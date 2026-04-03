@@ -35,6 +35,7 @@ const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER;
 const repo = process.env.NEXT_PUBLIC_GITHUB_REPO;
 const SUPPORT_AUTHOR_URL = "https://send.monobank.ua/jar/2PMhPjRk9j";
 const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
+const PROJECT_REPO_URL = "https://github.com/WebDev-Den/AlarmMini";
 
 const EMPTY_BOARD: BoardSnapshot = {
   wifiStatus: "Очікує підключення",
@@ -248,6 +249,11 @@ export default function Page() {
     selectedRelease?.assets.find((asset) =>
       asset.name.toLowerCase().includes("littlefs"),
     ) ?? null;
+  const canFlashSelectedRelease =
+    Boolean(selectedRelease) &&
+    Boolean(firmwareAsset) &&
+    Boolean(littlefsAsset) &&
+    portState === "connected";
 
   async function disconnectPort() {
     try {
@@ -368,6 +374,24 @@ export default function Page() {
         </div>
 
         <div className="sidebar-card">
+          <div className="panel-label">GitHub</div>
+          <h2 className="panel-title">Проєкт AlarmMini</h2>
+          <p className="panel-text">
+            Офіційний репозиторій з кодом, документацією та релізами прошивки.
+          </p>
+          <div className="button-stack">
+            <a
+              className="ghost-btn support-link"
+              href={PROJECT_REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Відкрити GitHub
+            </a>
+          </div>
+        </div>
+
+        <div className="sidebar-card">
           <div className="panel-label">Support</div>
           <h2 className="panel-title">Підтримати автора</h2>
 
@@ -428,6 +452,14 @@ export default function Page() {
                   ? littlefsAsset.name
                   : "littlefs.bin не знайдено"}
               </span>
+            </div>
+            <div className="button-stack hero-action-stack">
+              <button className="primary-btn" type="button" disabled={!canFlashSelectedRelease}>
+                Прошити плату
+              </button>
+            </div>
+            <div className="hero-hint">
+              Кнопка стане активною, коли реліз вибрано, обидва файли знайдені й плата підключена.
             </div>
           </div>
         </header>

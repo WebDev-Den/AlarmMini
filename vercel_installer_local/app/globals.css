@@ -353,6 +353,22 @@ button {
   gap: 6px;
 }
 
+.hero-action-stack {
+  margin-top: 4px;
+}
+
+.hero-action-stack .primary-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.hero-hint {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
