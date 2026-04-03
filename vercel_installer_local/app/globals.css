@@ -175,6 +175,15 @@ button {
   justify-content: space-between;
 }
 
+.installer-sidebar .button-stack {
+  align-items: stretch;
+}
+
+.installer-sidebar .button-stack > * {
+  width: 100%;
+  justify-content: center;
+}
+
 .primary-btn,
 .inline-btn,
 .ghost-btn {
@@ -213,7 +222,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 196px;
+  min-height: 160px;
+  padding: 12px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
   overflow: hidden;
@@ -221,8 +231,8 @@ button {
 
 .support-qr-image {
   display: block;
-  width: 176px;
-  height: 176px;
+  width: 148px;
+  height: 148px;
   object-fit: contain;
 }
 
@@ -306,6 +316,7 @@ button {
 .hero-card {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 16px;
   padding: 10px;
   border-radius: 24px;
@@ -317,6 +328,7 @@ button {
 .hero-copy {
   flex: 1 1 560px;
   padding: 12px;
+  align-self: flex-start;
 }
 
 .hero-side {
@@ -357,6 +369,12 @@ button {
   margin-top: 4px;
 }
 
+.install-button-host {
+  display: block;
+  width: 100%;
+}
+
+.install-trigger-btn,
 .hero-action-stack .primary-btn {
   width: 100%;
   justify-content: center;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 
 type ReleaseAsset = {
@@ -183,6 +183,7 @@ export default function Page() {
   const [board, setBoard] = useState<BoardSnapshot>(EMPTY_BOARD);
   const [serialLog, setSerialLog] = useState<string[]>([]);
   const [supportQrSrc, setSupportQrSrc] = useState("");
+  const [installManifestUrl, setInstallManifestUrl] = useState("");
 
   const portRef = useRef<any>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
@@ -192,6 +193,10 @@ export default function Page() {
     setSerialSupported(
       typeof navigator !== "undefined" && "serial" in navigator,
     );
+  }, []);
+
+  useEffect(() => {
+    void import("esp-web-tools/dist/web/install-button.js");
   }, []);
 
   useEffect(() => {
@@ -253,7 +258,46 @@ export default function Page() {
     Boolean(selectedRelease) &&
     Boolean(firmwareAsset) &&
     Boolean(littlefsAsset) &&
-    portState === "connected";
+    Boolean(installManifestUrl) &&
+    serialSupported &&
+    portState !== "connected" &&
+    portState !== "connecting";
+
+  useEffect(() => {
+    if (!selectedRelease || !firmwareAsset || !littlefsAsset) {
+      setInstallManifestUrl("");
+      return;
+    }
+
+    const manifest = {
+      name: "AlarmMini",
+      version:
+        selectedRelease.tag_name || selectedRelease.name || "unversioned",
+      new_install_prompt_erase: false,
+      builds: [
+        {
+          chipFamily: "ESP8266",
+          parts: [
+            {
+              path: `/api/release-asset?source=${encodeURIComponent(firmwareAsset.browser_download_url)}`,
+              offset: 0,
+            },
+            {
+              path: `/api/release-asset?source=${encodeURIComponent(littlefsAsset.browser_download_url)}`,
+              offset: 2097152,
+            },
+          ],
+        },
+      ],
+    };
+
+    const nextUrl = URL.createObjectURL(
+      new Blob([JSON.stringify(manifest)], { type: "application/json" }),
+    );
+    setInstallManifestUrl(nextUrl);
+
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [selectedRelease, firmwareAsset, littlefsAsset]);
 
   async function disconnectPort() {
     try {
@@ -454,12 +498,28 @@ export default function Page() {
               </span>
             </div>
             <div className="button-stack hero-action-stack">
-              <button className="primary-btn" type="button" disabled={!canFlashSelectedRelease}>
-                Прошити плату
-              </button>
+              {createElement(
+                "esp-web-install-button" as any,
+                {
+                  manifest: installManifestUrl,
+                  class: "install-button-host",
+                },
+                createElement(
+                  "button",
+                  {
+                    slot: "activate",
+                    className: "primary-btn install-trigger-btn",
+                    type: "button",
+                    disabled: !canFlashSelectedRelease,
+                  },
+                  "Прошити плату",
+                ),
+              )}
             </div>
             <div className="hero-hint">
-              Кнопка стане активною, коли реліз вибрано, обидва файли знайдені й плата підключена.
+              {portState === "connected"
+                ? "Для прошивки спершу натисни «Від'єднати», щоб звільнити COM-порт."
+                : "Кнопка стане активною, коли реліз вибрано, обидва файли знайдені і браузер підтримує Web Serial."}
             </div>
           </div>
         </header>
