@@ -468,7 +468,7 @@ export default function Page() {
     setFlashBusy(true);
     try {
       setFlashStatus(t.config.applying);
-      await restoreConfigViaSerial(merged);
+      await restoreConfigWithRetry(merged);
       await disconnectPort({ preserveBackupState: true });
       await new Promise((resolve) => setTimeout(resolve, 3000));
       await reconnectBoardAfterFlash();
@@ -810,7 +810,7 @@ export default function Page() {
         resolve,
         reject,
         buffer: "",
-        timeoutId: setTimeout(() => rejectConfigTransfer("restore_timeout"), 20000),
+        timeoutId: setTimeout(() => rejectConfigTransfer("restore_timeout"), 30000),
         readyResolve: null,
       };
 
@@ -824,26 +824,51 @@ export default function Page() {
           }
           transfer.timeoutId = setTimeout(
             () => rejectConfigTransfer("restore_ready_timeout"),
-            5000,
+            8000,
           );
           transfer.readyResolve = readyResolve;
         });
-        const chunkSize = 192;
+        const chunkSize = 160;
         for (let offset = 0; offset < serialized.length; offset += chunkSize) {
           await writeSerialLine(
             `AMCFG SET DATA ${serialized.slice(offset, offset + chunkSize)}`,
           );
-          await new Promise((resolve) => setTimeout(resolve, 12));
+          await new Promise((resolve) => setTimeout(resolve, 20));
         }
         clearConfigTransferTimeout();
         if (configTransferRef.current) {
-          armConfigTransferTimeout("restore_timeout", 20000);
+          armConfigTransferTimeout("restore_timeout", 30000);
         }
         await writeSerialLine("AMCFG SET END");
       } catch {
         rejectConfigTransfer("restore_write_failed");
       }
     });
+  }
+
+  async function restoreConfigWithRetry(configPayload: any, attempts = 2) {
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        if (attempt > 0) {
+          await disconnectPort({ preserveBackupState: true });
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          await reconnectBoardAfterFlash();
+          await new Promise((resolve) => setTimeout(resolve, 1800));
+        }
+
+        await restoreConfigViaSerial(configPayload);
+        return;
+      } catch (restoreError) {
+        lastError = restoreError;
+        resetConfigTransferState();
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("restore_timeout");
   }
 
   async function startReadLoop(port: any) {
@@ -889,7 +914,7 @@ export default function Page() {
       });
   }
 
-  async function backupConfigWithRetry(attempts = 3) {
+  async function backupConfigWithRetry(attempts = 1) {
     let lastError: unknown = null;
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -1142,7 +1167,7 @@ export default function Page() {
           }
           setFlashStage("restoring");
           setFlashStatus(t.flash.stageRestoring);
-          await restoreConfigViaSerial(
+          await restoreConfigWithRetry(
             getMergedConfigPayload(configBackupRef.current),
           );
           await disconnectPort({ preserveBackupState: true });
