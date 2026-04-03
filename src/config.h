@@ -12,7 +12,7 @@
 #define MQTT_PASS_MAXLEN  32
 #define NTP_SERVER_MAXLEN 64
 #define ADMIN_PASS_MAXLEN 32
-#define FIRMWARE_VERSION  "1.0.0"
+#define FIRMWARE_VERSION  "1.0.1-beta"
 
 #define REGIONS_COUNT 25
 

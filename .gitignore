@@ -22,3 +22,4 @@ LOCAL_RELEASE_GUIDE.md
 # Vercel installer build artifacts
 vercel_installer_local/node_modules/
 vercel_installer_local/.next/
+release_artifacts/

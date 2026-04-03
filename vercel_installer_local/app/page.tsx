@@ -2,6 +2,7 @@
 
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
+import { connect as startEspInstall } from "esp-web-tools/dist/connect.js";
 
 type ReleaseAsset = {
   id: number;
@@ -29,6 +30,14 @@ type BoardSnapshot = {
   firmwareVersion: string;
   hostname: string;
   lastLine: string;
+};
+
+type ConfigTransferState = {
+  mode: "backup" | "restore";
+  resolve: (value: any) => void;
+  reject: (reason?: unknown) => void;
+  buffer: string;
+  timeoutId: ReturnType<typeof setTimeout> | null;
 };
 
 const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER;
@@ -184,10 +193,19 @@ export default function Page() {
   const [serialLog, setSerialLog] = useState<string[]>([]);
   const [supportQrSrc, setSupportQrSrc] = useState("");
   const [installManifestUrl, setInstallManifestUrl] = useState("");
+  const [flashBusy, setFlashBusy] = useState(false);
+  const [flashStatus, setFlashStatus] = useState("");
+  const [configBackupReady, setConfigBackupReady] = useState(false);
 
   const portRef = useRef<any>(null);
+  const rememberedPortRef = useRef<any>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
   const readLoopRef = useRef<Promise<void> | null>(null);
+  const installButtonRef = useRef<HTMLElement | null>(null);
+  const reconnectAfterFlashRef = useRef(false);
+  const configBackupRef = useRef<any | null>(null);
+  const restoreAfterReconnectRef = useRef(false);
+  const configTransferRef = useRef<ConfigTransferState | null>(null);
 
   useEffect(() => {
     setSerialSupported(
@@ -260,8 +278,24 @@ export default function Page() {
     Boolean(littlefsAsset) &&
     Boolean(installManifestUrl) &&
     serialSupported &&
-    portState !== "connected" &&
-    portState !== "connecting";
+    portState === "connected" &&
+    !flashBusy;
+
+  const flashHint = !serialSupported
+    ? "Для прошивки потрібен Chrome або Edge з підтримкою Web Serial."
+    : flashBusy
+      ? "Триває підготовка або завершення прошивки. Зачекай кілька секунд."
+      : portState === "connecting"
+        ? "Дочекайся завершення підключення або скасуй його перед прошивкою."
+      : portState !== "connected"
+        ? "Спершу підключи плату, щоб зчитати й зберегти конфігурацію перед прошивкою."
+        : !configBackupReady
+          ? "Плата підключена, але конфіг ще не підтверджено для безпечної прошивки."
+        : !selectedRelease
+            ? "Спершу вибери реліз для прошивки."
+          : !firmwareAsset || !littlefsAsset
+              ? "У релізі мають бути firmware.bin і littlefs.bin."
+              : "Сторінка збереже конфіг, відкриє прошивку, а потім поверне налаштування на плату.";
 
   useEffect(() => {
     if (!selectedRelease || !firmwareAsset || !littlefsAsset) {
@@ -309,7 +343,141 @@ export default function Page() {
     readerRef.current = null;
     portRef.current = null;
     readLoopRef.current = null;
+    setConfigBackupReady(false);
     setPortState("idle");
+  }
+
+  async function writeSerialLine(line: string) {
+    const port = rememberedPortRef.current ?? portRef.current;
+    if (!port?.writable) throw new Error("Serial port is not writable");
+    const writer = port.writable.getWriter();
+    try {
+      const encoder = new TextEncoder();
+      await writer.write(encoder.encode(`${line}\n`));
+    } finally {
+      writer.releaseLock();
+    }
+  }
+
+  function clearConfigTransferTimeout() {
+    const transfer = configTransferRef.current;
+    if (transfer?.timeoutId) clearTimeout(transfer.timeoutId);
+    if (transfer) transfer.timeoutId = null;
+  }
+
+  function rejectConfigTransfer(reason: string) {
+    const transfer = configTransferRef.current;
+    if (!transfer) return;
+    clearConfigTransferTimeout();
+    configTransferRef.current = null;
+    transfer.reject(new Error(reason));
+  }
+
+  function handleConfigProtocolLine(line: string): boolean {
+    if (!line.startsWith("AMCFG ")) return false;
+
+    const transfer = configTransferRef.current;
+    if (!transfer) return true;
+
+    if (line.startsWith("AMCFG ERROR ")) {
+      rejectConfigTransfer(line.replace("AMCFG ERROR ", "").trim());
+      return true;
+    }
+
+    if (line === "AMCFG READY") {
+      clearConfigTransferTimeout();
+      return true;
+    }
+
+    if (line.startsWith("AMCFG BEGIN ")) {
+      transfer.buffer = "";
+      clearConfigTransferTimeout();
+      return true;
+    }
+
+    if (line.startsWith("AMCFG DATA ")) {
+      transfer.buffer += line.slice("AMCFG DATA ".length);
+      clearConfigTransferTimeout();
+      return true;
+    }
+
+    if (line === "AMCFG END" && transfer.mode === "backup") {
+      try {
+        const parsed = JSON.parse(transfer.buffer || "{}");
+        clearConfigTransferTimeout();
+        configTransferRef.current = null;
+        transfer.resolve(parsed);
+      } catch (error) {
+        rejectConfigTransfer("invalid_backup_json");
+      }
+      return true;
+    }
+
+    if (line === "AMCFG OK" && transfer.mode === "restore") {
+      clearConfigTransferTimeout();
+      configTransferRef.current = null;
+      transfer.resolve(true);
+      return true;
+    }
+
+    return true;
+  }
+
+  async function backupConfigViaSerial() {
+    if (portState !== "connected") return null;
+
+    setFlashStatus("Зчитуємо конфігурацію з плати...");
+
+    return await new Promise<any>(async (resolve, reject) => {
+      configTransferRef.current = {
+        mode: "backup",
+        resolve,
+        reject,
+        buffer: "",
+        timeoutId: setTimeout(() => rejectConfigTransfer("backup_timeout"), 5000),
+      };
+
+      try {
+        await writeSerialLine("AMCFG GET");
+      } catch (error) {
+        rejectConfigTransfer("backup_write_failed");
+      }
+    });
+  }
+
+  async function restoreConfigViaSerial(configPayload: any) {
+    const serialized = JSON.stringify(configPayload || {});
+    setFlashStatus("Повертаємо конфігурацію на плату...");
+
+    await new Promise<boolean>(async (resolve, reject) => {
+      configTransferRef.current = {
+        mode: "restore",
+        resolve,
+        reject,
+        buffer: "",
+        timeoutId: setTimeout(() => rejectConfigTransfer("restore_timeout"), 7000),
+      };
+
+      try {
+        await writeSerialLine("AMCFG SET BEGIN");
+        const chunkSize = 192;
+        for (let offset = 0; offset < serialized.length; offset += chunkSize) {
+          await writeSerialLine(`AMCFG SET DATA ${serialized.slice(offset, offset + chunkSize)}`);
+        }
+        await writeSerialLine("AMCFG SET END");
+      } catch (error) {
+        rejectConfigTransfer("restore_write_failed");
+      }
+    });
+  }
+
+  async function openBoardPort(port: any) {
+    await port.open({ baudRate: 115200 });
+    portRef.current = port;
+    rememberedPortRef.current = port;
+    setPortState("connected");
+    setConfigBackupReady(false);
+    await startReadLoop(port);
   }
 
   async function startReadLoop(port: any) {
@@ -333,6 +501,7 @@ export default function Page() {
           .map((line) => line.trim())
           .filter(Boolean)
           .forEach((line) => {
+            if (handleConfigProtocolLine(line)) return;
             setSerialLog((prev) => [line, ...prev].slice(0, 60));
             setBoard((prev) =>
               applyStructuredSerialLine(line, applySerialLine(line, prev)),
@@ -360,15 +529,141 @@ export default function Page() {
       setSerialLog([]);
       const serial = (navigator as Navigator & { serial: any }).serial;
       const port = await serial.requestPort();
-      await port.open({ baudRate: 115200 });
-      portRef.current = port;
-      setPortState("connected");
-      await startReadLoop(port);
+      await openBoardPort(port);
+      try {
+        configBackupRef.current = await backupConfigViaSerial();
+        setConfigBackupReady(Boolean(configBackupRef.current));
+        setFlashStatus("Конфігурацію зчитано. Можна запускати прошивку.");
+      } catch (error) {
+        console.error("[config-backup-init]", error);
+        configBackupRef.current = null;
+        setConfigBackupReady(false);
+        setFlashStatus("Не вдалося зчитати конфіг. Безпечна прошивка недоступна.");
+      }
     } catch (error) {
       console.error("[serial-connect]", error);
       await disconnectPort();
     }
   }
+
+  async function reconnectBoardAfterFlash() {
+    if (!("serial" in navigator)) return;
+
+    const serial = (navigator as Navigator & { serial: any }).serial;
+    const port =
+      rememberedPortRef.current ??
+      (await serial.getPorts()).find(Boolean);
+
+    if (!port) return;
+
+    try {
+      setPortState("connecting");
+      setBoard(EMPTY_BOARD);
+      setSerialLog([]);
+      await openBoardPort(port);
+    } catch (error) {
+      console.error("[serial-reconnect]", error);
+      await disconnectPort();
+    }
+  }
+
+  async function handleFlashDialogClosed() {
+    setFlashStatus("Прошивка завершена. Повертаємо підключення до плати...");
+    if (!reconnectAfterFlashRef.current) return;
+    reconnectAfterFlashRef.current = false;
+    restoreAfterReconnectRef.current = Boolean(configBackupRef.current);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await reconnectBoardAfterFlash();
+    if (!restoreAfterReconnectRef.current) {
+      setFlashBusy(false);
+      setFlashStatus("Плату перепрошито.");
+    }
+  }
+
+  async function handleFlashStart() {
+    if (!canFlashSelectedRelease || !installButtonRef.current) return;
+
+    reconnectAfterFlashRef.current = true;
+    setFlashBusy(true);
+    setFlashStatus("Готуємо прошивку...");
+    if (!configBackupRef.current) {
+      setFlashBusy(false);
+      setFlashStatus("Конфігурацію не зчитано. Спершу перепідключи плату.");
+      return;
+    }
+
+    if (portState === "connected" || portState === "connecting") {
+      await disconnectPort();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    const observer = new MutationObserver((mutations, obs) => {
+      for (const mutation of mutations) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLElement && node.tagName.toLowerCase() === "ewt-install-dialog") {
+            node.addEventListener(
+              "closed",
+              () => {
+                void handleFlashDialogClosed();
+              },
+              { once: true },
+            );
+            obs.disconnect();
+            return;
+          }
+        }
+      }
+    });
+
+    observer.observe(document.body, { childList: true });
+
+    try {
+      setFlashStatus("Відкриваємо діалог прошивки...");
+      await startEspInstall(installButtonRef.current);
+    } catch (error) {
+      observer.disconnect();
+      reconnectAfterFlashRef.current = false;
+      setFlashBusy(false);
+      setFlashStatus("Не вдалося запустити прошивку.");
+      console.error("[flash-start]", error);
+      await reconnectBoardAfterFlash();
+    }
+  }
+
+  useEffect(() => {
+    if (
+      flashBusy &&
+      portState === "connected" &&
+      restoreAfterReconnectRef.current &&
+      configBackupRef.current
+    ) {
+      restoreAfterReconnectRef.current = false;
+      void (async () => {
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          await restoreConfigViaSerial(configBackupRef.current);
+          setFlashStatus("Конфігурацію відновлено. Чекаємо перезапуск плати...");
+          await disconnectPort();
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          await reconnectBoardAfterFlash();
+          try {
+            configBackupRef.current = await backupConfigViaSerial();
+            setConfigBackupReady(Boolean(configBackupRef.current));
+          } catch (_) {
+            configBackupRef.current = null;
+            setConfigBackupReady(false);
+          }
+          setFlashStatus("Плату перепрошито, конфігурацію повернуто.");
+        } catch (error) {
+          console.error("[config-restore]", error);
+          setFlashStatus("Прошивка завершена, але конфігурацію не вдалося повернути автоматично.");
+        } finally {
+          configBackupRef.current = null;
+          setFlashBusy(false);
+        }
+      })();
+    }
+  }, [flashBusy, portState]);
 
   return (
     <main className="installer-shell">
@@ -399,7 +694,7 @@ export default function Page() {
             <button
               className="primary-btn"
               onClick={handleConnect}
-              disabled={!serialSupported || portState === "connecting"}
+              disabled={!serialSupported || portState === "connecting" || flashBusy}
             >
               {portState === "connected"
                 ? "Порт підключено"
@@ -410,7 +705,7 @@ export default function Page() {
             <button
               className="ghost-btn"
               onClick={() => void disconnectPort()}
-              disabled={portState !== "connected"}
+              disabled={portState !== "connected" || flashBusy}
             >
               Від'єднати
             </button>
@@ -497,30 +792,31 @@ export default function Page() {
                   : "littlefs.bin не знайдено"}
               </span>
             </div>
+            <div
+              className={`status-pill ${configBackupReady ? "is-ok" : "is-warn"}`}
+            >
+              {configBackupReady
+                ? "Конфіг збережено перед прошивкою"
+                : "Потрібен backup конфігу"}
+            </div>
             <div className="button-stack hero-action-stack">
-              {createElement(
-                "esp-web-install-button" as any,
-                {
-                  manifest: installManifestUrl,
-                  class: "install-button-host",
-                },
-                createElement(
-                  "button",
-                  {
-                    slot: "activate",
-                    className: "primary-btn install-trigger-btn",
-                    type: "button",
-                    disabled: !canFlashSelectedRelease,
-                  },
-                  "Прошити плату",
-                ),
-              )}
+              {createElement("esp-web-install-button" as any, {
+                manifest: installManifestUrl,
+                class: "install-button-host",
+                ref: installButtonRef,
+              })}
+              <button
+                className="primary-btn install-trigger-btn"
+                type="button"
+                disabled={!canFlashSelectedRelease}
+                title={flashHint}
+                onClick={() => void handleFlashStart()}
+              >
+                {flashBusy ? "Підготовка до прошивки..." : "Прошити плату"}
+              </button>
             </div>
-            <div className="hero-hint">
-              {portState === "connected"
-                ? "Для прошивки спершу натисни «Від'єднати», щоб звільнити COM-порт."
-                : "Кнопка стане активною, коли реліз вибрано, обидва файли знайдені і браузер підтримує Web Serial."}
-            </div>
+            <div className="hero-hint">{flashHint}</div>
+            {flashStatus ? <div className="hero-hint">{flashStatus}</div> : null}
           </div>
         </header>
 

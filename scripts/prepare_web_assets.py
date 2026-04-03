@@ -15,6 +15,7 @@ OUTPUT_DIR = os.path.join(env.subst("$PROJECT_DIR"), "data")
 CONFIG_PATH = os.path.join(WORK_SOURCE_DIR, "config.json")
 CONFIG_EXAMPLE_PATH = os.path.join(WORK_SOURCE_DIR, "config.example.json")
 TEXT_ASSET_EXTENSIONS = {".html", ".css", ".js", ".svg"}
+CONFIG_MODE = os.environ.get("ALARMMINI_CONFIG_MODE", "").strip().lower()
 
 
 def _read_text(path):
@@ -114,8 +115,16 @@ def _prepare_assets():
 
     output_config_path = os.path.join(OUTPUT_DIR, "config.json")
     output_example_path = os.path.join(OUTPUT_DIR, "config.example.json")
-    if not os.path.isfile(CONFIG_PATH) and os.path.isfile(CONFIG_EXAMPLE_PATH):
+    if CONFIG_MODE == "release":
+        if not os.path.isfile(CONFIG_EXAMPLE_PATH):
+            raise FileNotFoundError(f"[web-assets] release build requires config.example.json: {CONFIG_EXAMPLE_PATH}")
         shutil.copy2(CONFIG_EXAMPLE_PATH, output_config_path)
+        print("[web-assets] config mode: release (using config.example.json)")
+    elif not os.path.isfile(CONFIG_PATH) and os.path.isfile(CONFIG_EXAMPLE_PATH):
+        shutil.copy2(CONFIG_EXAMPLE_PATH, output_config_path)
+        print("[web-assets] config mode: fallback example")
+    else:
+        print("[web-assets] config mode: local")
     if os.path.isfile(output_example_path):
         os.remove(output_example_path)
 

@@ -11,6 +11,153 @@
 #include "webserver.h"
 
 char gHostname[32];
+static String gSerialLineBuffer;
+static String gIncomingConfigJson;
+static bool gReceivingConfig = false;
+
+static void serialConfigSendCurrent()
+{
+    File configFile = LittleFS.open("/config.json", "r");
+    if (!configFile)
+    {
+        Serial.println("AMCFG ERROR read_failed");
+        return;
+    }
+
+    String json = configFile.readString();
+    configFile.close();
+    json.trim();
+
+    if (!json.length())
+    {
+        Serial.println("AMCFG ERROR empty");
+        return;
+    }
+
+    Serial.printf("AMCFG BEGIN %u\n", json.length());
+    constexpr size_t chunkSize = 192;
+    for (size_t offset = 0; offset < json.length(); offset += chunkSize)
+    {
+        String chunk = json.substring(offset, offset + chunkSize);
+        Serial.print("AMCFG DATA ");
+        Serial.println(chunk);
+        yield();
+    }
+    Serial.println("AMCFG END");
+}
+
+static void serialConfigApplyIncoming()
+{
+    if (!gIncomingConfigJson.length())
+    {
+        Serial.println("AMCFG ERROR empty_payload");
+        return;
+    }
+
+    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
+    DeserializationError err = deserializeJson(doc, gIncomingConfigJson);
+    if (err)
+    {
+        Serial.printf("AMCFG ERROR json_%s\n", err.c_str());
+        return;
+    }
+
+    doc.remove("adminPassword");
+    doc.remove("animations");
+
+    File configFile = LittleFS.open("/config.json", "w");
+    if (!configFile)
+    {
+        Serial.println("AMCFG ERROR write_failed");
+        return;
+    }
+
+    serializeJson(doc, configFile);
+    configFile.close();
+
+    storageApplyJson(doc);
+    loggerSetMask(gConfig.logMask);
+    Serial.println("AMCFG OK");
+    LOG_INFO(LOG_CAT_CONFIG, "Config restored from serial");
+    scheduleRestart();
+}
+
+static void handleSerialProtocolLine(const String &line)
+{
+    if (line == "AMCFG GET")
+    {
+        serialConfigSendCurrent();
+        return;
+    }
+
+    if (line == "AMCFG SET BEGIN")
+    {
+        gIncomingConfigJson = "";
+        gIncomingConfigJson.reserve(CONFIG_JSON_CAPACITY);
+        gReceivingConfig = true;
+        Serial.println("AMCFG READY");
+        return;
+    }
+
+    if (line == "AMCFG SET END")
+    {
+        bool hadPayload = gReceivingConfig;
+        gReceivingConfig = false;
+        if (!hadPayload)
+        {
+            Serial.println("AMCFG ERROR not_receiving");
+            return;
+        }
+        serialConfigApplyIncoming();
+        return;
+    }
+
+    if (line.startsWith("AMCFG SET DATA "))
+    {
+        if (!gReceivingConfig)
+        {
+            Serial.println("AMCFG ERROR not_receiving");
+            return;
+        }
+
+        String chunk = line.substring(strlen("AMCFG SET DATA "));
+        if (gIncomingConfigJson.length() + chunk.length() > CONFIG_JSON_CAPACITY - 1)
+        {
+            gReceivingConfig = false;
+            gIncomingConfigJson = "";
+            Serial.println("AMCFG ERROR too_large");
+            return;
+        }
+
+        gIncomingConfigJson += chunk;
+        return;
+    }
+}
+
+static void serialProtocolHandle()
+{
+    while (Serial.available())
+    {
+        const char ch = (char)Serial.read();
+        if (ch == '\r')
+            continue;
+
+        if (ch == '\n')
+        {
+            String line = gSerialLineBuffer;
+            gSerialLineBuffer = "";
+            line.trim();
+            if (line.startsWith("AMCFG "))
+            {
+                handleSerialProtocolLine(line);
+            }
+            continue;
+        }
+
+        if (gSerialLineBuffer.length() < CONFIG_JSON_CAPACITY)
+            gSerialLineBuffer += ch;
+    }
+}
 
 static const char* ntpServerOrDefault(const char* configured, const char* fallback)
 {
@@ -104,6 +251,7 @@ void setup()
 
 void loop()
 {
+    serialProtocolHandle();
     MDNS.update();
     webserverHandle();
     alertsHandle();

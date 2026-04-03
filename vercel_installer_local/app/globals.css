@@ -53,19 +53,18 @@ button {
 
 .installer-shell {
   display: grid;
-  grid-template-columns: 290px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 276px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
   min-height: 100dvh;
   padding: 16px;
 }
 
 .installer-sidebar {
-  position: sticky;
-  top: 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: calc(100dvh - 32px);
+  align-self: start;
 }
 
 .brand-card,
@@ -89,7 +88,7 @@ button {
 .sidebar-card,
 .panel-card,
 .serial-log {
-  padding: 18px;
+  padding: 16px;
 }
 
 .brand-card {
@@ -122,7 +121,7 @@ button {
 .serial-lines {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .brand-title,
@@ -152,7 +151,7 @@ button {
 
 .panel-title {
   margin: 4px 0 0;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.15;
 }
 
@@ -222,17 +221,17 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 160px;
-  padding: 12px;
-  border-radius: 18px;
+  min-height: 144px;
+  padding: 10px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.96);
   overflow: hidden;
 }
 
 .support-qr-image {
   display: block;
-  width: 148px;
-  height: 148px;
+  width: 124px;
+  height: 124px;
   object-fit: contain;
 }
 
@@ -311,6 +310,7 @@ button {
 
 .installer-content {
   min-width: 0;
+  align-self: start;
 }
 
 .hero-card {
@@ -318,7 +318,7 @@ button {
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 16px;
-  padding: 10px;
+  padding: 12px;
   border-radius: 24px;
   border: 1px solid var(--border);
   background: rgba(6, 16, 31, 0.82);
@@ -327,14 +327,14 @@ button {
 
 .hero-copy {
   flex: 1 1 560px;
-  padding: 12px;
+  padding: 8px 10px;
   align-self: flex-start;
 }
 
 .hero-side {
   flex: 0 0 320px;
   min-width: 280px;
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--border);
   border-radius: 22px;
   background:
@@ -370,8 +370,7 @@ button {
 }
 
 .install-button-host {
-  display: block;
-  width: 100%;
+  display: none;
 }
 
 .install-trigger-btn,
@@ -390,7 +389,7 @@ button {
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
-  gap: 16px;
+  gap: 20px;
 }
 
 .installer-panel {
@@ -483,6 +482,10 @@ button {
   overflow: auto;
 }
 
+.installer-sidebar .sidebar-card:last-child {
+  gap: 12px;
+}
+
 .serial-line,
 .serial-empty {
   padding: 10px 12px;
@@ -500,11 +503,6 @@ button {
   .installer-shell,
   .content-grid {
     grid-template-columns: 1fr;
-  }
-
-  .installer-sidebar {
-    position: static;
-    max-height: none;
   }
 }
 

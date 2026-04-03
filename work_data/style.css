@@ -348,6 +348,13 @@ body.auth-locked {
     transition: transform .18s ease, border-color .18s ease, background .18s ease;
 }
 
+.sidebar-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
 .nav-tab {
     text-align: left;
 }
@@ -414,17 +421,37 @@ body.auth-locked {
 }
 
 .sidebar-action-telegram {
-    min-height: 46px;
-    border-color: rgba(78, 168, 255, .26);
-    background: linear-gradient(180deg, rgba(20, 49, 84, .94), rgba(8, 27, 48, .96));
+    min-height: 44px;
+    padding: 0 16px;
+    border-color: rgba(78, 168, 255, .24);
+    background: linear-gradient(180deg, rgba(12, 32, 56, .96), rgba(7, 22, 40, .98));
     color: #dcecff;
-    text-align: center;
-    box-shadow: 0 10px 22px rgba(24, 91, 163, .14);
+    font-family: var(--sans);
+    font-size: 13px;
+    letter-spacing: .01em;
+    box-shadow: 0 8px 18px rgba(24, 91, 163, .12);
 }
 
 .sidebar-action-telegram:hover {
     border-color: rgba(78, 168, 255, .4);
-    box-shadow: 0 14px 28px rgba(37, 125, 214, .18);
+    box-shadow: 0 12px 24px rgba(37, 125, 214, .16);
+}
+
+.sidebar-action-telegram::before {
+    content: "TG";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+    border-radius: 999px;
+    background: rgba(78, 168, 255, .16);
+    color: #7fc0ff;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    flex: 0 0 24px;
 }
 
 #saveBtn {

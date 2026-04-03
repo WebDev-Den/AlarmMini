@@ -139,8 +139,9 @@ float fixedTransitionBrightness(unsigned long elapsedMs) {
     return minLevel + pulse * (1.0f - minLevel);
 }
 
-uint32_t fixedAlertClearColor(const Color& target, bool night, unsigned long elapsedMs) {
+uint32_t fixedAlertClearColor(const Color& target, bool night, unsigned long elapsedMs, uint8_t extraMaxBrightness = 255) {
     Color active = capColorForMode(target, night);
+    active.a = min<uint8_t>(active.a, extraMaxBrightness);
     active.a = (uint8_t)(active.a * fixedTransitionBrightness(elapsedMs));
     return applyColorBrightness(active, 1.0f);
 }
@@ -180,7 +181,7 @@ float mqttOfflinePulse(unsigned long nowMs) {
     return minBrightness + pulse * (1.0f - minBrightness);
 }
 
-uint32_t retainedStateColorForLed(int ledIndex, bool night, unsigned long now) {
+uint32_t retainedStateColorForLed(int ledIndex, bool night, unsigned long now, const AnimationConfig& offlineCfg) {
     int region = gConfig.ledRegion[ledIndex];
     if (region < 0 || region >= REGIONS_COUNT) {
         return 0;
@@ -196,23 +197,28 @@ uint32_t retainedStateColorForLed(int ledIndex, bool night, unsigned long now) {
 
     if (alertState) {
         unsigned long elapsed = gRegionStateChangedAt[region] > 0 ? now - gRegionStateChangedAt[region] : 0;
-        return fixedAlertClearColor(alertColor, night, elapsed);
+        return fixedAlertClearColor(alertColor, night, elapsed, offlineCfg.maxBrightness);
     }
 
     if (recentClear) {
         unsigned long elapsed = gRegionStateChangedAt[region] > 0 ? now - gRegionStateChangedAt[region] : 0;
-        return fixedAlertClearColor(clearColor, night, elapsed);
+        return fixedAlertClearColor(clearColor, night, elapsed, offlineCfg.maxBrightness);
     }
 
-    return applyColorBrightness(capColorForMode(clearColor, night), 1.0f);
+    Color baseClear = capColorForMode(clearColor, night);
+    baseClear.a = min<uint8_t>(baseClear.a, offlineCfg.maxBrightness);
+    return applyColorBrightness(baseClear, 1.0f);
 }
 
 void renderRetainedStateWithPulse(bool night, bool mqttLost) {
     const unsigned long now = millis();
+    const AnimationConfig offlineCfg = animationForState(
+        mqttLost ? MAP_STATE_MQTT_LOST : MAP_STATE_INTERNET_LOST
+    );
     const float pulseBrightness = mqttLost ? mqttOfflinePulse(now) : internetOfflinePulse(now);
 
     for (int i = 0; i < gConfig.ledCount; i++) {
-        uint32_t baseColor = retainedStateColorForLed(i, night, now);
+        uint32_t baseColor = retainedStateColorForLed(i, night, now, offlineCfg);
         strip.setPixelColor(i, scalePackedColor(baseColor, pulseBrightness));
     }
 
