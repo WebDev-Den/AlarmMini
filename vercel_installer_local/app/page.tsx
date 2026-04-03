@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
@@ -47,9 +47,9 @@ const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
 const PROJECT_REPO_URL = "https://github.com/WebDev-Den/AlarmMini";
 
 const EMPTY_BOARD: BoardSnapshot = {
-  wifiStatus: "Очікує підключення",
-  mqttStatus: "Невідомо",
-  internetStatus: "Невідомо",
+  wifiStatus: "РћС‡С–РєСѓС” РїС–РґРєР»СЋС‡РµРЅРЅСЏ",
+  mqttStatus: "РќРµРІС–РґРѕРјРѕ",
+  internetStatus: "РќРµРІС–РґРѕРјРѕ",
   ip: "-",
   mdnsUrl: "-",
   adminPassword: "-",
@@ -85,14 +85,14 @@ function applySerialLine(line: string, current: BoardSnapshot): BoardSnapshot {
 
   const wifiMatch = line.match(/\[WiFi\]\s+OK IP:\s*([0-9.]+)/i);
   if (wifiMatch) {
-    next.wifiStatus = "Підключено";
-    next.internetStatus = "Ймовірно онлайн";
+    next.wifiStatus = "РџС–РґРєР»СЋС‡РµРЅРѕ";
+    next.internetStatus = "Р™РјРѕРІС–СЂРЅРѕ РѕРЅР»Р°Р№РЅ";
     next.ip = wifiMatch[1];
   }
 
-  if (/\[WiFi\].*AP/i.test(line)) next.wifiStatus = "AP режим";
+  if (/\[WiFi\].*AP/i.test(line)) next.wifiStatus = "AP СЂРµР¶РёРј";
   if (/\[WiFi\].*(disconnect|failed|lost)/i.test(line))
-    next.wifiStatus = "Немає Wi‑Fi";
+    next.wifiStatus = "РќРµРјР°С” WiвЂ‘Fi";
 
   const adminMatch = line.match(/\[Admin\]\s+Password:\s*(\S+)/i);
   if (adminMatch) next.adminPassword = adminMatch[1];
@@ -107,13 +107,13 @@ function applySerialLine(line: string, current: BoardSnapshot): BoardSnapshot {
     }
   }
 
-  if (/\[MQTT\].*Connected/i.test(line)) next.mqttStatus = "Підключено";
+  if (/\[MQTT\].*Connected/i.test(line)) next.mqttStatus = "РџС–РґРєР»СЋС‡РµРЅРѕ";
   if (/\[MQTT\].*(Disconnected|offline|failed|lost)/i.test(line))
-    next.mqttStatus = "Немає з'єднання";
+    next.mqttStatus = "РќРµРјР°С” Р·'С”РґРЅР°РЅРЅСЏ";
 
-  if (/\[Internet\].*(online|ok)/i.test(line)) next.internetStatus = "Онлайн";
+  if (/\[Internet\].*(online|ok)/i.test(line)) next.internetStatus = "РћРЅР»Р°Р№РЅ";
   if (/\[Internet\].*(offline|lost|failed)/i.test(line))
-    next.internetStatus = "Немає інтернету";
+    next.internetStatus = "РќРµРјР°С” С–РЅС‚РµСЂРЅРµС‚Сѓ";
 
   return next;
 }
@@ -153,26 +153,26 @@ function applyStructuredSerialLine(
   if (category === "wifi") {
     const ipMatch = message.match(/^OK IP:\s*([0-9.]+)/i);
     if (ipMatch) {
-      next.wifiStatus = "Підключено";
-      next.internetStatus = "Ймовірно онлайн";
+      next.wifiStatus = "РџС–РґРєР»СЋС‡РµРЅРѕ";
+      next.internetStatus = "Р™РјРѕРІС–СЂРЅРѕ РѕРЅР»Р°Р№РЅ";
       next.ip = ipMatch[1];
     }
 
-    if (/AP mode/i.test(message)) next.wifiStatus = "AP режим";
+    if (/AP mode/i.test(message)) next.wifiStatus = "AP СЂРµР¶РёРј";
     if (/(disconnect|failed|lost)/i.test(message))
-      next.wifiStatus = "Немає Wi‑Fi";
+      next.wifiStatus = "РќРµРјР°С” WiвЂ‘Fi";
   }
 
   if (category === "mqtt") {
-    if (/Connected/i.test(message)) next.mqttStatus = "Підключено";
+    if (/Connected/i.test(message)) next.mqttStatus = "РџС–РґРєР»СЋС‡РµРЅРѕ";
     if (/(disconnected|offline|failed|lost|error)/i.test(message))
-      next.mqttStatus = "Немає з'єднання";
+      next.mqttStatus = "РќРµРјР°С” Р·'С”РґРЅР°РЅРЅСЏ";
   }
 
   if (category === "internet") {
-    if (/(online|ok)/i.test(message)) next.internetStatus = "Онлайн";
+    if (/(online|ok)/i.test(message)) next.internetStatus = "РћРЅР»Р°Р№РЅ";
     if (/(offline|lost|failed)/i.test(message))
-      next.internetStatus = "Немає інтернету";
+      next.internetStatus = "РќРµРјР°С” С–РЅС‚РµСЂРЅРµС‚Сѓ";
   }
 
   return next;
@@ -195,7 +195,9 @@ export default function Page() {
   const [installManifestUrl, setInstallManifestUrl] = useState("");
   const [flashBusy, setFlashBusy] = useState(false);
   const [flashStatus, setFlashStatus] = useState("");
+  const [flashStage, setFlashStage] = useState<"" | "flashed" | "restoring" | "done">("");
   const [configBackupReady, setConfigBackupReady] = useState(false);
+  const [defaultConfigMode, setDefaultConfigMode] = useState(false);
 
   const portRef = useRef<any>(null);
   const rememberedPortRef = useRef<any>(null);
@@ -229,7 +231,7 @@ export default function Page() {
 
   useEffect(() => {
     if (!owner || !repo) {
-      setError("Заповни NEXT_PUBLIC_GITHUB_OWNER і NEXT_PUBLIC_GITHUB_REPO.");
+      setError("Р—Р°РїРѕРІРЅРё NEXT_PUBLIC_GITHUB_OWNER С– NEXT_PUBLIC_GITHUB_REPO.");
       setLoading(false);
       return;
     }
@@ -247,7 +249,7 @@ export default function Page() {
       })
       .catch((err: unknown) => {
         setError(
-          err instanceof Error ? err.message : "Не вдалося отримати релізи",
+          err instanceof Error ? err.message : "РќРµ РІРґР°Р»РѕСЃСЏ РѕС‚СЂРёРјР°С‚Рё СЂРµР»С–Р·Рё",
         );
       })
       .finally(() => setLoading(false));
@@ -272,30 +274,29 @@ export default function Page() {
     selectedRelease?.assets.find((asset) =>
       asset.name.toLowerCase().includes("littlefs"),
     ) ?? null;
-  const canFlashSelectedRelease =
+  const hasSelectedReleaseAssets =
     Boolean(selectedRelease) &&
     Boolean(firmwareAsset) &&
     Boolean(littlefsAsset) &&
-    Boolean(installManifestUrl) &&
-    serialSupported &&
-    portState === "connected" &&
-    !flashBusy;
+    Boolean(installManifestUrl);
+  const canFlashSelectedRelease =
+    hasSelectedReleaseAssets && serialSupported && !flashBusy;
 
   const flashHint = !serialSupported
-    ? "Для прошивки потрібен Chrome або Edge з підтримкою Web Serial."
+    ? "Р”Р»СЏ РїСЂРѕС€РёРІРєРё РїРѕС‚СЂС–Р±РµРЅ Chrome Р°Р±Рѕ Edge Р· РїС–РґС‚СЂРёРјРєРѕСЋ Web Serial."
     : flashBusy
-      ? "Триває підготовка або завершення прошивки. Зачекай кілька секунд."
+      ? "РўСЂРёРІР°С” РїС–РґРіРѕС‚РѕРІРєР° Р°Р±Рѕ Р·Р°РІРµСЂС€РµРЅРЅСЏ РїСЂРѕС€РёРІРєРё. Р—Р°С‡РµРєР°Р№ РєС–Р»СЊРєР° СЃРµРєСѓРЅРґ."
       : portState === "connecting"
-        ? "Дочекайся завершення підключення або скасуй його перед прошивкою."
-      : portState !== "connected"
-        ? "Спершу підключи плату, щоб зчитати й зберегти конфігурацію перед прошивкою."
-        : !configBackupReady
-          ? "Плата підключена, але конфіг ще не підтверджено для безпечної прошивки."
+        ? "РўСЂРёРІР°С” РїС–РґРєР»СЋС‡РµРЅРЅСЏ РґРѕ РїР»Р°С‚Рё. Р—Р°С‡РµРєР°Р№ РєС–Р»СЊРєР° СЃРµРєСѓРЅРґ."
         : !selectedRelease
-            ? "Спершу вибери реліз для прошивки."
+          ? "РЎРїРµСЂС€Сѓ РІРёР±РµСЂРё СЂРµР»С–Р· РґР»СЏ РїСЂРѕС€РёРІРєРё."
           : !firmwareAsset || !littlefsAsset
-              ? "У релізі мають бути firmware.bin і littlefs.bin."
-              : "Сторінка збереже конфіг, відкриє прошивку, а потім поверне налаштування на плату.";
+            ? "РЈ СЂРµР»С–Р·С– РјР°СЋС‚СЊ Р±СѓС‚Рё firmware.bin С– littlefs.bin."
+            : defaultConfigMode
+              ? "РљРѕРЅС„С–Рі РЅРµ Р·С‡РёС‚Р°РЅРѕ. РџСЂРѕС€РёРІРєР° РїС–РґРµ Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ Р· СЂРµР»С–Р·Сѓ."
+              : configBackupReady
+                ? "РљРѕРЅС„С–Рі Р·С‡РёС‚Р°РЅРѕ. РџС–СЃР»СЏ РїСЂРѕС€РёРІРєРё СЃС‚РѕСЂС–РЅРєР° РїРѕРІРµСЂРЅРµ Р№РѕРіРѕ РЅР°Р·Р°Рґ РЅР° РїР»Р°С‚Сѓ."
+                : "РљРЅРѕРїРєР° СЃР°РјР° РїС–РґРєР»СЋС‡РёС‚СЊ РїР»Р°С‚Сѓ, СЃРїСЂРѕР±СѓС” Р·С‡РёС‚Р°С‚Рё РєРѕРЅС„С–Рі С– Р»РёС€Рµ РїРѕС‚С–Рј Р·Р°РїСѓСЃС‚РёС‚СЊ РїСЂРѕС€РёРІРєСѓ.";
 
   useEffect(() => {
     if (!selectedRelease || !firmwareAsset || !littlefsAsset) {
@@ -333,7 +334,7 @@ export default function Page() {
     return () => URL.revokeObjectURL(nextUrl);
   }, [selectedRelease, firmwareAsset, littlefsAsset]);
 
-  async function disconnectPort() {
+  async function disconnectPort(options?: { preserveBackupState?: boolean }) {
     try {
       await readerRef.current?.cancel();
     } catch {}
@@ -343,8 +344,15 @@ export default function Page() {
     readerRef.current = null;
     portRef.current = null;
     readLoopRef.current = null;
-    setConfigBackupReady(false);
+    if (!options?.preserveBackupState) {
+      setConfigBackupReady(false);
+      configBackupRef.current = null;
+    }
     setPortState("idle");
+  }
+
+  function isPortOpen(port: any) {
+    return Boolean(port?.readable || port?.writable);
   }
 
   async function writeSerialLine(line: string) {
@@ -424,9 +432,10 @@ export default function Page() {
   }
 
   async function backupConfigViaSerial() {
-    if (portState !== "connected") return null;
+    const activePort = rememberedPortRef.current ?? portRef.current;
+    if (!activePort?.readable || !activePort?.writable) return null;
 
-    setFlashStatus("Зчитуємо конфігурацію з плати...");
+    setFlashStatus("Р—С‡РёС‚СѓС”РјРѕ РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ Р· РїР»Р°С‚Рё...");
 
     return await new Promise<any>(async (resolve, reject) => {
       configTransferRef.current = {
@@ -447,7 +456,7 @@ export default function Page() {
 
   async function restoreConfigViaSerial(configPayload: any) {
     const serialized = JSON.stringify(configPayload || {});
-    setFlashStatus("Повертаємо конфігурацію на плату...");
+    setFlashStatus("РџРѕРІРµСЂС‚Р°С”РјРѕ РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ РЅР° РїР»Р°С‚Сѓ...");
 
     await new Promise<boolean>(async (resolve, reject) => {
       configTransferRef.current = {
@@ -472,12 +481,16 @@ export default function Page() {
   }
 
   async function openBoardPort(port: any) {
-    await port.open({ baudRate: 115200 });
+    if (!isPortOpen(port)) {
+      await port.open({ baudRate: 115200 });
+    }
     portRef.current = port;
     rememberedPortRef.current = port;
     setPortState("connected");
     setConfigBackupReady(false);
-    await startReadLoop(port);
+    if (!readerRef.current) {
+      await startReadLoop(port);
+    }
   }
 
   async function startReadLoop(port: any) {
@@ -522,6 +535,9 @@ export default function Page() {
 
   async function handleConnect() {
     if (!("serial" in navigator)) return;
+    if (portState === "connected" && isPortOpen(portRef.current ?? rememberedPortRef.current)) {
+      return;
+    }
 
     try {
       setPortState("connecting");
@@ -530,20 +546,65 @@ export default function Page() {
       const serial = (navigator as Navigator & { serial: any }).serial;
       const port = await serial.requestPort();
       await openBoardPort(port);
+      await new Promise((resolve) => setTimeout(resolve, 500));
       try {
         configBackupRef.current = await backupConfigViaSerial();
         setConfigBackupReady(Boolean(configBackupRef.current));
-        setFlashStatus("Конфігурацію зчитано. Можна запускати прошивку.");
+        setDefaultConfigMode(false);
+        setFlashStatus("РљРѕРЅС„С–РіСѓСЂР°С†С–СЋ Р·С‡РёС‚Р°РЅРѕ. РњРѕР¶РЅР° Р·Р°РїСѓСЃРєР°С‚Рё РїСЂРѕС€РёРІРєСѓ.");
       } catch (error) {
         console.error("[config-backup-init]", error);
         configBackupRef.current = null;
         setConfigBackupReady(false);
-        setFlashStatus("Не вдалося зчитати конфіг. Безпечна прошивка недоступна.");
+        setDefaultConfigMode(true);
+        setFlashStatus("РљРѕРЅС„С–РіСѓСЂР°С†С–СЋ РЅРµ РІРґР°Р»РѕСЃСЏ Р·С‡РёС‚Р°С‚Рё. РњРѕР¶РЅР° РїСЂРѕС€РёС‚Рё РїР»Р°С‚Сѓ Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ.");
       }
     } catch (error) {
       console.error("[serial-connect]", error);
       await disconnectPort();
     }
+  }
+
+  async function ensureConnectedAndBackedUp() {
+    if (!("serial" in navigator)) throw new Error("serial_unsupported");
+
+    if (portState !== "connected") {
+      setFlashStatus("РџС–РґРєР»СЋС‡Р°С”РјРѕ РїР»Р°С‚Сѓ...");
+      setPortState("connecting");
+      setBoard(EMPTY_BOARD);
+      setSerialLog([]);
+
+      const serial = (navigator as Navigator & { serial: any }).serial;
+      const knownPorts = await serial.getPorts();
+      const port = knownPorts[0] ?? (await serial.requestPort());
+      await openBoardPort(port);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (!configBackupRef.current && !defaultConfigMode) {
+      try {
+        const backup = await backupConfigViaSerial();
+        configBackupRef.current = backup;
+        setConfigBackupReady(Boolean(backup));
+        setDefaultConfigMode(false);
+      } catch (error) {
+        console.error("[config-backup-check]", error);
+        configBackupRef.current = null;
+        setConfigBackupReady(false);
+        setDefaultConfigMode(true);
+      }
+    }
+
+    if (!configBackupRef.current && !defaultConfigMode) {
+      setFlashStatus("РљРѕРЅС„С–РіСѓСЂР°С†С–СЋ РЅРµ РІРґР°Р»РѕСЃСЏ Р·С‡РёС‚Р°С‚Рё. РњРѕР¶РЅР° РїСЂРѕРґРѕРІР¶РёС‚Рё Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ.");
+      return null;
+    }
+
+    if (configBackupRef.current) {
+      setFlashStatus("РљРѕРЅС„С–РіСѓСЂР°С†С–СЋ Р·С‡РёС‚Р°РЅРѕ. Р—Р°РїСѓСЃРєР°С”РјРѕ РїСЂРѕС€РёРІРєСѓ...");
+    }
+
+    return configBackupRef.current;
   }
 
   async function reconnectBoardAfterFlash() {
@@ -563,12 +624,24 @@ export default function Page() {
       await openBoardPort(port);
     } catch (error) {
       console.error("[serial-reconnect]", error);
+      if (isPortOpen(port)) {
+        try {
+          portRef.current = port;
+          rememberedPortRef.current = port;
+          setPortState("connected");
+          if (!readerRef.current) {
+            await startReadLoop(port);
+          }
+          return;
+        } catch {}
+      }
       await disconnectPort();
     }
   }
 
   async function handleFlashDialogClosed() {
-    setFlashStatus("Прошивка завершена. Повертаємо підключення до плати...");
+    setFlashStage("flashed");
+    setFlashStatus("РџСЂРѕС€РёС‚Рѕ");
     if (!reconnectAfterFlashRef.current) return;
     reconnectAfterFlashRef.current = false;
     restoreAfterReconnectRef.current = Boolean(configBackupRef.current);
@@ -576,7 +649,8 @@ export default function Page() {
     await reconnectBoardAfterFlash();
     if (!restoreAfterReconnectRef.current) {
       setFlashBusy(false);
-      setFlashStatus("Плату перепрошито.");
+      setFlashStage("done");
+      setFlashStatus("Р“РѕС‚РѕРІРѕ. РџР»Р°С‚Сѓ РїСЂРѕС€РёС‚Рѕ Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ.");
     }
   }
 
@@ -585,46 +659,63 @@ export default function Page() {
 
     reconnectAfterFlashRef.current = true;
     setFlashBusy(true);
-    setFlashStatus("Готуємо прошивку...");
-    if (!configBackupRef.current) {
-      setFlashBusy(false);
-      setFlashStatus("Конфігурацію не зчитано. Спершу перепідключи плату.");
-      return;
-    }
-
-    if (portState === "connected" || portState === "connecting") {
-      await disconnectPort();
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
-
-    const observer = new MutationObserver((mutations, obs) => {
-      for (const mutation of mutations) {
-        for (const node of Array.from(mutation.addedNodes)) {
-          if (node instanceof HTMLElement && node.tagName.toLowerCase() === "ewt-install-dialog") {
-            node.addEventListener(
-              "closed",
-              () => {
-                void handleFlashDialogClosed();
-              },
-              { once: true },
-            );
-            obs.disconnect();
-            return;
-          }
-        }
-      }
-    });
-
-    observer.observe(document.body, { childList: true });
+    setFlashStage("");
+    setFlashStatus("Р“РѕС‚СѓС”РјРѕ РїСЂРѕС€РёРІРєСѓ...");
 
     try {
-      setFlashStatus("Відкриваємо діалог прошивки...");
+      const backup = await ensureConnectedAndBackedUp();
+
+      if (!backup) {
+        const continueWithDefault = window.confirm("Конфігурацію не вдалося зчитати. Продовжити прошивку з типовою конфігурацією?");
+        if (!continueWithDefault) {
+          reconnectAfterFlashRef.current = false;
+          setFlashBusy(false);
+          setFlashStatus("РџСЂРѕС€РёРІРєСѓ СЃРєР°СЃРѕРІР°РЅРѕ. РџРµСЂРµРІС–СЂ Р·С‡РёС‚СѓРІР°РЅРЅСЏ РєРѕРЅС„С–РіСѓ Р№ СЃРїСЂРѕР±СѓР№ С‰Рµ СЂР°Р·.");
+          return;
+        }
+
+        configBackupRef.current = null;
+        setConfigBackupReady(false);
+        setDefaultConfigMode(true);
+        setFlashStatus("РџСЂРѕРґРѕРІР¶СѓС”РјРѕ Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ Р· СЂРµР»С–Р·Сѓ...");
+      }
+
+      if (rememberedPortRef.current || portRef.current) {
+        await disconnectPort({ preserveBackupState: Boolean(configBackupRef.current) });
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
+      const observer = new MutationObserver((mutations, obs) => {
+        for (const mutation of mutations) {
+          for (const node of Array.from(mutation.addedNodes)) {
+            if (node instanceof HTMLElement && node.tagName.toLowerCase() === "ewt-install-dialog") {
+              node.addEventListener(
+                "closed",
+                () => {
+                  void handleFlashDialogClosed();
+                },
+                { once: true },
+              );
+              obs.disconnect();
+              return;
+            }
+          }
+        }
+      });
+
+      observer.observe(document.body, { childList: true });
+      setFlashStatus("Р’С–РґРєСЂРёРІР°С”РјРѕ РґС–Р°Р»РѕРі РїСЂРѕС€РёРІРєРё...");
       await startEspInstall(installButtonRef.current);
     } catch (error) {
-      observer.disconnect();
       reconnectAfterFlashRef.current = false;
       setFlashBusy(false);
-      setFlashStatus("Не вдалося запустити прошивку.");
+      setConfigBackupReady(Boolean(configBackupRef.current));
+      setFlashStage("");
+      setFlashStatus(
+        defaultConfigMode
+          ? "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РїСѓСЃС‚РёС‚Рё РїСЂРѕС€РёРІРєСѓ. РЎРїСЂРѕР±СѓР№ С‰Рµ СЂР°Р· Р· РїС–РґРєР»СЋС‡РµРЅРѕСЋ РїР»Р°С‚РѕСЋ."
+          : "РќРµ РІРґР°Р»РѕСЃСЏ РїС–РґРіРѕС‚СѓРІР°С‚Рё РїСЂРѕС€РёРІРєСѓ Р°Р±Рѕ Р·С‡РёС‚Р°С‚Рё РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ. РџРµСЂРµРІС–СЂ РєР°Р±РµР»СЊ С– СЃРїСЂРѕР±СѓР№ С‰Рµ СЂР°Р·.",
+      );
       console.error("[flash-start]", error);
       await reconnectBoardAfterFlash();
     }
@@ -641,22 +732,25 @@ export default function Page() {
       void (async () => {
         try {
           await new Promise((resolve) => setTimeout(resolve, 1500));
+          setFlashStage("restoring");
           await restoreConfigViaSerial(configBackupRef.current);
-          setFlashStatus("Конфігурацію відновлено. Чекаємо перезапуск плати...");
-          await disconnectPort();
+          await disconnectPort({ preserveBackupState: true });
           await new Promise((resolve) => setTimeout(resolve, 2500));
           await reconnectBoardAfterFlash();
           try {
             configBackupRef.current = await backupConfigViaSerial();
             setConfigBackupReady(Boolean(configBackupRef.current));
+            setDefaultConfigMode(false);
           } catch (_) {
             configBackupRef.current = null;
             setConfigBackupReady(false);
           }
-          setFlashStatus("Плату перепрошито, конфігурацію повернуто.");
+          setFlashStage("done");
+          setFlashStatus("Р“РѕС‚РѕРІРѕ");
         } catch (error) {
           console.error("[config-restore]", error);
-          setFlashStatus("Прошивка завершена, але конфігурацію не вдалося повернути автоматично.");
+          setFlashStage("");
+          setFlashStatus("РџСЂРѕС€РёРІРєР° Р·Р°РІРµСЂС€РµРЅР°, Р°Р»Рµ РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ РЅРµ РІРґР°Р»РѕСЃСЏ РїРѕРІРµСЂРЅСѓС‚Рё Р°РІС‚РѕРјР°С‚РёС‡РЅРѕ.");
         } finally {
           configBackupRef.current = null;
           setFlashBusy(false);
@@ -678,17 +772,17 @@ export default function Page() {
 
         <div className="sidebar-card">
           <div className="panel-label">COM / Browser</div>
-          <h2 className="panel-title">Підключення плати</h2>
+          <h2 className="panel-title">РџС–РґРєР»СЋС‡РµРЅРЅСЏ РїР»Р°С‚Рё</h2>
           <p className="panel-text">
-            Працює в Chrome або Edge на ПК. Сторінка зчитує сервісну інформацію
-            з serial ще до етапу прошивки.
+            РџСЂР°С†СЋС” РІ Chrome Р°Р±Рѕ Edge РЅР° РџРљ. РЎС‚РѕСЂС–РЅРєР° Р·С‡РёС‚СѓС” СЃРµСЂРІС–СЃРЅСѓ С–РЅС„РѕСЂРјР°С†С–СЋ
+            Р· serial С‰Рµ РґРѕ РµС‚Р°РїСѓ РїСЂРѕС€РёРІРєРё.
           </p>
           <div
             className={`status-pill ${serialSupported ? "is-ok" : "is-warn"}`}
           >
             {serialSupported
-              ? "Web Serial доступний"
-              : "Потрібен Chromium-браузер"}
+              ? "Web Serial РґРѕСЃС‚СѓРїРЅРёР№"
+              : "РџРѕС‚СЂС–Р±РµРЅ Chromium-Р±СЂР°СѓР·РµСЂ"}
           </div>
           <div className="button-stack">
             <button
@@ -697,52 +791,34 @@ export default function Page() {
               disabled={!serialSupported || portState === "connecting" || flashBusy}
             >
               {portState === "connected"
-                ? "Порт підключено"
+                ? "РџРѕСЂС‚ РїС–РґРєР»СЋС‡РµРЅРѕ"
                 : portState === "connecting"
-                  ? "Підключення..."
-                  : "Підключити плату"}
+                  ? "РџС–РґРєР»СЋС‡РµРЅРЅСЏ..."
+                  : "РџС–РґРєР»СЋС‡РёС‚Рё РїР»Р°С‚Сѓ"}
             </button>
             <button
               className="ghost-btn"
               onClick={() => void disconnectPort()}
               disabled={portState !== "connected" || flashBusy}
             >
-              Від'єднати
+              Р’С–Рґ'С”РґРЅР°С‚Рё
             </button>
           </div>
         </div>
 
         <div className="sidebar-card">
-          <div className="panel-label">GitHub</div>
-          <h2 className="panel-title">Проєкт AlarmMini</h2>
-          <p className="panel-text">
-            Офіційний репозиторій з кодом, документацією та релізами прошивки.
-          </p>
-          <div className="button-stack">
-            <a
-              className="ghost-btn support-link"
-              href={PROJECT_REPO_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Відкрити GitHub
-            </a>
-          </div>
-        </div>
-
-        <div className="sidebar-card">
           <div className="panel-label">Support</div>
-          <h2 className="panel-title">Підтримати автора</h2>
+          <h2 className="panel-title">РџС–РґС‚СЂРёРјР°С‚Рё Р°РІС‚РѕСЂР°</h2>
 
           <div className="support-qr-shell">
             {supportQrSrc ? (
               <img
                 className="support-qr-image"
                 src={supportQrSrc}
-                alt="Mono QR для донату"
+                alt="Mono QR РґР»СЏ РґРѕРЅР°С‚Сѓ"
               />
             ) : (
-              <div className="support-qr-placeholder">Готуємо QR...</div>
+              <div className="support-qr-placeholder">Р“РѕС‚СѓС”РјРѕ QR...</div>
             )}
           </div>
           <div className="button-stack">
@@ -752,7 +828,7 @@ export default function Page() {
               target="_blank"
               rel="noreferrer"
             >
-              Підтримати автора
+              РџС–РґС‚СЂРёРјР°С‚Рё Р°РІС‚РѕСЂР°
             </a>
             <a
               className="ghost-btn support-link"
@@ -760,7 +836,25 @@ export default function Page() {
               target="_blank"
               rel="noreferrer"
             >
-              Telegram група
+              Telegram РіСЂСѓРїР°
+            </a>
+          </div>
+        </div>
+
+        <div className="sidebar-card">
+          <div className="panel-label">GitHub</div>
+          <h2 className="panel-title">РџСЂРѕС”РєС‚ AlarmMini</h2>
+          <p className="panel-text">
+            РћС„С–С†С–Р№РЅРёР№ СЂРµРїРѕР·РёС‚РѕСЂС–Р№ Р· РєРѕРґРѕРј, РґРѕРєСѓРјРµРЅС‚Р°С†С–С”СЋ С‚Р° СЂРµР»С–Р·Р°РјРё РїСЂРѕС€РёРІРєРё.
+          </p>
+          <div className="button-stack">
+            <a
+              className="ghost-btn support-link"
+              href={PROJECT_REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Р’С–РґРєСЂРёС‚Рё GitHub
             </a>
           </div>
         </div>
@@ -769,55 +863,10 @@ export default function Page() {
       <section className="installer-content">
         <header className="hero-card">
           <div className="hero-copy">
-            <div className="content-eyebrow">Прошивка</div>
-            <h1 className="content-title">Вибір релізу та підключення плати</h1>
+            <div className="content-eyebrow">РџСЂРѕС€РёРІРєР°</div>
+            <h1 className="content-title">Р’РёР±С–СЂ СЂРµР»С–Р·Сѓ С‚Р° РїС–РґРєР»СЋС‡РµРЅРЅСЏ РїР»Р°С‚Рё</h1>
           </div>
 
-          <div className="hero-side">
-            <div className="panel-label">Обраний реліз</div>
-            <div className="hero-release">
-              {selectedRelease?.name ||
-                selectedRelease?.tag_name ||
-                "Ще не вибрано"}
-            </div>
-            <div className="hero-assets">
-              <span>
-                {firmwareAsset
-                  ? firmwareAsset.name
-                  : "firmware.bin не знайдено"}
-              </span>
-              <span>
-                {littlefsAsset
-                  ? littlefsAsset.name
-                  : "littlefs.bin не знайдено"}
-              </span>
-            </div>
-            <div
-              className={`status-pill ${configBackupReady ? "is-ok" : "is-warn"}`}
-            >
-              {configBackupReady
-                ? "Конфіг збережено перед прошивкою"
-                : "Потрібен backup конфігу"}
-            </div>
-            <div className="button-stack hero-action-stack">
-              {createElement("esp-web-install-button" as any, {
-                manifest: installManifestUrl,
-                class: "install-button-host",
-                ref: installButtonRef,
-              })}
-              <button
-                className="primary-btn install-trigger-btn"
-                type="button"
-                disabled={!canFlashSelectedRelease}
-                title={flashHint}
-                onClick={() => void handleFlashStart()}
-              >
-                {flashBusy ? "Підготовка до прошивки..." : "Прошити плату"}
-              </button>
-            </div>
-            <div className="hero-hint">{flashHint}</div>
-            {flashStatus ? <div className="hero-hint">{flashStatus}</div> : null}
-          </div>
         </header>
 
         <div className="content-grid">
@@ -825,16 +874,16 @@ export default function Page() {
             <div className="panel-head">
               <div>
                 <div className="panel-label">GitHub Releases</div>
-                <h2 className="panel-title">Список доступних версій</h2>
+                <h2 className="panel-title">РЎРїРёСЃРѕРє РґРѕСЃС‚СѓРїРЅРёС… РІРµСЂСЃС–Р№</h2>
               </div>
             </div>
 
             {loading && (
-              <div className="state-box">Завантаження релізів...</div>
+              <div className="state-box">Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ СЂРµР»С–Р·С–РІ...</div>
             )}
             {error && <div className="state-box state-box-error">{error}</div>}
             {!loading && !error && releases.length === 0 && (
-              <div className="state-box">Релізи не знайдено.</div>
+              <div className="state-box">Р РµР»С–Р·Рё РЅРµ Р·РЅР°Р№РґРµРЅРѕ.</div>
             )}
 
             {!loading && !error && releases.length > 0 && (
@@ -859,7 +908,7 @@ export default function Page() {
                           className={isActive ? "ghost-btn" : "inline-btn"}
                           onClick={() => setSelectedReleaseId(release.id)}
                         >
-                          {isActive ? "Обрано" : "Вибрати"}
+                          {isActive ? "РћР±СЂР°РЅРѕ" : "Р’РёР±СЂР°С‚Рё"}
                         </button>
                       </div>
 
@@ -877,7 +926,7 @@ export default function Page() {
                               target="_blank"
                               rel="noreferrer"
                             >
-                              Відкрити
+                              Р’С–РґРєСЂРёС‚Рё
                             </a>
                           </div>
                         ))}
@@ -890,16 +939,68 @@ export default function Page() {
           </section>
 
           <section className="panel-card installer-panel">
+
+
+          <div className="hero-side">
+            <div className="panel-label">РћР±СЂР°РЅРёР№ СЂРµР»С–Р·</div>
+            <div className="hero-release">
+              {selectedRelease?.name ||
+                selectedRelease?.tag_name ||
+                "Р©Рµ РЅРµ РІРёР±СЂР°РЅРѕ"}
+            </div>
+            <div className="hero-assets">
+              <span>
+                {firmwareAsset
+                  ? firmwareAsset.name
+                  : "firmware.bin РЅРµ Р·РЅР°Р№РґРµРЅРѕ"}
+              </span>
+              <span>
+                {littlefsAsset
+                  ? littlefsAsset.name
+                  : "littlefs.bin РЅРµ Р·РЅР°Р№РґРµРЅРѕ"}
+              </span>
+            </div>
+            <div
+              className={`status-pill ${configBackupReady ? "is-ok" : "is-warn"}`}
+            >
+              {configBackupReady
+                ? "РљРѕРЅС„С–Рі Р·Р±РµСЂРµР¶РµРЅРѕ РїРµСЂРµРґ РїСЂРѕС€РёРІРєРѕСЋ"
+                : "РџРѕС‚СЂС–Р±РµРЅ backup РєРѕРЅС„С–РіСѓ"}
+            </div>
+            <div className="button-stack hero-action-stack">
+              {createElement("esp-web-install-button" as any, {
+                manifest: installManifestUrl,
+                class: "install-button-host",
+                ref: installButtonRef,
+              })}
+              <button
+                className="primary-btn install-trigger-btn"
+                type="button"
+                disabled={!canFlashSelectedRelease}
+                title={flashHint}
+                onClick={() => void handleFlashStart()}
+              >
+                {flashBusy ? "РџС–РґРіРѕС‚РѕРІРєР° РґРѕ РїСЂРѕС€РёРІРєРё..." : "РџСЂРѕС€РёС‚Рё РїР»Р°С‚Сѓ"}
+              </button>
+            </div>
+            <div className="hero-hint">{flashHint}</div>
+            {flashStatus ? (
+              <div className={`hero-hint ${flashStage ? `flash-stage flash-stage-${flashStage}` : ""}`}>
+                {flashStatus}
+              </div>
+            ) : null}
+          </div>
+
             <div className="panel-head">
               <div>
                 <div className="panel-label">COM status</div>
-                <h2 className="panel-title">Службова інформація з плати</h2>
+                <h2 className="panel-title">РЎР»СѓР¶Р±РѕРІР° С–РЅС„РѕСЂРјР°С†С–СЏ Р· РїР»Р°С‚Рё</h2>
               </div>
             </div>
 
             <div className="board-grid">
               <div className="info-tile">
-                <span>Wi‑Fi</span>
+                <span>WiвЂ‘Fi</span>
                 <strong>{board.wifiStatus}</strong>
               </div>
               <div className="info-tile">
@@ -919,7 +1020,7 @@ export default function Page() {
                 <strong>{board.mdnsUrl}</strong>
               </div>
               <div className="info-tile">
-                <span>Пароль</span>
+                <span>РџР°СЂРѕР»СЊ</span>
                 <strong>{board.adminPassword}</strong>
               </div>
               <div className="info-tile">
@@ -927,7 +1028,7 @@ export default function Page() {
                 <strong>{board.firmwareVersion}</strong>
               </div>
               <div className="info-tile">
-                <span>Останній рядок</span>
+                <span>РћСЃС‚Р°РЅРЅС–Р№ СЂСЏРґРѕРє</span>
                 <strong>{board.lastLine}</strong>
               </div>
             </div>
@@ -938,13 +1039,13 @@ export default function Page() {
                 <span
                   className={`status-pill ${portState === "connected" ? "is-ok" : "is-muted"}`}
                 >
-                  {portState === "connected" ? "Streaming" : "Не читається"}
+                  {portState === "connected" ? "Streaming" : "РќРµ С‡РёС‚Р°С”С‚СЊСЃСЏ"}
                 </span>
               </div>
               <div className="serial-lines">
                 {serialLog.length === 0 ? (
                   <div className="serial-empty">
-                    Підключи плату, щоб побачити лог.
+                    РџС–РґРєР»СЋС‡Рё РїР»Р°С‚Сѓ, С‰РѕР± РїРѕР±Р°С‡РёС‚Рё Р»РѕРі.
                   </div>
                 ) : (
                   serialLog.map((line, index) => (
@@ -961,3 +1062,5 @@ export default function Page() {
     </main>
   );
 }
+
+

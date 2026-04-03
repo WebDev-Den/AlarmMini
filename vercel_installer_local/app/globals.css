@@ -122,6 +122,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
 .brand-title,
@@ -161,6 +163,8 @@ button {
 .step-item {
   color: var(--text-2);
   line-height: 1.6;
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
 .button-stack,
@@ -384,6 +388,34 @@ button {
   font-family: var(--mono);
   font-size: 11px;
   line-height: 1.5;
+}
+
+.flash-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  width: fit-content;
+}
+
+.flash-stage-flashed {
+  color: #ffd84f;
+  border-color: rgba(255, 216, 79, 0.35);
+  background: rgba(255, 216, 79, 0.08);
+}
+
+.flash-stage-restoring {
+  color: #76f7a5;
+  border-color: rgba(118, 247, 165, 0.35);
+  background: rgba(118, 247, 165, 0.08);
+}
+
+.flash-stage-done {
+  color: #7cc3ff;
+  border-color: rgba(124, 195, 255, 0.35);
+  background: rgba(124, 195, 255, 0.08);
 }
 
 .content-grid {
