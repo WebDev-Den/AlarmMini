@@ -248,6 +248,7 @@ export default function Page() {
   const [flashStage, setFlashStage] = useState<
     "" | "flashed" | "restoring" | "done"
   >("");
+  const [backupProgress, setBackupProgress] = useState<number | null>(null);
   const [configBackupReady, setConfigBackupReady] = useState(false);
   const [defaultConfigMode, setDefaultConfigMode] = useState(false);
   const [boardConfig, setBoardConfig] = useState<DeviceConfig>(
@@ -269,6 +270,27 @@ export default function Page() {
   const configTransferRef = useRef<ConfigTransferState | null>(null);
   const configOverridesRef = useRef<Partial<DeviceConfig> | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const backupStartedAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (backupProgress === null) return;
+
+    const timer = window.setInterval(() => {
+      const startedAt = backupStartedAtRef.current;
+      if (!startedAt) {
+        setBackupProgress(null);
+        return;
+      }
+      const elapsed = Date.now() - startedAt;
+      const progress = Math.min(100, (elapsed / 30000) * 100);
+      setBackupProgress(progress);
+      if (progress >= 100) {
+        window.clearInterval(timer);
+      }
+    }, 150);
+
+    return () => window.clearInterval(timer);
+  }, [backupProgress]);
 
   useEffect(() => {
     setSerialSupported(
@@ -433,6 +455,43 @@ export default function Page() {
     );
   }
 
+  async function applyConfigToConnectedBoard(merged: DeviceConfig) {
+    if (
+      portState !== "connected" ||
+      !isPortOpen(rememberedPortRef.current ?? portRef.current) ||
+      flashBusy
+    ) {
+      setFlashStatus(t.config.connectToApply);
+      return false;
+    }
+
+    setFlashBusy(true);
+    try {
+      setFlashStatus(t.config.applying);
+      await restoreConfigViaSerial(merged);
+      await disconnectPort({ preserveBackupState: true });
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await reconnectBoardAfterFlash();
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      try {
+        configBackupRef.current = getMergedConfigPayload(
+          await backupConfigWithRetry(2),
+        );
+        syncBoardConfig(configBackupRef.current);
+      } catch {
+        configBackupRef.current = merged;
+      }
+      setFlashStatus(t.config.applied);
+      return true;
+    } catch (configApplyError) {
+      console.error("[config-apply]", configApplyError);
+      setFlashStatus(t.config.applyFailed);
+      return false;
+    } finally {
+      setFlashBusy(false);
+    }
+  }
+
   async function saveConfigDraft() {
     const normalized = normalizeDeviceConfig(configDraft);
     const overrides: Partial<DeviceConfig> = {
@@ -464,32 +523,24 @@ export default function Page() {
         isPortOpen(rememberedPortRef.current ?? portRef.current) &&
         !flashBusy
       ) {
-        setFlashBusy(true);
-        setFlashStatus(t.config.applying);
-        await restoreConfigViaSerial(merged);
-        await disconnectPort({ preserveBackupState: true });
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        await reconnectBoardAfterFlash();
-        await new Promise((resolve) => setTimeout(resolve, 1800));
-        try {
-          configBackupRef.current = getMergedConfigPayload(
-            await backupConfigWithRetry(2),
-          );
-          syncBoardConfig(configBackupRef.current);
-        } catch {
-          configBackupRef.current = merged;
-        }
-        setFlashStatus(t.config.applied);
+        await applyConfigToConnectedBoard(merged);
       } else {
         setFlashStatus(t.config.staged);
       }
       setConfigModalOpen(false);
-    } catch (configApplyError) {
-      console.error("[config-apply]", configApplyError);
-      setFlashStatus(t.config.applyFailed);
-    } finally {
-      setFlashBusy(false);
-    }
+    } catch {}
+  }
+
+  async function applyStagedConfigToBoard() {
+    const merged = getMergedConfigPayload({
+      ...boardConfig,
+      ...(configOverridesRef.current || {}),
+    });
+    configBackupRef.current = merged;
+    syncBoardConfig(merged);
+    setConfigBackupReady(true);
+    setDefaultConfigMode(false);
+    await applyConfigToConnectedBoard(merged);
   }
 
   function exportConfigDraft() {
@@ -627,6 +678,26 @@ export default function Page() {
     if (transfer) transfer.timeoutId = null;
   }
 
+  function beginBackupProgress() {
+    backupStartedAtRef.current = Date.now();
+    setBackupProgress(0);
+  }
+
+  function resetBackupProgress() {
+    backupStartedAtRef.current = 0;
+    setBackupProgress(null);
+  }
+
+  function armConfigTransferTimeout(reason: string, timeoutMs: number) {
+    const transfer = configTransferRef.current;
+    if (!transfer) return;
+    clearConfigTransferTimeout();
+    transfer.timeoutId = setTimeout(
+      () => rejectConfigTransfer(reason),
+      timeoutMs,
+    );
+  }
+
   function resetConfigTransferState() {
     clearConfigTransferTimeout();
     configTransferRef.current = null;
@@ -652,7 +723,11 @@ export default function Page() {
     }
 
     if (line === "AMCFG READY") {
-      clearConfigTransferTimeout();
+      if (transfer.mode === "backup") {
+        armConfigTransferTimeout("backup_timeout", 15000);
+      } else {
+        clearConfigTransferTimeout();
+      }
       if (transfer.readyResolve) {
         const readyResolve = transfer.readyResolve;
         transfer.readyResolve = null;
@@ -663,13 +738,16 @@ export default function Page() {
 
     if (line.startsWith("AMCFG BEGIN ")) {
       transfer.buffer = "";
-      clearConfigTransferTimeout();
+      armConfigTransferTimeout("backup_timeout", 15000);
       return true;
     }
 
     if (line.startsWith("AMCFG DATA ")) {
       transfer.buffer += line.slice("AMCFG DATA ".length);
-      clearConfigTransferTimeout();
+      armConfigTransferTimeout(
+        transfer.mode === "backup" ? "backup_timeout" : "restore_timeout",
+        15000,
+      );
       return true;
     }
 
@@ -700,6 +778,7 @@ export default function Page() {
     if (!activePort?.readable || !activePort?.writable) return null;
 
     setFlashStatus(t.flash.readingConfig);
+    beginBackupProgress();
     resetConfigTransferState();
 
     return await new Promise<any>(async (resolve, reject) => {
@@ -708,10 +787,7 @@ export default function Page() {
         resolve,
         reject,
         buffer: "",
-        timeoutId: setTimeout(
-          () => rejectConfigTransfer("backup_timeout"),
-          15000,
-        ),
+        timeoutId: setTimeout(() => rejectConfigTransfer("backup_timeout"), 30000),
         readyResolve: null,
       };
 
@@ -734,10 +810,7 @@ export default function Page() {
         resolve,
         reject,
         buffer: "",
-        timeoutId: setTimeout(
-          () => rejectConfigTransfer("restore_timeout"),
-          15000,
-        ),
+        timeoutId: setTimeout(() => rejectConfigTransfer("restore_timeout"), 20000),
         readyResolve: null,
       };
 
@@ -764,10 +837,7 @@ export default function Page() {
         }
         clearConfigTransferTimeout();
         if (configTransferRef.current) {
-          configTransferRef.current.timeoutId = setTimeout(
-            () => rejectConfigTransfer("restore_timeout"),
-            15000,
-          );
+          armConfigTransferTimeout("restore_timeout", 20000);
         }
         await writeSerialLine("AMCFG SET END");
       } catch {
@@ -828,13 +898,18 @@ export default function Page() {
           await new Promise((resolve) => setTimeout(resolve, 1200));
         }
         const backup = await backupConfigViaSerial();
-        if (backup) return backup;
+        if (backup) {
+          resetBackupProgress();
+          return backup;
+        }
       } catch (backupError) {
         lastError = backupError;
         resetConfigTransferState();
+        resetBackupProgress();
       }
     }
 
+    resetBackupProgress();
     throw lastError instanceof Error
       ? lastError
       : new Error("backup_timeout");
@@ -874,12 +949,14 @@ export default function Page() {
         configBackupRef.current = getMergedConfigPayload(
           await backupConfigWithRetry(),
         );
+        resetBackupProgress();
         syncBoardConfig(configBackupRef.current);
         setConfigBackupReady(Boolean(configBackupRef.current));
         setDefaultConfigMode(false);
         setFlashStatus(t.flash.configReadOk);
       } catch (backupError) {
         console.error("[config-backup-init]", backupError);
+        resetBackupProgress();
         configBackupRef.current = null;
         setConfigBackupReady(false);
         setDefaultConfigMode(true);
@@ -910,12 +987,14 @@ export default function Page() {
     if (!configBackupRef.current && !defaultConfigMode) {
       try {
         const backup = getMergedConfigPayload(await backupConfigWithRetry());
+        resetBackupProgress();
         configBackupRef.current = backup;
         syncBoardConfig(backup);
         setConfigBackupReady(Boolean(backup));
         setDefaultConfigMode(false);
       } catch (backupError) {
         console.error("[config-backup-check]", backupError);
+        resetBackupProgress();
         configBackupRef.current = null;
         setConfigBackupReady(false);
         setDefaultConfigMode(true);
@@ -923,7 +1002,7 @@ export default function Page() {
     }
 
     if (!configBackupRef.current && !defaultConfigMode) {
-      setFlashStatus(t.flash.configNotReadContinue);
+      setFlashStatus(t.flash.continuingWithDefault);
       return null;
     }
 
@@ -993,16 +1072,6 @@ export default function Page() {
       const backup = await ensureConnectedAndBackedUp();
 
       if (!backup) {
-        const continueWithDefault = window.confirm(
-          t.flash.continueWithDefaultQuestion,
-        );
-        if (!continueWithDefault) {
-          reconnectAfterFlashRef.current = false;
-          setFlashBusy(false);
-          setFlashStatus(t.flash.flashCancelled);
-          return;
-        }
-
         configBackupRef.current = null;
         setConfigBackupReady(false);
         setDefaultConfigMode(true);
@@ -1043,6 +1112,7 @@ export default function Page() {
     } catch (flashError) {
       reconnectAfterFlashRef.current = false;
       setFlashBusy(false);
+      resetBackupProgress();
       setConfigBackupReady(Boolean(configBackupRef.current));
       setFlashStage("");
       setFlashStatus(
@@ -1318,10 +1388,23 @@ export default function Page() {
                 </button>
               </div>
               <div className="hero-hint">{flashHint}</div>
+              {backupProgress !== null ? (
+                <div className="flash-progress">
+                  <div className="flash-progress-bar">
+                    <span
+                      className="flash-progress-fill"
+                      style={{ width: `${backupProgress}%` }}
+                    />
+                  </div>
+                  <div className="hero-hint">
+                    {Math.max(0, Math.ceil((30000 - backupProgress * 300) / 1000))} c
+                  </div>
+                </div>
+              ) : null}
               {flashStatus ? (
-                <div
-                  className={`hero-hint ${flashStage ? `flash-stage flash-stage-${flashStage}` : ""}`}
-                >
+                  <div
+                    className={`hero-hint ${flashStage ? `flash-stage flash-stage-${flashStage}` : ""}`}
+                  >
                   {flashStatus}
                 </div>
               ) : null}
@@ -1335,20 +1418,41 @@ export default function Page() {
             </div>
 
             <div className="config-summary">
-              <div className="panel-head">
-                <div>
-                  <div className="panel-label">{t.config.title}</div>
-                  <h3 className="panel-title">{t.config.subtitle}</h3>
+                <div className="panel-head">
+                  <div>
+                    <div className="panel-label">{t.config.title}</div>
+                    <h3 className="panel-title">{t.config.subtitle}</h3>
+                  </div>
+                  <div className="button-stack">
+                    {hasConfigOverrides() ? (
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => void applyStagedConfigToBoard()}
+                        disabled={
+                          flashBusy ||
+                          portState !== "connected" ||
+                          !isPortOpen(rememberedPortRef.current ?? portRef.current)
+                        }
+                        title={
+                          portState === "connected"
+                            ? ""
+                            : t.config.connectToApply
+                        }
+                      >
+                        {t.config.applyNow}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="inline-btn config-edit-btn"
+                      onClick={openConfigModal}
+                      disabled={flashBusy}
+                    >
+                      {t.config.edit}
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  className="inline-btn config-edit-btn"
-                  onClick={openConfigModal}
-                  disabled={flashBusy}
-                >
-                  {t.config.edit}
-                </button>
-              </div>
 
               <div className="board-grid">
                 <div className="info-tile">

@@ -49,6 +49,7 @@ export const LANG = {
       user: "Логін",
       mqttPassword: "Пароль MQTT",
       edit: "Конфігурація",
+      applyNow: "Застосувати на плату",
       close: "Закрити",
       save: "Застосувати",
       import: "Завантажити JSON",
@@ -63,6 +64,7 @@ export const LANG = {
       localLoaded: "Локальну конфігурацію відновлено в браузері.",
       imported: "Конфігурацію завантажено. Перевір поля та застосуй зміни.",
       importFailed: "Не вдалося прочитати JSON конфігурації.",
+      connectToApply: "Підключи плату, щоб застосувати підготовлений конфіг.",
     },
     flash: {
       releaseMissing: "Ще не вибрано",

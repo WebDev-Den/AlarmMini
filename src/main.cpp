@@ -78,8 +78,9 @@ static void serialConfigApplyIncoming()
     storageApplyJson(doc);
     loggerSetMask(gConfig.logMask);
     Serial.println("AMCFG OK");
+    Serial.flush();
     LOG_INFO(LOG_CAT_CONFIG, "Config restored from serial");
-    scheduleRestart();
+    scheduleRestart(1200);
 }
 
 static void handleSerialProtocolLine(const String &line)
