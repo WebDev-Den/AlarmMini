@@ -15,12 +15,22 @@ static String gSerialLineBuffer;
 static String gIncomingConfigJson;
 static bool gReceivingConfig = false;
 
+static void serialSendJsonStatus(const char *eventName, const char *extraKey = nullptr, const char *extraValue = nullptr)
+{
+    DynamicJsonDocument doc(256);
+    doc["event"] = eventName;
+    if (extraKey && extraValue)
+        doc[extraKey] = extraValue;
+    serializeJson(doc, Serial);
+    Serial.println();
+}
+
 static void serialConfigSendCurrent()
 {
     File configFile = LittleFS.open("/config.json", "r");
     if (!configFile)
     {
-        Serial.println("AMCFG ERROR read_failed");
+        serialSendJsonStatus("error", "reason", "read_failed");
         return;
     }
 
@@ -30,27 +40,37 @@ static void serialConfigSendCurrent()
 
     if (!json.length())
     {
-        Serial.println("AMCFG ERROR empty");
+        serialSendJsonStatus("error", "reason", "empty");
         return;
     }
 
-    Serial.printf("AMCFG BEGIN %u\n", json.length());
-    constexpr size_t chunkSize = 192;
+    {
+        DynamicJsonDocument beginDoc(128);
+        beginDoc["event"] = "config_begin";
+        beginDoc["length"] = json.length();
+        serializeJson(beginDoc, Serial);
+        Serial.println();
+    }
+
+    constexpr size_t chunkSize = 160;
     for (size_t offset = 0; offset < json.length(); offset += chunkSize)
     {
         String chunk = json.substring(offset, offset + chunkSize);
-        Serial.print("AMCFG DATA ");
-        Serial.println(chunk);
+        DynamicJsonDocument dataDoc(256);
+        dataDoc["event"] = "config_data";
+        dataDoc["data"] = chunk;
+        serializeJson(dataDoc, Serial);
+        Serial.println();
         yield();
     }
-    Serial.println("AMCFG END");
+    serialSendJsonStatus("config_end");
 }
 
 static void serialConfigApplyIncoming()
 {
     if (!gIncomingConfigJson.length())
     {
-        Serial.println("AMCFG ERROR empty_payload");
+        serialSendJsonStatus("error", "reason", "empty_payload");
         return;
     }
 
@@ -58,7 +78,9 @@ static void serialConfigApplyIncoming()
     DeserializationError err = deserializeJson(doc, gIncomingConfigJson);
     if (err)
     {
-        Serial.printf("AMCFG ERROR json_%s\n", err.c_str());
+        char reason[64];
+        snprintf(reason, sizeof(reason), "json_%s", err.c_str());
+        serialSendJsonStatus("error", "reason", reason);
         return;
     }
 
@@ -68,7 +90,7 @@ static void serialConfigApplyIncoming()
     File configFile = LittleFS.open("/config.json", "w");
     if (!configFile)
     {
-        Serial.println("AMCFG ERROR write_failed");
+        serialSendJsonStatus("error", "reason", "write_failed");
         return;
     }
 
@@ -77,17 +99,114 @@ static void serialConfigApplyIncoming()
 
     storageApplyJson(doc);
     loggerSetMask(gConfig.logMask);
-    Serial.println("AMCFG OK");
+    serialSendJsonStatus("ok");
     Serial.flush();
     LOG_INFO(LOG_CAT_CONFIG, "Config restored from serial");
     scheduleRestart(1200);
 }
 
+static void serialSendReady()
+{
+    DynamicJsonDocument doc(192);
+    doc["event"] = "ready";
+    doc["protocol"] = "json-config-v1";
+    doc["version"] = FIRMWARE_VERSION;
+    serializeJson(doc, Serial);
+    Serial.println();
+}
+
+static bool handleSerialJsonMessage(const String &line)
+{
+    const int jsonStart = line.indexOf('{');
+    if (jsonStart < 0)
+        return false;
+    String jsonLine = line.substring(jsonStart);
+    jsonLine.trim();
+    if (!jsonLine.endsWith("}"))
+        return false;
+
+    if (jsonLine.indexOf("\"cmd\":\"hello\"") >= 0 ||
+        jsonLine.indexOf("\"cmd\": \"hello\"") >= 0 ||
+        jsonLine.indexOf("\"cmd\":\"ping\"") >= 0 ||
+        jsonLine.indexOf("\"cmd\": \"ping\"") >= 0)
+    {
+        serialSendReady();
+        return true;
+    }
+
+    if (jsonLine.indexOf("\"cmd\":\"get_config\"") >= 0 ||
+        jsonLine.indexOf("\"cmd\": \"get_config\"") >= 0)
+    {
+        serialSendReady();
+        serialConfigSendCurrent();
+        return true;
+    }
+
+    if (jsonLine.indexOf("\"cmd\":\"set_begin\"") >= 0 ||
+        jsonLine.indexOf("\"cmd\": \"set_begin\"") >= 0)
+    {
+        gIncomingConfigJson = "";
+        gIncomingConfigJson.reserve(CONFIG_JSON_CAPACITY);
+        gReceivingConfig = true;
+        serialSendReady();
+        return true;
+    }
+
+    if (jsonLine.indexOf("\"cmd\":\"set_end\"") >= 0 ||
+        jsonLine.indexOf("\"cmd\": \"set_end\"") >= 0)
+    {
+        bool hadPayload = gReceivingConfig;
+        gReceivingConfig = false;
+        if (!hadPayload)
+        {
+            serialSendJsonStatus("error", "reason", "not_receiving");
+            return true;
+        }
+        serialConfigApplyIncoming();
+        return true;
+    }
+
+    if (jsonLine.indexOf("\"cmd\":\"set_data\"") >= 0 ||
+        jsonLine.indexOf("\"cmd\": \"set_data\"") >= 0)
+    {
+        DynamicJsonDocument doc(512);
+        DeserializationError err = deserializeJson(doc, jsonLine);
+        if (err)
+        {
+            serialSendJsonStatus("error", "reason", "json_invalid");
+            return true;
+        }
+
+        if (!gReceivingConfig)
+        {
+            serialSendJsonStatus("error", "reason", "not_receiving");
+            return true;
+        }
+
+        String chunk = doc["data"] | "";
+        if (gIncomingConfigJson.length() + chunk.length() > CONFIG_JSON_CAPACITY - 1)
+        {
+            gReceivingConfig = false;
+            gIncomingConfigJson = "";
+            serialSendJsonStatus("error", "reason", "too_large");
+            return true;
+        }
+
+        gIncomingConfigJson += chunk;
+        return true;
+    }
+
+    return false;
+}
+
 static void handleSerialProtocolLine(const String &line)
 {
+    if (handleSerialJsonMessage(line))
+        return;
+
     if (line == "AMCFG GET")
     {
-        Serial.println("AMCFG READY");
+        serialSendReady();
         serialConfigSendCurrent();
         return;
     }
@@ -97,7 +216,7 @@ static void handleSerialProtocolLine(const String &line)
         gIncomingConfigJson = "";
         gIncomingConfigJson.reserve(CONFIG_JSON_CAPACITY);
         gReceivingConfig = true;
-        Serial.println("AMCFG READY");
+        serialSendReady();
         return;
     }
 
@@ -107,7 +226,7 @@ static void handleSerialProtocolLine(const String &line)
         gReceivingConfig = false;
         if (!hadPayload)
         {
-            Serial.println("AMCFG ERROR not_receiving");
+            serialSendJsonStatus("error", "reason", "not_receiving");
             return;
         }
         serialConfigApplyIncoming();
@@ -118,7 +237,7 @@ static void handleSerialProtocolLine(const String &line)
     {
         if (!gReceivingConfig)
         {
-            Serial.println("AMCFG ERROR not_receiving");
+            serialSendJsonStatus("error", "reason", "not_receiving");
             return;
         }
 
@@ -127,7 +246,7 @@ static void handleSerialProtocolLine(const String &line)
         {
             gReceivingConfig = false;
             gIncomingConfigJson = "";
-            Serial.println("AMCFG ERROR too_large");
+            serialSendJsonStatus("error", "reason", "too_large");
             return;
         }
 
@@ -136,7 +255,7 @@ static void handleSerialProtocolLine(const String &line)
     }
 }
 
-static void serialProtocolHandle()
+void serialProtocolHandle()
 {
     while (Serial.available())
     {

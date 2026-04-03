@@ -45,7 +45,7 @@ type DeviceConfig = {
 };
 
 type ConfigTransferState = {
-  mode: "backup" | "restore";
+  mode: "probe" | "backup" | "restore";
   resolve: (value: any) => void;
   reject: (reason?: unknown) => void;
   buffer: string;
@@ -53,8 +53,8 @@ type ConfigTransferState = {
   readyResolve: (() => void) | null;
 };
 
-const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER;
-const repo = process.env.NEXT_PUBLIC_GITHUB_REPO;
+const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER || "WebDev-Den";
+const repo = process.env.NEXT_PUBLIC_GITHUB_REPO || "AlarmMini";
 const SUPPORT_AUTHOR_URL = "https://send.monobank.ua/jar/2PMhPjRk9j";
 const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
 const PROJECT_REPO_URL = "https://github.com/WebDev-Den/AlarmMini";
@@ -433,6 +433,21 @@ export default function Page() {
     return normalized;
   }
 
+  function isExpectedConfigApplied(expectedConfig: any, actualConfig: any) {
+    const expected = normalizeDeviceConfig(expectedConfig);
+    const actual = normalizeDeviceConfig(actualConfig);
+
+    return (
+      expected.wifiSsid === actual.wifiSsid &&
+      expected.wifiPass === actual.wifiPass &&
+      expected.mqttHost === actual.mqttHost &&
+      expected.mqttPort === actual.mqttPort &&
+      expected.mqttTopic === actual.mqttTopic &&
+      expected.mqttUser === actual.mqttUser &&
+      expected.mqttPass === actual.mqttPass
+    );
+  }
+
   function hasConfigOverrides() {
     return Boolean(configOverridesRef.current);
   }
@@ -468,18 +483,24 @@ export default function Page() {
     setFlashBusy(true);
     try {
       setFlashStatus(t.config.applying);
-      await restoreConfigWithRetry(merged);
+      const expectedConfig = getMergedConfigPayload(merged);
+      await restoreConfigWithRetry(expectedConfig);
       await disconnectPort({ preserveBackupState: true });
       await new Promise((resolve) => setTimeout(resolve, 3000));
       await reconnectBoardAfterFlash();
       await new Promise((resolve) => setTimeout(resolve, 1800));
       try {
-        configBackupRef.current = getMergedConfigPayload(
-          await backupConfigWithRetry(2),
-        );
-        syncBoardConfig(configBackupRef.current);
+        const appliedConfig = await backupConfigWithRetry(2);
+        if (appliedConfig && isExpectedConfigApplied(expectedConfig, appliedConfig)) {
+          configBackupRef.current = getMergedConfigPayload(appliedConfig);
+          syncBoardConfig(configBackupRef.current);
+        } else {
+          throw new Error("config_verify_failed");
+        }
       } catch {
-        configBackupRef.current = merged;
+        configBackupRef.current = expectedConfig;
+        setFlashStatus(t.config.applyFailed);
+        return false;
       }
       setFlashStatus(t.config.applied);
       return true;
@@ -679,8 +700,8 @@ export default function Page() {
   }
 
   function beginBackupProgress() {
-    backupStartedAtRef.current = Date.now();
-    setBackupProgress(0);
+    backupStartedAtRef.current = 0;
+    setBackupProgress(null);
   }
 
   function resetBackupProgress() {
@@ -708,10 +729,88 @@ export default function Page() {
     if (!transfer) return;
     clearConfigTransferTimeout();
     configTransferRef.current = null;
+    if (transfer.mode === "backup") {
+      transfer.resolve(null);
+      return;
+    }
     transfer.reject(new Error(reason));
   }
 
+  function isJsonProtocolLine(line: string) {
+    return line.startsWith("{") && line.endsWith("}");
+  }
+
   function handleConfigProtocolLine(line: string): boolean {
+    if (isJsonProtocolLine(line)) {
+      try {
+        const payload = JSON.parse(line);
+        const transfer = configTransferRef.current;
+        if (!transfer) return true;
+
+        if (payload.event === "error") {
+          rejectConfigTransfer(String(payload.reason || "protocol_error"));
+          return true;
+        }
+
+        if (payload.event === "ready") {
+          if (transfer.mode === "probe") {
+            clearConfigTransferTimeout();
+            configTransferRef.current = null;
+            transfer.resolve(true);
+            return true;
+          }
+
+          if (transfer.mode === "backup") {
+            armConfigTransferTimeout("backup_timeout", 12000);
+          } else {
+            clearConfigTransferTimeout();
+          }
+
+          if (transfer.readyResolve) {
+            const readyResolve = transfer.readyResolve;
+            transfer.readyResolve = null;
+            readyResolve();
+          }
+          return true;
+        }
+
+        if (payload.event === "config_begin" && transfer.mode === "backup") {
+          transfer.buffer = "";
+          armConfigTransferTimeout("backup_timeout", 12000);
+          return true;
+        }
+
+        if (payload.event === "config_data" && transfer.mode === "backup") {
+          transfer.buffer += String(payload.data || "");
+          armConfigTransferTimeout("backup_timeout", 12000);
+          return true;
+        }
+
+        if (payload.event === "config_end" && transfer.mode === "backup") {
+          try {
+            const parsed = JSON.parse(transfer.buffer || "{}");
+            clearConfigTransferTimeout();
+            configTransferRef.current = null;
+            transfer.resolve(parsed);
+          } catch {
+            rejectConfigTransfer("invalid_backup_json");
+          }
+          return true;
+        }
+
+        if (payload.event === "ok" && transfer.mode === "restore") {
+          clearConfigTransferTimeout();
+          configTransferRef.current = null;
+          transfer.resolve(true);
+          return true;
+        }
+
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     if (!line.startsWith("AMCFG ")) return false;
 
     const transfer = configTransferRef.current;
@@ -723,6 +822,12 @@ export default function Page() {
     }
 
     if (line === "AMCFG READY") {
+      if (transfer.mode === "probe") {
+        clearConfigTransferTimeout();
+        configTransferRef.current = null;
+        transfer.resolve(true);
+        return true;
+      }
       if (transfer.mode === "backup") {
         armConfigTransferTimeout("backup_timeout", 15000);
       } else {
@@ -787,7 +892,7 @@ export default function Page() {
         resolve,
         reject,
         buffer: "",
-        timeoutId: setTimeout(() => rejectConfigTransfer("backup_timeout"), 30000),
+        timeoutId: setTimeout(() => rejectConfigTransfer("backup_timeout"), 12000),
         readyResolve: null,
       };
 
@@ -844,6 +949,37 @@ export default function Page() {
         rejectConfigTransfer("restore_write_failed");
       }
     });
+  }
+
+  async function waitForBoardReady(timeoutMs = 8000) {
+    const activePort = rememberedPortRef.current ?? portRef.current;
+    if (!activePort?.readable || !activePort?.writable) return false;
+
+    resetConfigTransferState();
+
+    return await new Promise<boolean>((resolve, reject) => {
+      configTransferRef.current = {
+        mode: "probe",
+        resolve,
+        reject,
+        buffer: "",
+        timeoutId: setTimeout(() => rejectConfigTransfer("ready_timeout"), timeoutMs),
+        readyResolve: null,
+      };
+
+      const poll = async () => {
+        const transfer = configTransferRef.current;
+        if (!transfer || transfer.mode !== "probe") return;
+        try {
+          await writeSerialLine("AMCFG GET");
+        } catch {}
+        window.setTimeout(poll, 1200);
+      };
+
+      void poll();
+    })
+      .then(() => true)
+      .catch(() => false);
   }
 
   async function restoreConfigWithRetry(configPayload: any, attempts = 2) {
@@ -922,11 +1058,18 @@ export default function Page() {
         if (attempt > 0) {
           await new Promise((resolve) => setTimeout(resolve, 1200));
         }
+        const ready = await waitForBoardReady(8000);
+        if (!ready) {
+          resetBackupProgress();
+          return null;
+        }
         const backup = await backupConfigViaSerial();
         if (backup) {
           resetBackupProgress();
           return backup;
         }
+        resetBackupProgress();
+        return null;
       } catch (backupError) {
         lastError = backupError;
         resetConfigTransferState();
@@ -935,9 +1078,8 @@ export default function Page() {
     }
 
     resetBackupProgress();
-    throw lastError instanceof Error
-      ? lastError
-      : new Error("backup_timeout");
+    if (!lastError) return null;
+    throw lastError instanceof Error ? lastError : new Error("backup_timeout");
   }
 
   async function openBoardPort(port: any) {
@@ -969,16 +1111,21 @@ export default function Page() {
       const serial = (navigator as Navigator & { serial: any }).serial;
       const port = await serial.requestPort();
       await openBoardPort(port);
-      await new Promise((resolve) => setTimeout(resolve, 2500));
       try {
-        configBackupRef.current = getMergedConfigPayload(
-          await backupConfigWithRetry(),
-        );
+        const backup = await backupConfigWithRetry();
         resetBackupProgress();
-        syncBoardConfig(configBackupRef.current);
-        setConfigBackupReady(Boolean(configBackupRef.current));
-        setDefaultConfigMode(false);
-        setFlashStatus(t.flash.configReadOk);
+        if (backup) {
+          configBackupRef.current = getMergedConfigPayload(backup);
+          syncBoardConfig(configBackupRef.current);
+          setConfigBackupReady(Boolean(configBackupRef.current));
+          setDefaultConfigMode(false);
+          setFlashStatus(t.flash.configReadOk);
+        } else {
+          configBackupRef.current = null;
+          setConfigBackupReady(false);
+          setDefaultConfigMode(true);
+          setFlashStatus(t.flash.configReadFailedCanContinue);
+        }
       } catch (backupError) {
         console.error("[config-backup-init]", backupError);
         resetBackupProgress();
@@ -997,26 +1144,39 @@ export default function Page() {
     if (!("serial" in navigator)) throw new Error("serial_unsupported");
 
     if (portState !== "connected") {
+      const serial = (navigator as Navigator & { serial: any }).serial;
+      const knownPorts = await serial.getPorts();
+      const port = knownPorts[0] ?? rememberedPortRef.current ?? null;
+
+      if (!port) {
+        setFlashStatus(t.flash.continuingWithDefault);
+        setConfigBackupReady(false);
+        setDefaultConfigMode(true);
+        return null;
+      }
+
       setFlashStatus(t.flash.connectingBoard);
       setPortState("connecting");
       setBoard(getEmptyBoard());
       setSerialLog([]);
-
-      const serial = (navigator as Navigator & { serial: any }).serial;
-      const knownPorts = await serial.getPorts();
-      const port = knownPorts[0] ?? (await serial.requestPort());
       await openBoardPort(port);
-      await new Promise((resolve) => setTimeout(resolve, 2500));
     }
 
     if (!configBackupRef.current && !defaultConfigMode) {
       try {
-        const backup = getMergedConfigPayload(await backupConfigWithRetry());
+        const backup = await backupConfigWithRetry();
         resetBackupProgress();
-        configBackupRef.current = backup;
-        syncBoardConfig(backup);
-        setConfigBackupReady(Boolean(backup));
-        setDefaultConfigMode(false);
+        if (backup) {
+          const mergedBackup = getMergedConfigPayload(backup);
+          configBackupRef.current = mergedBackup;
+          syncBoardConfig(mergedBackup);
+          setConfigBackupReady(Boolean(mergedBackup));
+          setDefaultConfigMode(false);
+        } else {
+          configBackupRef.current = null;
+          setConfigBackupReady(false);
+          setDefaultConfigMode(true);
+        }
       } catch (backupError) {
         console.error("[config-backup-check]", backupError);
         resetBackupProgress();
@@ -1162,27 +1322,35 @@ export default function Page() {
           await new Promise((resolve) => setTimeout(resolve, 1500));
           if (!configBackupRef.current) {
             const flashedConfig = await backupConfigWithRetry(3);
-            configBackupRef.current = getMergedConfigPayload(flashedConfig);
-            syncBoardConfig(configBackupRef.current);
+            if (flashedConfig) {
+              configBackupRef.current = getMergedConfigPayload(flashedConfig);
+              syncBoardConfig(configBackupRef.current);
+            }
           }
           setFlashStage("restoring");
           setFlashStatus(t.flash.stageRestoring);
-          await restoreConfigWithRetry(
-            getMergedConfigPayload(configBackupRef.current),
-          );
+          const expectedConfig = getMergedConfigPayload(configBackupRef.current);
+          await restoreConfigWithRetry(expectedConfig);
           await disconnectPort({ preserveBackupState: true });
           await new Promise((resolve) => setTimeout(resolve, 3000));
           await reconnectBoardAfterFlash();
           try {
-            configBackupRef.current = getMergedConfigPayload(
-              await backupConfigWithRetry(2),
-            );
-            syncBoardConfig(configBackupRef.current);
-            setConfigBackupReady(Boolean(configBackupRef.current));
-            setDefaultConfigMode(false);
+            const restoredConfig = await backupConfigWithRetry(2);
+            if (restoredConfig && isExpectedConfigApplied(expectedConfig, restoredConfig)) {
+              configBackupRef.current = getMergedConfigPayload(restoredConfig);
+              syncBoardConfig(configBackupRef.current);
+              setConfigBackupReady(Boolean(configBackupRef.current));
+              setDefaultConfigMode(false);
+            } else {
+              throw new Error("config_verify_failed");
+            }
           } catch {
             configBackupRef.current = null;
             setConfigBackupReady(false);
+            setFlashStage("");
+            setFlashStatus(t.flash.restoreFailed);
+            setFlashBusy(false);
+            return;
           }
           setFlashStage("done");
           setFlashStatus(t.flash.stageDone);

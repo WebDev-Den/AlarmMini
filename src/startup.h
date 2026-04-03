@@ -8,12 +8,14 @@
 #include "animations.h"
 #include "logger.h"
 
+void serialProtocolHandle();
+
 static void _showStartupBounceFlagAnimation(uint8_t ledCount,
                                             const Color& primary,
                                             const Color& secondary,
                                             unsigned long frameIntervalMs)
 {
-    constexpr float STARTUP_SWEEP_MS = 1100.0f;
+    constexpr float STARTUP_SWEEP_MS = 2200.0f;
     static float activeIndex = 0.0f;
     static int8_t direction = 1;
     static unsigned long lastStepMs = 0;
@@ -142,7 +144,10 @@ static void _showSolidFor(uint8_t ledCount, uint32_t color, unsigned long durati
 
     const unsigned long startMs = millis();
     while (millis() - startMs < durationMs)
+    {
+        serialProtocolHandle();
         yield();
+    }
 }
 
 // ===== MAIN WIFI + EFFECT =====
@@ -167,6 +172,7 @@ bool startupWifiWithEffect(uint8_t ledCount)
     unsigned long lastStartupFrame = 0;
     while (millis() - t0 < 15000)
     {
+        serialProtocolHandle();
         if (WiFi.status() == WL_CONNECTED)
         {
             storageSyncWifiCredentials();
@@ -186,6 +192,7 @@ bool startupWifiWithEffect(uint8_t ledCount)
     const unsigned long startupTailStart = millis();
     while (millis() - startupTailStart < 1200)
     {
+        serialProtocolHandle();
         _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, 55);
         yield();
     }
@@ -209,6 +216,7 @@ bool startupWifiWithEffect(uint8_t ledCount)
     unsigned long lastApFrame = 0;
     while (millis() - apStart < 180000UL)
     {
+        serialProtocolHandle();
         dns.processNextRequest();
         wm.process();
 
@@ -239,7 +247,10 @@ bool startupWifiWithEffect(uint8_t ledCount)
     strip.show();
     const unsigned long restartPauseStart = millis();
     while (millis() - restartPauseStart < 300)
+    {
+        serialProtocolHandle();
         yield();
+    }
     ESP.restart();
     return false;
 }
