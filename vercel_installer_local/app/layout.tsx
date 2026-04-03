@@ -1,9 +1,12 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { getMessages } from "./lang";
+
+const t = getMessages();
 
 export const metadata: Metadata = {
-  title: "AlarmMini Installer",
-  description: "Вибір релізу, Web Serial і сервісна сторінка для AlarmMini.",
+  title: t.meta.title,
+  description: t.meta.description,
   icons: {
     icon: "/icon.svg",
     shortcut: "/icon.svg",
@@ -11,7 +14,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="uk" suppressHydrationWarning>
       <body suppressHydrationWarning>{children}</body>

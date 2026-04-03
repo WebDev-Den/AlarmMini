@@ -98,8 +98,7 @@ void createDefaultConfig() {
     doc["logMask"] = LOG_MASK_ALL;
 
     JsonArray buz = doc.createNestedArray("buzzerRegions");
-    buz.add("??????????? ???????");
-    buz.add("???????? ???????");
+    buz.add("Хмельницька область");
 
     JsonArray leds = doc.createNestedArray("leds");
     for (int i = 0; i < MAX_LEDS; i++) leds.add("");

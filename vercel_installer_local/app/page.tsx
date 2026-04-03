@@ -3,6 +3,7 @@
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { connect as startEspInstall } from "esp-web-tools/dist/connect.js";
+import { getMessages } from "./lang";
 
 type ReleaseAsset = {
   id: number;
@@ -45,18 +46,21 @@ const repo = process.env.NEXT_PUBLIC_GITHUB_REPO;
 const SUPPORT_AUTHOR_URL = "https://send.monobank.ua/jar/2PMhPjRk9j";
 const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
 const PROJECT_REPO_URL = "https://github.com/WebDev-Den/AlarmMini";
+const t = getMessages();
 
-const EMPTY_BOARD: BoardSnapshot = {
-  wifiStatus: "РћС‡С–РєСѓС” РїС–РґРєР»СЋС‡РµРЅРЅСЏ",
-  mqttStatus: "РќРµРІС–РґРѕРјРѕ",
-  internetStatus: "РќРµРІС–РґРѕРјРѕ",
-  ip: "-",
-  mdnsUrl: "-",
-  adminPassword: "-",
-  firmwareVersion: "-",
-  hostname: "-",
-  lastLine: "-",
-};
+function getEmptyBoard(): BoardSnapshot {
+  return {
+    wifiStatus: t.board.waitingForConnection,
+    mqttStatus: t.common.unknown,
+    internetStatus: t.common.unknown,
+    ip: "-",
+    mdnsUrl: "-",
+    adminPassword: "-",
+    firmwareVersion: "-",
+    hostname: "-",
+    lastLine: "-",
+  };
+}
 
 function formatDate(iso: string) {
   try {
@@ -85,14 +89,15 @@ function applySerialLine(line: string, current: BoardSnapshot): BoardSnapshot {
 
   const wifiMatch = line.match(/\[WiFi\]\s+OK IP:\s*([0-9.]+)/i);
   if (wifiMatch) {
-    next.wifiStatus = "РџС–РґРєР»СЋС‡РµРЅРѕ";
-    next.internetStatus = "Р™РјРѕРІС–СЂРЅРѕ РѕРЅР»Р°Р№РЅ";
+    next.wifiStatus = t.board.connected;
+    next.internetStatus = t.board.probablyOnline;
     next.ip = wifiMatch[1];
   }
 
-  if (/\[WiFi\].*AP/i.test(line)) next.wifiStatus = "AP СЂРµР¶РёРј";
-  if (/\[WiFi\].*(disconnect|failed|lost)/i.test(line))
-    next.wifiStatus = "РќРµРјР°С” WiвЂ‘Fi";
+  if (/\[WiFi\].*AP/i.test(line)) next.wifiStatus = t.board.apMode;
+  if (/\[WiFi\].*(disconnect|failed|lost)/i.test(line)) {
+    next.wifiStatus = t.board.noWifi;
+  }
 
   const adminMatch = line.match(/\[Admin\]\s+Password:\s*(\S+)/i);
   if (adminMatch) next.adminPassword = adminMatch[1];
@@ -107,13 +112,17 @@ function applySerialLine(line: string, current: BoardSnapshot): BoardSnapshot {
     }
   }
 
-  if (/\[MQTT\].*Connected/i.test(line)) next.mqttStatus = "РџС–РґРєР»СЋС‡РµРЅРѕ";
-  if (/\[MQTT\].*(Disconnected|offline|failed|lost)/i.test(line))
-    next.mqttStatus = "РќРµРјР°С” Р·'С”РґРЅР°РЅРЅСЏ";
+  if (/\[MQTT\].*Connected/i.test(line)) next.mqttStatus = t.board.connected;
+  if (/\[MQTT\].*(Disconnected|offline|failed|lost)/i.test(line)) {
+    next.mqttStatus = t.board.noMqtt;
+  }
 
-  if (/\[Internet\].*(online|ok)/i.test(line)) next.internetStatus = "РћРЅР»Р°Р№РЅ";
-  if (/\[Internet\].*(offline|lost|failed)/i.test(line))
-    next.internetStatus = "РќРµРјР°С” С–РЅС‚РµСЂРЅРµС‚Сѓ";
+  if (/\[Internet\].*(online|ok)/i.test(line)) {
+    next.internetStatus = t.board.online;
+  }
+  if (/\[Internet\].*(offline|lost|failed)/i.test(line)) {
+    next.internetStatus = t.board.noInternet;
+  }
 
   return next;
 }
@@ -153,26 +162,29 @@ function applyStructuredSerialLine(
   if (category === "wifi") {
     const ipMatch = message.match(/^OK IP:\s*([0-9.]+)/i);
     if (ipMatch) {
-      next.wifiStatus = "РџС–РґРєР»СЋС‡РµРЅРѕ";
-      next.internetStatus = "Р™РјРѕРІС–СЂРЅРѕ РѕРЅР»Р°Р№РЅ";
+      next.wifiStatus = t.board.connected;
+      next.internetStatus = t.board.probablyOnline;
       next.ip = ipMatch[1];
     }
 
-    if (/AP mode/i.test(message)) next.wifiStatus = "AP СЂРµР¶РёРј";
-    if (/(disconnect|failed|lost)/i.test(message))
-      next.wifiStatus = "РќРµРјР°С” WiвЂ‘Fi";
+    if (/AP mode/i.test(message)) next.wifiStatus = t.board.apMode;
+    if (/(disconnect|failed|lost)/i.test(message)) {
+      next.wifiStatus = t.board.noWifi;
+    }
   }
 
   if (category === "mqtt") {
-    if (/Connected/i.test(message)) next.mqttStatus = "РџС–РґРєР»СЋС‡РµРЅРѕ";
-    if (/(disconnected|offline|failed|lost|error)/i.test(message))
-      next.mqttStatus = "РќРµРјР°С” Р·'С”РґРЅР°РЅРЅСЏ";
+    if (/Connected/i.test(message)) next.mqttStatus = t.board.connected;
+    if (/(disconnected|offline|failed|lost|error)/i.test(message)) {
+      next.mqttStatus = t.board.noMqtt;
+    }
   }
 
   if (category === "internet") {
-    if (/(online|ok)/i.test(message)) next.internetStatus = "РћРЅР»Р°Р№РЅ";
-    if (/(offline|lost|failed)/i.test(message))
-      next.internetStatus = "РќРµРјР°С” С–РЅС‚РµСЂРЅРµС‚Сѓ";
+    if (/(online|ok)/i.test(message)) next.internetStatus = t.board.online;
+    if (/(offline|lost|failed)/i.test(message)) {
+      next.internetStatus = t.board.noInternet;
+    }
   }
 
   return next;
@@ -189,13 +201,15 @@ export default function Page() {
   const [portState, setPortState] = useState<
     "idle" | "connecting" | "connected"
   >("idle");
-  const [board, setBoard] = useState<BoardSnapshot>(EMPTY_BOARD);
+  const [board, setBoard] = useState<BoardSnapshot>(getEmptyBoard());
   const [serialLog, setSerialLog] = useState<string[]>([]);
   const [supportQrSrc, setSupportQrSrc] = useState("");
   const [installManifestUrl, setInstallManifestUrl] = useState("");
   const [flashBusy, setFlashBusy] = useState(false);
   const [flashStatus, setFlashStatus] = useState("");
-  const [flashStage, setFlashStage] = useState<"" | "flashed" | "restoring" | "done">("");
+  const [flashStage, setFlashStage] = useState<
+    "" | "flashed" | "restoring" | "done"
+  >("");
   const [configBackupReady, setConfigBackupReady] = useState(false);
   const [defaultConfigMode, setDefaultConfigMode] = useState(false);
 
@@ -226,12 +240,12 @@ export default function Page() {
       color: { dark: "#0b2a4f", light: "#ffffff" },
     })
       .then(setSupportQrSrc)
-      .catch((error) => console.error("[support-qr]", error));
+      .catch((qrError) => console.error("[support-qr]", qrError));
   }, []);
 
   useEffect(() => {
     if (!owner || !repo) {
-      setError("Р—Р°РїРѕРІРЅРё NEXT_PUBLIC_GITHUB_OWNER С– NEXT_PUBLIC_GITHUB_REPO.");
+      setError(t.common.fillGithubEnv);
       setLoading(false);
       return;
     }
@@ -247,9 +261,11 @@ export default function Page() {
         setReleases(data);
         setSelectedReleaseId(data[0]?.id ?? null);
       })
-      .catch((err: unknown) => {
+      .catch((fetchError: unknown) => {
         setError(
-          err instanceof Error ? err.message : "РќРµ РІРґР°Р»РѕСЃСЏ РѕС‚СЂРёРјР°С‚Рё СЂРµР»С–Р·Рё",
+          fetchError instanceof Error
+            ? fetchError.message
+            : t.common.releasesLoadFailed,
         );
       })
       .finally(() => setLoading(false));
@@ -274,6 +290,7 @@ export default function Page() {
     selectedRelease?.assets.find((asset) =>
       asset.name.toLowerCase().includes("littlefs"),
     ) ?? null;
+
   const hasSelectedReleaseAssets =
     Boolean(selectedRelease) &&
     Boolean(firmwareAsset) &&
@@ -283,20 +300,20 @@ export default function Page() {
     hasSelectedReleaseAssets && serialSupported && !flashBusy;
 
   const flashHint = !serialSupported
-    ? "Р”Р»СЏ РїСЂРѕС€РёРІРєРё РїРѕС‚СЂС–Р±РµРЅ Chrome Р°Р±Рѕ Edge Р· РїС–РґС‚СЂРёРјРєРѕСЋ Web Serial."
+    ? t.flash.serialUnsupported
     : flashBusy
-      ? "РўСЂРёРІР°С” РїС–РґРіРѕС‚РѕРІРєР° Р°Р±Рѕ Р·Р°РІРµСЂС€РµРЅРЅСЏ РїСЂРѕС€РёРІРєРё. Р—Р°С‡РµРєР°Р№ РєС–Р»СЊРєР° СЃРµРєСѓРЅРґ."
+      ? t.flash.busy
       : portState === "connecting"
-        ? "РўСЂРёРІР°С” РїС–РґРєР»СЋС‡РµРЅРЅСЏ РґРѕ РїР»Р°С‚Рё. Р—Р°С‡РµРєР°Р№ РєС–Р»СЊРєР° СЃРµРєСѓРЅРґ."
+        ? t.flash.connecting
         : !selectedRelease
-          ? "РЎРїРµСЂС€Сѓ РІРёР±РµСЂРё СЂРµР»С–Р· РґР»СЏ РїСЂРѕС€РёРІРєРё."
+          ? t.flash.chooseRelease
           : !firmwareAsset || !littlefsAsset
-            ? "РЈ СЂРµР»С–Р·С– РјР°СЋС‚СЊ Р±СѓС‚Рё firmware.bin С– littlefs.bin."
+            ? t.flash.requireAssets
             : defaultConfigMode
-              ? "РљРѕРЅС„С–Рі РЅРµ Р·С‡РёС‚Р°РЅРѕ. РџСЂРѕС€РёРІРєР° РїС–РґРµ Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ Р· СЂРµР»С–Р·Сѓ."
+              ? t.flash.defaultConfig
               : configBackupReady
-                ? "РљРѕРЅС„С–Рі Р·С‡РёС‚Р°РЅРѕ. РџС–СЃР»СЏ РїСЂРѕС€РёРІРєРё СЃС‚РѕСЂС–РЅРєР° РїРѕРІРµСЂРЅРµ Р№РѕРіРѕ РЅР°Р·Р°Рґ РЅР° РїР»Р°С‚Сѓ."
-                : "РљРЅРѕРїРєР° СЃР°РјР° РїС–РґРєР»СЋС‡РёС‚СЊ РїР»Р°С‚Сѓ, СЃРїСЂРѕР±СѓС” Р·С‡РёС‚Р°С‚Рё РєРѕРЅС„С–Рі С– Р»РёС€Рµ РїРѕС‚С–Рј Р·Р°РїСѓСЃС‚РёС‚СЊ РїСЂРѕС€РёРІРєСѓ.";
+                ? t.flash.restoreConfig
+                : t.flash.autoFlow;
 
   useEffect(() => {
     if (!selectedRelease || !firmwareAsset || !littlefsAsset) {
@@ -335,12 +352,20 @@ export default function Page() {
   }, [selectedRelease, firmwareAsset, littlefsAsset]);
 
   async function disconnectPort(options?: { preserveBackupState?: boolean }) {
+    const activePort = portRef.current ?? rememberedPortRef.current;
+
     try {
       await readerRef.current?.cancel();
     } catch {}
+
     try {
-      await portRef.current?.close();
+      await readLoopRef.current;
     } catch {}
+
+    try {
+      await activePort?.close();
+    } catch {}
+
     readerRef.current = null;
     portRef.current = null;
     readLoopRef.current = null;
@@ -415,7 +440,7 @@ export default function Page() {
         clearConfigTransferTimeout();
         configTransferRef.current = null;
         transfer.resolve(parsed);
-      } catch (error) {
+      } catch {
         rejectConfigTransfer("invalid_backup_json");
       }
       return true;
@@ -435,7 +460,7 @@ export default function Page() {
     const activePort = rememberedPortRef.current ?? portRef.current;
     if (!activePort?.readable || !activePort?.writable) return null;
 
-    setFlashStatus("Р—С‡РёС‚СѓС”РјРѕ РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ Р· РїР»Р°С‚Рё...");
+    setFlashStatus(t.flash.readingConfig);
 
     return await new Promise<any>(async (resolve, reject) => {
       configTransferRef.current = {
@@ -443,12 +468,15 @@ export default function Page() {
         resolve,
         reject,
         buffer: "",
-        timeoutId: setTimeout(() => rejectConfigTransfer("backup_timeout"), 5000),
+        timeoutId: setTimeout(
+          () => rejectConfigTransfer("backup_timeout"),
+          9000,
+        ),
       };
 
       try {
         await writeSerialLine("AMCFG GET");
-      } catch (error) {
+      } catch {
         rejectConfigTransfer("backup_write_failed");
       }
     });
@@ -456,7 +484,7 @@ export default function Page() {
 
   async function restoreConfigViaSerial(configPayload: any) {
     const serialized = JSON.stringify(configPayload || {});
-    setFlashStatus("РџРѕРІРµСЂС‚Р°С”РјРѕ РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ РЅР° РїР»Р°С‚Сѓ...");
+    setFlashStatus(t.flash.restoringConfig);
 
     await new Promise<boolean>(async (resolve, reject) => {
       configTransferRef.current = {
@@ -464,33 +492,25 @@ export default function Page() {
         resolve,
         reject,
         buffer: "",
-        timeoutId: setTimeout(() => rejectConfigTransfer("restore_timeout"), 7000),
+        timeoutId: setTimeout(
+          () => rejectConfigTransfer("restore_timeout"),
+          7000,
+        ),
       };
 
       try {
         await writeSerialLine("AMCFG SET BEGIN");
         const chunkSize = 192;
         for (let offset = 0; offset < serialized.length; offset += chunkSize) {
-          await writeSerialLine(`AMCFG SET DATA ${serialized.slice(offset, offset + chunkSize)}`);
+          await writeSerialLine(
+            `AMCFG SET DATA ${serialized.slice(offset, offset + chunkSize)}`,
+          );
         }
         await writeSerialLine("AMCFG SET END");
-      } catch (error) {
+      } catch {
         rejectConfigTransfer("restore_write_failed");
       }
     });
-  }
-
-  async function openBoardPort(port: any) {
-    if (!isPortOpen(port)) {
-      await port.open({ baudRate: 115200 });
-    }
-    portRef.current = port;
-    rememberedPortRef.current = port;
-    setPortState("connected");
-    setConfigBackupReady(false);
-    if (!readerRef.current) {
-      await startReadLoop(port);
-    }
   }
 
   async function startReadLoop(port: any) {
@@ -522,45 +542,64 @@ export default function Page() {
           });
       }
     })()
-      .catch((error) => {
-        console.error("[serial-read]", error);
+      .catch((readError) => {
+        console.error("[serial-read]", readError);
       })
       .finally(async () => {
         try {
           reader.releaseLock();
         } catch {}
+        if (readerRef.current === reader) {
+          readerRef.current = null;
+        }
         await readableClosed;
       });
   }
 
+  async function openBoardPort(port: any) {
+    if (!isPortOpen(port)) {
+      await port.open({ baudRate: 115200 });
+    }
+    portRef.current = port;
+    rememberedPortRef.current = port;
+    setPortState("connected");
+    setConfigBackupReady(false);
+    if (!readerRef.current) {
+      await startReadLoop(port);
+    }
+  }
+
   async function handleConnect() {
     if (!("serial" in navigator)) return;
-    if (portState === "connected" && isPortOpen(portRef.current ?? rememberedPortRef.current)) {
+    if (
+      portState === "connected" &&
+      isPortOpen(portRef.current ?? rememberedPortRef.current)
+    ) {
       return;
     }
 
     try {
       setPortState("connecting");
-      setBoard(EMPTY_BOARD);
+      setBoard(getEmptyBoard());
       setSerialLog([]);
       const serial = (navigator as Navigator & { serial: any }).serial;
       const port = await serial.requestPort();
       await openBoardPort(port);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 1800));
       try {
         configBackupRef.current = await backupConfigViaSerial();
         setConfigBackupReady(Boolean(configBackupRef.current));
         setDefaultConfigMode(false);
-        setFlashStatus("РљРѕРЅС„С–РіСѓСЂР°С†С–СЋ Р·С‡РёС‚Р°РЅРѕ. РњРѕР¶РЅР° Р·Р°РїСѓСЃРєР°С‚Рё РїСЂРѕС€РёРІРєСѓ.");
-      } catch (error) {
-        console.error("[config-backup-init]", error);
+        setFlashStatus(t.flash.configReadOk);
+      } catch (backupError) {
+        console.error("[config-backup-init]", backupError);
         configBackupRef.current = null;
         setConfigBackupReady(false);
         setDefaultConfigMode(true);
-        setFlashStatus("РљРѕРЅС„С–РіСѓСЂР°С†С–СЋ РЅРµ РІРґР°Р»РѕСЃСЏ Р·С‡РёС‚Р°С‚Рё. РњРѕР¶РЅР° РїСЂРѕС€РёС‚Рё РїР»Р°С‚Сѓ Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ.");
+        setFlashStatus(t.flash.configReadFailedCanContinue);
       }
-    } catch (error) {
-      console.error("[serial-connect]", error);
+    } catch (connectError) {
+      console.error("[serial-connect]", connectError);
       await disconnectPort();
     }
   }
@@ -569,16 +608,16 @@ export default function Page() {
     if (!("serial" in navigator)) throw new Error("serial_unsupported");
 
     if (portState !== "connected") {
-      setFlashStatus("РџС–РґРєР»СЋС‡Р°С”РјРѕ РїР»Р°С‚Сѓ...");
+      setFlashStatus(t.flash.connectingBoard);
       setPortState("connecting");
-      setBoard(EMPTY_BOARD);
+      setBoard(getEmptyBoard());
       setSerialLog([]);
 
       const serial = (navigator as Navigator & { serial: any }).serial;
       const knownPorts = await serial.getPorts();
       const port = knownPorts[0] ?? (await serial.requestPort());
       await openBoardPort(port);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 1800));
     }
 
     if (!configBackupRef.current && !defaultConfigMode) {
@@ -587,8 +626,8 @@ export default function Page() {
         configBackupRef.current = backup;
         setConfigBackupReady(Boolean(backup));
         setDefaultConfigMode(false);
-      } catch (error) {
-        console.error("[config-backup-check]", error);
+      } catch (backupError) {
+        console.error("[config-backup-check]", backupError);
         configBackupRef.current = null;
         setConfigBackupReady(false);
         setDefaultConfigMode(true);
@@ -596,12 +635,12 @@ export default function Page() {
     }
 
     if (!configBackupRef.current && !defaultConfigMode) {
-      setFlashStatus("РљРѕРЅС„С–РіСѓСЂР°С†С–СЋ РЅРµ РІРґР°Р»РѕСЃСЏ Р·С‡РёС‚Р°С‚Рё. РњРѕР¶РЅР° РїСЂРѕРґРѕРІР¶РёС‚Рё Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ.");
+      setFlashStatus(t.flash.configNotReadContinue);
       return null;
     }
 
     if (configBackupRef.current) {
-      setFlashStatus("РљРѕРЅС„С–РіСѓСЂР°С†С–СЋ Р·С‡РёС‚Р°РЅРѕ. Р—Р°РїСѓСЃРєР°С”РјРѕ РїСЂРѕС€РёРІРєСѓ...");
+      setFlashStatus(t.flash.configReadOkStarting);
     }
 
     return configBackupRef.current;
@@ -612,18 +651,17 @@ export default function Page() {
 
     const serial = (navigator as Navigator & { serial: any }).serial;
     const port =
-      rememberedPortRef.current ??
-      (await serial.getPorts()).find(Boolean);
+      rememberedPortRef.current ?? (await serial.getPorts()).find(Boolean);
 
     if (!port) return;
 
     try {
       setPortState("connecting");
-      setBoard(EMPTY_BOARD);
+      setBoard(getEmptyBoard());
       setSerialLog([]);
       await openBoardPort(port);
-    } catch (error) {
-      console.error("[serial-reconnect]", error);
+    } catch (reconnectError) {
+      console.error("[serial-reconnect]", reconnectError);
       if (isPortOpen(port)) {
         try {
           portRef.current = port;
@@ -641,7 +679,7 @@ export default function Page() {
 
   async function handleFlashDialogClosed() {
     setFlashStage("flashed");
-    setFlashStatus("РџСЂРѕС€РёС‚Рѕ");
+    setFlashStatus(t.flash.stageFlashed);
     if (!reconnectAfterFlashRef.current) return;
     reconnectAfterFlashRef.current = false;
     restoreAfterReconnectRef.current = Boolean(configBackupRef.current);
@@ -650,7 +688,7 @@ export default function Page() {
     if (!restoreAfterReconnectRef.current) {
       setFlashBusy(false);
       setFlashStage("done");
-      setFlashStatus("Р“РѕС‚РѕРІРѕ. РџР»Р°С‚Сѓ РїСЂРѕС€РёС‚Рѕ Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ.");
+      setFlashStatus(t.flash.doneWithDefault);
     }
   }
 
@@ -660,35 +698,42 @@ export default function Page() {
     reconnectAfterFlashRef.current = true;
     setFlashBusy(true);
     setFlashStage("");
-    setFlashStatus("Р“РѕС‚СѓС”РјРѕ РїСЂРѕС€РёРІРєСѓ...");
+    setFlashStatus(t.flash.preparing);
 
     try {
       const backup = await ensureConnectedAndBackedUp();
 
       if (!backup) {
-        const continueWithDefault = window.confirm("Конфігурацію не вдалося зчитати. Продовжити прошивку з типовою конфігурацією?");
+        const continueWithDefault = window.confirm(
+          t.flash.continueWithDefaultQuestion,
+        );
         if (!continueWithDefault) {
           reconnectAfterFlashRef.current = false;
           setFlashBusy(false);
-          setFlashStatus("РџСЂРѕС€РёРІРєСѓ СЃРєР°СЃРѕРІР°РЅРѕ. РџРµСЂРµРІС–СЂ Р·С‡РёС‚СѓРІР°РЅРЅСЏ РєРѕРЅС„С–РіСѓ Р№ СЃРїСЂРѕР±СѓР№ С‰Рµ СЂР°Р·.");
+          setFlashStatus(t.flash.flashCancelled);
           return;
         }
 
         configBackupRef.current = null;
         setConfigBackupReady(false);
         setDefaultConfigMode(true);
-        setFlashStatus("РџСЂРѕРґРѕРІР¶СѓС”РјРѕ Р· С‚РёРїРѕРІРѕСЋ РєРѕРЅС„С–РіСѓСЂР°С†С–С”СЋ Р· СЂРµР»С–Р·Сѓ...");
+        setFlashStatus(t.flash.continuingWithDefault);
       }
 
       if (rememberedPortRef.current || portRef.current) {
-        await disconnectPort({ preserveBackupState: Boolean(configBackupRef.current) });
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        await disconnectPort({
+          preserveBackupState: Boolean(configBackupRef.current),
+        });
+        await new Promise((resolve) => setTimeout(resolve, 600));
       }
 
       const observer = new MutationObserver((mutations, obs) => {
         for (const mutation of mutations) {
           for (const node of Array.from(mutation.addedNodes)) {
-            if (node instanceof HTMLElement && node.tagName.toLowerCase() === "ewt-install-dialog") {
+            if (
+              node instanceof HTMLElement &&
+              node.tagName.toLowerCase() === "ewt-install-dialog"
+            ) {
               node.addEventListener(
                 "closed",
                 () => {
@@ -704,19 +749,19 @@ export default function Page() {
       });
 
       observer.observe(document.body, { childList: true });
-      setFlashStatus("Р’С–РґРєСЂРёРІР°С”РјРѕ РґС–Р°Р»РѕРі РїСЂРѕС€РёРІРєРё...");
+      setFlashStatus(t.flash.openingDialog);
       await startEspInstall(installButtonRef.current);
-    } catch (error) {
+    } catch (flashError) {
       reconnectAfterFlashRef.current = false;
       setFlashBusy(false);
       setConfigBackupReady(Boolean(configBackupRef.current));
       setFlashStage("");
       setFlashStatus(
         defaultConfigMode
-          ? "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РїСѓСЃС‚РёС‚Рё РїСЂРѕС€РёРІРєСѓ. РЎРїСЂРѕР±СѓР№ С‰Рµ СЂР°Р· Р· РїС–РґРєР»СЋС‡РµРЅРѕСЋ РїР»Р°С‚РѕСЋ."
-          : "РќРµ РІРґР°Р»РѕСЃСЏ РїС–РґРіРѕС‚СѓРІР°С‚Рё РїСЂРѕС€РёРІРєСѓ Р°Р±Рѕ Р·С‡РёС‚Р°С‚Рё РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ. РџРµСЂРµРІС–СЂ РєР°Р±РµР»СЊ С– СЃРїСЂРѕР±СѓР№ С‰Рµ СЂР°Р·.",
+          ? t.flash.flashStartFailedDefault
+          : t.flash.flashStartFailed,
       );
-      console.error("[flash-start]", error);
+      console.error("[flash-start]", flashError);
       await reconnectBoardAfterFlash();
     }
   }
@@ -733,6 +778,7 @@ export default function Page() {
         try {
           await new Promise((resolve) => setTimeout(resolve, 1500));
           setFlashStage("restoring");
+          setFlashStatus(t.flash.stageRestoring);
           await restoreConfigViaSerial(configBackupRef.current);
           await disconnectPort({ preserveBackupState: true });
           await new Promise((resolve) => setTimeout(resolve, 2500));
@@ -741,16 +787,16 @@ export default function Page() {
             configBackupRef.current = await backupConfigViaSerial();
             setConfigBackupReady(Boolean(configBackupRef.current));
             setDefaultConfigMode(false);
-          } catch (_) {
+          } catch {
             configBackupRef.current = null;
             setConfigBackupReady(false);
           }
           setFlashStage("done");
-          setFlashStatus("Р“РѕС‚РѕРІРѕ");
-        } catch (error) {
-          console.error("[config-restore]", error);
+          setFlashStatus(t.flash.stageDone);
+        } catch (restoreError) {
+          console.error("[config-restore]", restoreError);
           setFlashStage("");
-          setFlashStatus("РџСЂРѕС€РёРІРєР° Р·Р°РІРµСЂС€РµРЅР°, Р°Р»Рµ РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ РЅРµ РІРґР°Р»РѕСЃСЏ РїРѕРІРµСЂРЅСѓС‚Рё Р°РІС‚РѕРјР°С‚РёС‡РЅРѕ.");
+          setFlashStatus(t.flash.restoreFailed);
         } finally {
           configBackupRef.current = null;
           setFlashBusy(false);
@@ -765,60 +811,59 @@ export default function Page() {
         <div className="brand-card">
           <div className="brand-mark">AM</div>
           <div className="brand-copy">
-            <div className="brand-title">AlarmMini</div>
-            <div className="brand-subtitle">Installer console</div>
+            <div className="brand-title">{t.page.brandTitle}</div>
+            <div className="brand-subtitle">{t.page.brandSubtitle}</div>
           </div>
         </div>
 
         <div className="sidebar-card">
-          <div className="panel-label">COM / Browser</div>
-          <h2 className="panel-title">РџС–РґРєР»СЋС‡РµРЅРЅСЏ РїР»Р°С‚Рё</h2>
-          <p className="panel-text">
-            РџСЂР°С†СЋС” РІ Chrome Р°Р±Рѕ Edge РЅР° РџРљ. РЎС‚РѕСЂС–РЅРєР° Р·С‡РёС‚СѓС” СЃРµСЂРІС–СЃРЅСѓ С–РЅС„РѕСЂРјР°С†С–СЋ
-            Р· serial С‰Рµ РґРѕ РµС‚Р°РїСѓ РїСЂРѕС€РёРІРєРё.
-          </p>
+          <div className="panel-label">{t.page.comBrowser}</div>
+          <h2 className="panel-title">{t.page.connectBoardTitle}</h2>
+          <p className="panel-text">{t.page.connectBoardText}</p>
           <div
             className={`status-pill ${serialSupported ? "is-ok" : "is-warn"}`}
           >
-            {serialSupported
-              ? "Web Serial РґРѕСЃС‚СѓРїРЅРёР№"
-              : "РџРѕС‚СЂС–Р±РµРЅ Chromium-Р±СЂР°СѓР·РµСЂ"}
+            {serialSupported ? t.page.webSerialAvailable : t.page.needChromium}
           </div>
           <div className="button-stack">
             <button
               className="primary-btn"
               onClick={handleConnect}
-              disabled={!serialSupported || portState === "connecting" || flashBusy}
+              disabled={
+                !serialSupported || portState === "connecting" || flashBusy
+              }
             >
               {portState === "connected"
-                ? "РџРѕСЂС‚ РїС–РґРєР»СЋС‡РµРЅРѕ"
+                ? t.flash.connectedBtn
                 : portState === "connecting"
-                  ? "РџС–РґРєР»СЋС‡РµРЅРЅСЏ..."
-                  : "РџС–РґРєР»СЋС‡РёС‚Рё РїР»Р°С‚Сѓ"}
+                  ? t.flash.connectingBtn
+                  : t.flash.connectBtn}
             </button>
             <button
               className="ghost-btn"
               onClick={() => void disconnectPort()}
               disabled={portState !== "connected" || flashBusy}
             >
-              Р’С–Рґ'С”РґРЅР°С‚Рё
+              {t.flash.disconnectBtn}
             </button>
           </div>
         </div>
 
         <div className="sidebar-card">
-          <div className="panel-label">Support</div>
-          <h2 className="panel-title">РџС–РґС‚СЂРёРјР°С‚Рё Р°РІС‚РѕСЂР°</h2>
+          <div className="panel-label">{t.page.supportLabel}</div>
+          <h2 className="panel-title">{t.page.supportTitle}</h2>
 
           <div className="support-qr-shell">
             {supportQrSrc ? (
               <img
                 className="support-qr-image"
                 src={supportQrSrc}
-                alt="Mono QR РґР»СЏ РґРѕРЅР°С‚Сѓ"
+                alt={t.support.monoQrAlt}
               />
             ) : (
-              <div className="support-qr-placeholder">Р“РѕС‚СѓС”РјРѕ QR...</div>
+              <div className="support-qr-placeholder">
+                {t.support.preparingQr}
+              </div>
             )}
           </div>
           <div className="button-stack">
@@ -828,7 +873,7 @@ export default function Page() {
               target="_blank"
               rel="noreferrer"
             >
-              РџС–РґС‚СЂРёРјР°С‚Рё Р°РІС‚РѕСЂР°
+              {t.support.supportAuthor}
             </a>
             <a
               className="ghost-btn support-link"
@@ -836,17 +881,15 @@ export default function Page() {
               target="_blank"
               rel="noreferrer"
             >
-              Telegram РіСЂСѓРїР°
+              {t.support.telegramGroup}
             </a>
           </div>
         </div>
 
         <div className="sidebar-card">
-          <div className="panel-label">GitHub</div>
-          <h2 className="panel-title">РџСЂРѕС”РєС‚ AlarmMini</h2>
-          <p className="panel-text">
-            РћС„С–С†С–Р№РЅРёР№ СЂРµРїРѕР·РёС‚РѕСЂС–Р№ Р· РєРѕРґРѕРј, РґРѕРєСѓРјРµРЅС‚Р°С†С–С”СЋ С‚Р° СЂРµР»С–Р·Р°РјРё РїСЂРѕС€РёРІРєРё.
-          </p>
+          <div className="panel-label">{t.page.githubLabel}</div>
+          <h2 className="panel-title">{t.page.githubTitle}</h2>
+          <p className="panel-text">{t.page.githubText}</p>
           <div className="button-stack">
             <a
               className="ghost-btn support-link"
@@ -854,7 +897,7 @@ export default function Page() {
               target="_blank"
               rel="noreferrer"
             >
-              Р’С–РґРєСЂРёС‚Рё GitHub
+              {t.support.openGithub}
             </a>
           </div>
         </div>
@@ -863,27 +906,24 @@ export default function Page() {
       <section className="installer-content">
         <header className="hero-card">
           <div className="hero-copy">
-            <div className="content-eyebrow">РџСЂРѕС€РёРІРєР°</div>
-            <h1 className="content-title">Р’РёР±С–СЂ СЂРµР»С–Р·Сѓ С‚Р° РїС–РґРєР»СЋС‡РµРЅРЅСЏ РїР»Р°С‚Рё</h1>
+            <div className="content-eyebrow">{t.page.eyebrow}</div>
+            <h1 className="content-title">{t.page.title}</h1>
           </div>
-
         </header>
 
         <div className="content-grid">
           <section className="panel-card installer-panel">
             <div className="panel-head">
               <div>
-                <div className="panel-label">GitHub Releases</div>
-                <h2 className="panel-title">РЎРїРёСЃРѕРє РґРѕСЃС‚СѓРїРЅРёС… РІРµСЂСЃС–Р№</h2>
+                <div className="panel-label">{t.page.releasesLabel}</div>
+                <h2 className="panel-title">{t.page.releasesTitle}</h2>
               </div>
             </div>
 
-            {loading && (
-              <div className="state-box">Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ СЂРµР»С–Р·С–РІ...</div>
-            )}
+            {loading && <div className="state-box">{t.page.releasesLoading}</div>}
             {error && <div className="state-box state-box-error">{error}</div>}
             {!loading && !error && releases.length === 0 && (
-              <div className="state-box">Р РµР»С–Р·Рё РЅРµ Р·РЅР°Р№РґРµРЅРѕ.</div>
+              <div className="state-box">{t.page.noReleases}</div>
             )}
 
             {!loading && !error && releases.length > 0 && (
@@ -908,7 +948,7 @@ export default function Page() {
                           className={isActive ? "ghost-btn" : "inline-btn"}
                           onClick={() => setSelectedReleaseId(release.id)}
                         >
-                          {isActive ? "РћР±СЂР°РЅРѕ" : "Р’РёР±СЂР°С‚Рё"}
+                          {isActive ? t.page.selected : t.page.select}
                         </button>
                       </div>
 
@@ -926,7 +966,7 @@ export default function Page() {
                               target="_blank"
                               rel="noreferrer"
                             >
-                              Р’С–РґРєСЂРёС‚Рё
+                              {t.common.open}
                             </a>
                           </div>
                         ))}
@@ -939,114 +979,112 @@ export default function Page() {
           </section>
 
           <section className="panel-card installer-panel">
-
-
-          <div className="hero-side">
-            <div className="panel-label">РћР±СЂР°РЅРёР№ СЂРµР»С–Р·</div>
-            <div className="hero-release">
-              {selectedRelease?.name ||
-                selectedRelease?.tag_name ||
-                "Р©Рµ РЅРµ РІРёР±СЂР°РЅРѕ"}
-            </div>
-            <div className="hero-assets">
-              <span>
-                {firmwareAsset
-                  ? firmwareAsset.name
-                  : "firmware.bin РЅРµ Р·РЅР°Р№РґРµРЅРѕ"}
-              </span>
-              <span>
-                {littlefsAsset
-                  ? littlefsAsset.name
-                  : "littlefs.bin РЅРµ Р·РЅР°Р№РґРµРЅРѕ"}
-              </span>
-            </div>
-            <div
-              className={`status-pill ${configBackupReady ? "is-ok" : "is-warn"}`}
-            >
-              {configBackupReady
-                ? "РљРѕРЅС„С–Рі Р·Р±РµСЂРµР¶РµРЅРѕ РїРµСЂРµРґ РїСЂРѕС€РёРІРєРѕСЋ"
-                : "РџРѕС‚СЂС–Р±РµРЅ backup РєРѕРЅС„С–РіСѓ"}
-            </div>
-            <div className="button-stack hero-action-stack">
-              {createElement("esp-web-install-button" as any, {
-                manifest: installManifestUrl,
-                class: "install-button-host",
-                ref: installButtonRef,
-              })}
-              <button
-                className="primary-btn install-trigger-btn"
-                type="button"
-                disabled={!canFlashSelectedRelease}
-                title={flashHint}
-                onClick={() => void handleFlashStart()}
-              >
-                {flashBusy ? "РџС–РґРіРѕС‚РѕРІРєР° РґРѕ РїСЂРѕС€РёРІРєРё..." : "РџСЂРѕС€РёС‚Рё РїР»Р°С‚Сѓ"}
-              </button>
-            </div>
-            <div className="hero-hint">{flashHint}</div>
-            {flashStatus ? (
-              <div className={`hero-hint ${flashStage ? `flash-stage flash-stage-${flashStage}` : ""}`}>
-                {flashStatus}
+            <div className="hero-side">
+              <div className="panel-label">{t.page.selectedReleaseLabel}</div>
+              <div className="hero-release">
+                {selectedRelease?.name ||
+                  selectedRelease?.tag_name ||
+                  t.flash.releaseMissing}
               </div>
-            ) : null}
-          </div>
+              <div className="hero-assets">
+                <span>
+                  {firmwareAsset ? firmwareAsset.name : t.flash.firmwareMissing}
+                </span>
+                <span>
+                  {littlefsAsset
+                    ? littlefsAsset.name
+                    : t.flash.littlefsMissing}
+                </span>
+              </div>
+              <div
+                className={`status-pill ${configBackupReady ? "is-ok" : "is-warn"}`}
+              >
+                {configBackupReady
+                  ? t.flash.backupSaved
+                  : t.flash.backupRequired}
+              </div>
+              <div className="button-stack hero-action-stack">
+                {createElement("esp-web-install-button" as any, {
+                  manifest: installManifestUrl,
+                  class: "install-button-host",
+                  ref: installButtonRef,
+                })}
+                <button
+                  className="primary-btn install-trigger-btn"
+                  type="button"
+                  disabled={!canFlashSelectedRelease}
+                  title={flashHint}
+                  onClick={() => void handleFlashStart()}
+                >
+                  {flashBusy ? t.flash.flashPreparingBtn : t.flash.flashBtn}
+                </button>
+              </div>
+              <div className="hero-hint">{flashHint}</div>
+              {flashStatus ? (
+                <div
+                  className={`hero-hint ${flashStage ? `flash-stage flash-stage-${flashStage}` : ""}`}
+                >
+                  {flashStatus}
+                </div>
+              ) : null}
+            </div>
 
             <div className="panel-head">
               <div>
-                <div className="panel-label">COM status</div>
-                <h2 className="panel-title">РЎР»СѓР¶Р±РѕРІР° С–РЅС„РѕСЂРјР°С†С–СЏ Р· РїР»Р°С‚Рё</h2>
+                <div className="panel-label">{t.page.comStatusLabel}</div>
+                <h2 className="panel-title">{t.page.boardInfoTitle}</h2>
               </div>
             </div>
 
             <div className="board-grid">
               <div className="info-tile">
-                <span>WiвЂ‘Fi</span>
+                <span>{t.page.wifi}</span>
                 <strong>{board.wifiStatus}</strong>
               </div>
               <div className="info-tile">
-                <span>Internet</span>
+                <span>{t.page.internet}</span>
                 <strong>{board.internetStatus}</strong>
               </div>
               <div className="info-tile">
-                <span>MQTT</span>
+                <span>{t.page.mqtt}</span>
                 <strong>{board.mqttStatus}</strong>
               </div>
               <div className="info-tile">
-                <span>IP</span>
+                <span>{t.page.ip}</span>
                 <strong>{board.ip}</strong>
               </div>
               <div className="info-tile">
-                <span>mDNS</span>
+                <span>{t.page.mdns}</span>
                 <strong>{board.mdnsUrl}</strong>
               </div>
               <div className="info-tile">
-                <span>РџР°СЂРѕР»СЊ</span>
+                <span>{t.page.password}</span>
                 <strong>{board.adminPassword}</strong>
               </div>
               <div className="info-tile">
-                <span>Firmware</span>
+                <span>{t.page.firmware}</span>
                 <strong>{board.firmwareVersion}</strong>
               </div>
               <div className="info-tile">
-                <span>РћСЃС‚Р°РЅРЅС–Р№ СЂСЏРґРѕРє</span>
+                <span>{t.page.lastLine}</span>
                 <strong>{board.lastLine}</strong>
               </div>
             </div>
 
             <div className="serial-log">
               <div className="serial-head">
-                <span className="panel-label">Serial log</span>
+                <span className="panel-label">{t.page.serialLogLabel}</span>
                 <span
                   className={`status-pill ${portState === "connected" ? "is-ok" : "is-muted"}`}
                 >
-                  {portState === "connected" ? "Streaming" : "РќРµ С‡РёС‚Р°С”С‚СЊСЃСЏ"}
+                  {portState === "connected"
+                    ? t.board.streaming
+                    : t.board.notReading}
                 </span>
               </div>
               <div className="serial-lines">
                 {serialLog.length === 0 ? (
-                  <div className="serial-empty">
-                    РџС–РґРєР»СЋС‡Рё РїР»Р°С‚Сѓ, С‰РѕР± РїРѕР±Р°С‡РёС‚Рё Р»РѕРі.
-                  </div>
+                  <div className="serial-empty">{t.board.connectToSeeLog}</div>
                 ) : (
                   serialLog.map((line, index) => (
                     <div key={`${line}-${index}`} className="serial-line">
@@ -1062,5 +1100,4 @@ export default function Page() {
     </main>
   );
 }
-
 
