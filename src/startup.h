@@ -97,13 +97,48 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
     strip.show();
 }
 
-static void _showStartupAnimation(const AnimationConfig& cfg, uint8_t ledCount, const Color& primary, const Color& secondary)
+static void _showApFlagBlendAnimation(uint8_t ledCount,
+                                      const Color& primary,
+                                      const Color& secondary,
+                                      unsigned long frameIntervalMs)
 {
-    unsigned long now = millis();
+    static unsigned long lastStepMs = 0;
+    static float phase = 0.0f;
+
+    if (ledCount == 0)
+    {
+        strip.clear();
+        strip.show();
+        return;
+    }
+
+    const unsigned long now = millis();
+    if (lastStepMs == 0 || now - lastStepMs >= frameIntervalMs)
+    {
+        lastStepMs = now;
+        phase += 0.18f;
+        if (phase >= 1000.0f)
+            phase = 0.0f;
+    }
+
     for (uint8_t i = 0; i < ledCount; i++)
-        strip.setPixelColor(i, animationColor(cfg, i, ledCount, now, primary, secondary));
+    {
+        const uint32_t seed = (uint32_t)(i + 1) * 2654435761UL;
+        const float offset = (seed & 0xFF) / 255.0f;
+        const float wave = 0.5f + 0.5f * sinf((phase * 0.85f) + offset * 6.2831853f);
+        const float brightness = 0.22f + wave * 0.78f;
+        Color mixed = {
+            (uint8_t)(primary.r + (secondary.r - primary.r) * wave),
+            (uint8_t)(primary.g + (secondary.g - primary.g) * wave),
+            (uint8_t)(primary.b + (secondary.b - primary.b) * wave),
+            primary.a
+        };
+        strip.setPixelColor(i, applyColorBrightness(mixed, brightness));
+    }
+
     for (uint8_t i = ledCount; i < MAX_LEDS; i++)
         strip.setPixelColor(i, 0);
+
     strip.show();
 }
 
@@ -200,7 +235,7 @@ bool startupWifiWithEffect(uint8_t ledCount)
         unsigned long now = millis();
         if (lastApFrame == 0 || now - lastApFrame >= 20)
         {
-            _showStartupAnimation(apCfg, ledCount, apPrimary, apSecondary);
+            _showApFlagBlendAnimation(ledCount, apPrimary, apSecondary, 40);
             lastApFrame = now;
         }
         yield();

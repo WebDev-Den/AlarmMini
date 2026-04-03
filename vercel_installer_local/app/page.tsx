@@ -50,6 +50,7 @@ type ConfigTransferState = {
   reject: (reason?: unknown) => void;
   buffer: string;
   timeoutId: ReturnType<typeof setTimeout> | null;
+  readyResolve: (() => void) | null;
 };
 
 const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER;
@@ -57,6 +58,7 @@ const repo = process.env.NEXT_PUBLIC_GITHUB_REPO;
 const SUPPORT_AUTHOR_URL = "https://send.monobank.ua/jar/2PMhPjRk9j";
 const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
 const PROJECT_REPO_URL = "https://github.com/WebDev-Den/AlarmMini";
+const CONFIG_STORAGE_KEY = "alarmmini.installer.config";
 const t = getMessages();
 
 const DEFAULT_DEVICE_CONFIG: DeviceConfig = {
@@ -266,6 +268,7 @@ export default function Page() {
   const restoreAfterReconnectRef = useRef(false);
   const configTransferRef = useRef<ConfigTransferState | null>(null);
   const configOverridesRef = useRef<Partial<DeviceConfig> | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setSerialSupported(
@@ -275,6 +278,23 @@ export default function Page() {
 
   useEffect(() => {
     void import("esp-web-tools/dist/web/install-button.js");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(CONFIG_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = normalizeDeviceConfig(JSON.parse(raw));
+      configOverridesRef.current = parsed;
+      setBoardConfig(parsed);
+      setConfigDraft(parsed);
+      setConfigBackupReady(true);
+      setDefaultConfigMode(false);
+      setFlashStatus(t.config.localLoaded);
+    } catch (storageError) {
+      console.error("[config-storage-load]", storageError);
+    }
   }, []);
 
   useEffect(() => {
@@ -366,6 +386,20 @@ export default function Page() {
     return normalized;
   }
 
+  function persistConfigToLocal(configPayload: Partial<DeviceConfig> | null) {
+    if (typeof window === "undefined") return;
+    try {
+      if (!configPayload) {
+        window.localStorage.removeItem(CONFIG_STORAGE_KEY);
+        return;
+      }
+      const normalized = normalizeDeviceConfig(configPayload);
+      window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(normalized));
+    } catch (storageError) {
+      console.error("[config-storage-save]", storageError);
+    }
+  }
+
   function getMergedConfigPayload(baseConfig: any) {
     const normalized = {
       ...(baseConfig || {}),
@@ -399,7 +433,7 @@ export default function Page() {
     );
   }
 
-  function saveConfigDraft() {
+  async function saveConfigDraft() {
     const normalized = normalizeDeviceConfig(configDraft);
     const overrides: Partial<DeviceConfig> = {
       wifiSsid: normalized.wifiSsid,
@@ -412,22 +446,92 @@ export default function Page() {
     };
 
     configOverridesRef.current = overrides;
+    persistConfigToLocal(overrides);
 
     const merged = getMergedConfigPayload({
       ...boardConfig,
       ...overrides,
     });
 
+    configBackupRef.current = merged;
     syncBoardConfig(merged);
+    setConfigBackupReady(true);
+    setDefaultConfigMode(false);
 
-    if (configBackupRef.current) {
-      configBackupRef.current = getMergedConfigPayload(configBackupRef.current);
+    try {
+      if (
+        portState === "connected" &&
+        isPortOpen(rememberedPortRef.current ?? portRef.current) &&
+        !flashBusy
+      ) {
+        setFlashBusy(true);
+        setFlashStatus(t.config.applying);
+        await restoreConfigViaSerial(merged);
+        await disconnectPort({ preserveBackupState: true });
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await reconnectBoardAfterFlash();
+        await new Promise((resolve) => setTimeout(resolve, 1800));
+        try {
+          configBackupRef.current = getMergedConfigPayload(
+            await backupConfigWithRetry(2),
+          );
+          syncBoardConfig(configBackupRef.current);
+        } catch {
+          configBackupRef.current = merged;
+        }
+        setFlashStatus(t.config.applied);
+      } else {
+        setFlashStatus(t.config.staged);
+      }
+      setConfigModalOpen(false);
+    } catch (configApplyError) {
+      console.error("[config-apply]", configApplyError);
+      setFlashStatus(t.config.applyFailed);
+    } finally {
+      setFlashBusy(false);
+    }
+  }
+
+  function exportConfigDraft() {
+    const payload = getMergedConfigPayload({
+      ...boardConfig,
+      ...(configOverridesRef.current || {}),
+    });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "alarmmini-config.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importConfigFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = normalizeDeviceConfig(JSON.parse(text));
+      configOverridesRef.current = parsed;
+      configBackupRef.current = getMergedConfigPayload({
+        ...boardConfig,
+        ...parsed,
+      });
+      syncBoardConfig(configBackupRef.current);
       setConfigBackupReady(true);
       setDefaultConfigMode(false);
+      persistConfigToLocal(parsed);
+      setFlashStatus(t.config.imported);
+      setConfigModalOpen(true);
+    } catch (importError) {
+      console.error("[config-import]", importError);
+      setFlashStatus(t.config.importFailed);
+    } finally {
+      event.target.value = "";
     }
-
-    setFlashStatus(t.config.staged);
-    setConfigModalOpen(false);
   }
 
   useEffect(() => {
@@ -549,6 +653,11 @@ export default function Page() {
 
     if (line === "AMCFG READY") {
       clearConfigTransferTimeout();
+      if (transfer.readyResolve) {
+        const readyResolve = transfer.readyResolve;
+        transfer.readyResolve = null;
+        readyResolve();
+      }
       return true;
     }
 
@@ -603,6 +712,7 @@ export default function Page() {
           () => rejectConfigTransfer("backup_timeout"),
           15000,
         ),
+        readyResolve: null,
       };
 
       try {
@@ -626,16 +736,37 @@ export default function Page() {
         buffer: "",
         timeoutId: setTimeout(
           () => rejectConfigTransfer("restore_timeout"),
-          7000,
+          15000,
         ),
+        readyResolve: null,
       };
 
       try {
         await writeSerialLine("AMCFG SET BEGIN");
+        await new Promise<void>((readyResolve, readyReject) => {
+          const transfer = configTransferRef.current;
+          if (!transfer) {
+            readyReject(new Error("restore_not_initialized"));
+            return;
+          }
+          transfer.timeoutId = setTimeout(
+            () => rejectConfigTransfer("restore_ready_timeout"),
+            5000,
+          );
+          transfer.readyResolve = readyResolve;
+        });
         const chunkSize = 192;
         for (let offset = 0; offset < serialized.length; offset += chunkSize) {
           await writeSerialLine(
             `AMCFG SET DATA ${serialized.slice(offset, offset + chunkSize)}`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 12));
+        }
+        clearConfigTransferTimeout();
+        if (configTransferRef.current) {
+          configTransferRef.current.timeoutId = setTimeout(
+            () => rejectConfigTransfer("restore_timeout"),
+            15000,
           );
         }
         await writeSerialLine("AMCFG SET END");
@@ -1211,7 +1342,7 @@ export default function Page() {
                 </div>
                 <button
                   type="button"
-                  className="inline-btn"
+                  className="inline-btn config-edit-btn"
                   onClick={openConfigModal}
                   disabled={flashBusy}
                 >
@@ -1392,6 +1523,27 @@ export default function Page() {
             </div>
 
             <div className="button-stack config-modal-actions">
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json"
+                className="config-import-input"
+                onChange={(event) => void importConfigFile(event)}
+              />
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => importInputRef.current?.click()}
+              >
+                {t.config.import}
+              </button>
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={exportConfigDraft}
+              >
+                {t.config.export}
+              </button>
               <button
                 type="button"
                 className="ghost-btn"
