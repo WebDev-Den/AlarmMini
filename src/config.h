@@ -10,6 +10,8 @@
 #define MQTT_TOPIC_MAXLEN 64
 #define MQTT_USER_MAXLEN  32
 #define MQTT_PASS_MAXLEN  32
+#define WIFI_SSID_MAXLEN  64
+#define WIFI_PASS_MAXLEN  64
 #define NTP_SERVER_MAXLEN 64
 #define ADMIN_PASS_MAXLEN 32
 #define FIRMWARE_VERSION  "1.0.1-beta"
@@ -133,6 +135,8 @@ struct AppConfig {
     BuzzerConfig buzzer;
     BlinkConfig  blink;        // Налаштування мигання при втраті MQTT
     // MQTT — всі налаштування через веб-інтерфейс
+    char         wifiSsid[WIFI_SSID_MAXLEN];
+    char         wifiPass[WIFI_PASS_MAXLEN];
     char         mqttHost[MQTT_HOST_MAXLEN];
     uint16_t     mqttPort;
     char         mqttTopic[MQTT_TOPIC_MAXLEN];

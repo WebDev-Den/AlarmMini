@@ -46,6 +46,8 @@ void storageApplyJson(DynamicJsonDocument& doc) {
     gConfig.blink.dayIntensity   = u8("blinkDayInt");
     gConfig.blink.nightIntensity = u8("blinkNightInt");
 
+    str("wifiSsid",  gConfig.wifiSsid,  WIFI_SSID_MAXLEN);
+    str("wifiPass",  gConfig.wifiPass,  WIFI_PASS_MAXLEN);
     str("mqttHost",  gConfig.mqttHost,  MQTT_HOST_MAXLEN);
     str("mqttTopic", gConfig.mqttTopic, MQTT_TOPIC_MAXLEN);
     str("mqttUser",  gConfig.mqttUser,  MQTT_USER_MAXLEN);
@@ -72,6 +74,92 @@ void storageApplyJson(DynamicJsonDocument& doc) {
     }
 }
 
+void storagePopulateJson(DynamicJsonDocument& doc) {
+    doc["dayAlertR"] = gConfig.dayMode.alertColor.r;
+    doc["dayAlertG"] = gConfig.dayMode.alertColor.g;
+    doc["dayAlertB"] = gConfig.dayMode.alertColor.b;
+    doc["dayAlertA"] = gConfig.dayMode.alertColor.a;
+    doc["dayClearR"] = gConfig.dayMode.clearColor.r;
+    doc["dayClearG"] = gConfig.dayMode.clearColor.g;
+    doc["dayClearB"] = gConfig.dayMode.clearColor.b;
+    doc["dayClearA"] = gConfig.dayMode.clearColor.a;
+    doc["nightAlertR"] = gConfig.nightMode.alertColor.r;
+    doc["nightAlertG"] = gConfig.nightMode.alertColor.g;
+    doc["nightAlertB"] = gConfig.nightMode.alertColor.b;
+    doc["nightAlertA"] = gConfig.nightMode.alertColor.a;
+    doc["nightClearR"] = gConfig.nightMode.clearColor.r;
+    doc["nightClearG"] = gConfig.nightMode.clearColor.g;
+    doc["nightClearB"] = gConfig.nightMode.clearColor.b;
+    doc["nightClearA"] = gConfig.nightMode.clearColor.a;
+    doc["nightEnabled"] = gConfig.night.enabled;
+    doc["nightStartH"] = gConfig.night.startHour;
+    doc["nightStartM"] = gConfig.night.startMinute;
+    doc["nightEndH"] = gConfig.night.endHour;
+    doc["nightEndM"] = gConfig.night.endMinute;
+    doc["nightMaxBright"] = gConfig.night.maxBrightness;
+    doc["nightPulseAlert"] = gConfig.night.pulseOnAlert;
+    doc["nightPulseClear"] = gConfig.night.pulseOnClear;
+    doc["buzzerEnabled"] = gConfig.buzzer.enabled;
+    doc["buzzerDayVol"] = gConfig.buzzer.dayVolume;
+    doc["buzzerNightVol"] = gConfig.buzzer.nightVolume;
+    doc["blinkEnabled"] = gConfig.blink.enabled;
+    doc["blinkDayInt"] = gConfig.blink.dayIntensity;
+    doc["blinkNightInt"] = gConfig.blink.nightIntensity;
+    doc["wifiSsid"] = gConfig.wifiSsid;
+    doc["wifiPass"] = gConfig.wifiPass;
+    doc["mqttHost"] = gConfig.mqttHost;
+    doc["mqttPort"] = gConfig.mqttPort;
+    doc["mqttTopic"] = gConfig.mqttTopic;
+    doc["mqttUser"] = gConfig.mqttUser;
+    doc["mqttPass"] = gConfig.mqttPass;
+    doc["ntpServer1"] = gConfig.ntpServer1;
+    doc["ntpServer2"] = gConfig.ntpServer2;
+    doc["ntpServer3"] = gConfig.ntpServer3;
+    doc["logMask"] = gConfig.logMask;
+
+    JsonArray buz = doc.createNestedArray("buzzerRegions");
+    for (int i = 0; i < REGIONS_COUNT; i++) {
+        if (gConfig.buzzer.regions[i]) buz.add(REGIONS[i]);
+    }
+
+    JsonArray leds = doc.createNestedArray("leds");
+    for (int i = 0; i < MAX_LEDS; i++) {
+        int8_t regionIndex = gConfig.ledRegion[i];
+        leds.add((regionIndex >= 0 && regionIndex < REGIONS_COUNT) ? REGIONS[regionIndex] : "");
+    }
+}
+
+void storageSaveCurrentConfig() {
+    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
+    storagePopulateJson(doc);
+
+    File f = LittleFS.open("/config.json", "w");
+    if (!f) {
+        LOG_ERROR(LOG_CAT_CONFIG, "Failed to open config.json for write");
+        return;
+    }
+    serializeJson(doc, f);
+    f.close();
+}
+
+bool storageSyncWifiCredentials() {
+    String currentSsid = WiFi.SSID();
+    String currentPass = WiFi.psk();
+    currentSsid.trim();
+    currentPass.trim();
+
+    bool changed = currentSsid != String(gConfig.wifiSsid) || currentPass != String(gConfig.wifiPass);
+    if (!changed) return false;
+
+    strncpy(gConfig.wifiSsid, currentSsid.c_str(), WIFI_SSID_MAXLEN - 1);
+    gConfig.wifiSsid[WIFI_SSID_MAXLEN - 1] = '\0';
+    strncpy(gConfig.wifiPass, currentPass.c_str(), WIFI_PASS_MAXLEN - 1);
+    gConfig.wifiPass[WIFI_PASS_MAXLEN - 1] = '\0';
+    storageSaveCurrentConfig();
+    LOG_INFO(LOG_CAT_CONFIG, "WiFi credentials synced to config");
+    return true;
+}
+
 void createDefaultConfig() {
     DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
     doc["dayAlertR"]  = 255; doc["dayAlertG"]  = 0;  doc["dayAlertB"]  = 0;  doc["dayAlertA"]  = 255;
@@ -87,6 +175,8 @@ void createDefaultConfig() {
 
     doc["blinkEnabled"]= true; doc["blinkDayInt"]= 75; doc["blinkNightInt"]= 30;
 
+    doc["wifiSsid"]  = "";
+    doc["wifiPass"]  = "";
     doc["mqttHost"]  = "";
     doc["mqttPort"]  = 1883;
     doc["mqttTopic"] = "alerts/status";

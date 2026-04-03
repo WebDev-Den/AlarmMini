@@ -27,24 +27,21 @@ static constexpr unsigned long INTERNET_CHECK_INTERVAL_MS = 60000UL;
 static constexpr uint16_t INTERNET_CONNECT_TIMEOUT_MS = 250;
 static constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 3;
 
-static String _formatLogClock()
+static void _formatLogClock(char* buffer, size_t size)
 {
     time_t now = time(nullptr);
     struct tm *tinfo = localtime(&now);
     if (tinfo && tinfo->tm_year >= 120)
     {
-        char buffer[16];
-        snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", tinfo->tm_hour, tinfo->tm_min, tinfo->tm_sec);
-        return String(buffer);
+        snprintf(buffer, size, "%02d:%02d:%02d", tinfo->tm_hour, tinfo->tm_min, tinfo->tm_sec);
+        return;
     }
 
     unsigned long seconds = millis() / 1000UL;
     unsigned long hours = (seconds / 3600UL) % 100UL;
     unsigned long minutes = (seconds / 60UL) % 60UL;
     unsigned long secs = seconds % 60UL;
-    char buffer[24];
-    snprintf(buffer, sizeof(buffer), "uptime %02lu:%02lu:%02lu", hours, minutes, secs);
-    return String(buffer);
+    snprintf(buffer, size, "uptime %02lu:%02lu:%02lu", hours, minutes, secs);
 }
 
 static void _applyEffectiveAlerts(const bool* nextStates) {
@@ -114,7 +111,8 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
 
     JsonArray arr = doc.as<JsonArray>();
-    String eventTime = _formatLogClock();
+    char eventTime[24];
+    _formatLogClock(eventTime, sizeof(eventTime));
 
     for (int i = 0; i < REGIONS_COUNT; i++) {
         bool v = (i < (int)arr.size()) && arr[i].as<bool>();
@@ -122,7 +120,7 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
             LOG_INFO(LOG_CAT_MQTT, "Region '%s' -> %s at %s",
                      REGIONS[i],
                      v ? "ALERT" : "CLEAR",
-                     eventTime.c_str());
+                     eventTime);
         }
         gMqttAlerts[i] = v;
     }

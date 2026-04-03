@@ -44,6 +44,7 @@ bool loggerIsEnabled(uint16_t category);
 void loggerClear();
 size_t loggerCount();
 size_t loggerExportJson(JsonArray out);
+size_t loggerExportJson(JsonArray out, size_t limit);
 void loggerWrite(uint8_t level, uint16_t category, const char *message);
 void loggerWritef(uint8_t level, uint16_t category, const char *fmt, ...);
 const char *loggerCategoryKey(uint16_t category);

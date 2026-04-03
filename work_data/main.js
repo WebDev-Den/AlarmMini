@@ -1261,12 +1261,14 @@ async function bootAuthenticated() {
   await ensureMapLoaded();
   storeDirtySnapshot();
   updateAlertsOnWeb();
-  await refreshLogs();
+  if (activeTab === "logs") await refreshLogs();
   setTimeout(updateAlertsOnWeb, 1200);
   clearInterval(alertsTimer);
   alertsTimer = setInterval(updateAlertsOnWeb, 10000);
   clearInterval(logsTimer);
-  logsTimer = setInterval(refreshLogs, 4000);
+  logsTimer = setInterval(() => {
+    if (activeTab === "logs" && !document.hidden) refreshLogs();
+  }, 4000);
 }
 
 function bindAuthUi() {

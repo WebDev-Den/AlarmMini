@@ -66,5 +66,7 @@
   "mqttTopic": "ukraine/alarm/map/full",
   "mqttUser": "mqtt_user",
   "mqttPass": "change_me",
+  "wifiSsid": "",
+  "wifiPass": "",
   "logMask": 255
 }

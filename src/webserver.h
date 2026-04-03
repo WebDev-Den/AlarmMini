@@ -344,7 +344,7 @@ void handleGetLogs()
     if (!ensureAuthorized())
         return;
 
-    DynamicJsonDocument doc(16384);
+    DynamicJsonDocument doc(8192);
     doc["mask"] = loggerGetMask();
 
     JsonArray categories = doc.createNestedArray("categories");
@@ -361,7 +361,7 @@ void handleGetLogs()
     }
 
     JsonArray entries = doc.createNestedArray("entries");
-    loggerExportJson(entries);
+    loggerExportJson(entries, 24);
     sendJson(doc);
 }
 

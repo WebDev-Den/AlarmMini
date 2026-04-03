@@ -33,6 +33,17 @@ type BoardSnapshot = {
   lastLine: string;
 };
 
+type DeviceConfig = {
+  wifiSsid: string;
+  wifiPass: string;
+  mqttHost: string;
+  mqttPort: number;
+  mqttTopic: string;
+  mqttUser: string;
+  mqttPass: string;
+  [key: string]: any;
+};
+
 type ConfigTransferState = {
   mode: "backup" | "restore";
   resolve: (value: any) => void;
@@ -48,6 +59,16 @@ const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
 const PROJECT_REPO_URL = "https://github.com/WebDev-Den/AlarmMini";
 const t = getMessages();
 
+const DEFAULT_DEVICE_CONFIG: DeviceConfig = {
+  wifiSsid: "",
+  wifiPass: "",
+  mqttHost: "",
+  mqttPort: 1883,
+  mqttTopic: "alerts/status",
+  mqttUser: "",
+  mqttPass: "",
+};
+
 function getEmptyBoard(): BoardSnapshot {
   return {
     wifiStatus: t.board.waitingForConnection,
@@ -59,6 +80,21 @@ function getEmptyBoard(): BoardSnapshot {
     firmwareVersion: "-",
     hostname: "-",
     lastLine: "-",
+  };
+}
+
+function normalizeDeviceConfig(config: Partial<DeviceConfig> | null | undefined): DeviceConfig {
+  const source = config || {};
+  return {
+    ...DEFAULT_DEVICE_CONFIG,
+    ...source,
+    wifiSsid: String(source.wifiSsid || ""),
+    wifiPass: String(source.wifiPass || ""),
+    mqttHost: String(source.mqttHost || ""),
+    mqttPort: Number(source.mqttPort || 1883) || 1883,
+    mqttTopic: String(source.mqttTopic || DEFAULT_DEVICE_CONFIG.mqttTopic),
+    mqttUser: String(source.mqttUser || ""),
+    mqttPass: String(source.mqttPass || ""),
   };
 }
 
@@ -212,6 +248,13 @@ export default function Page() {
   >("");
   const [configBackupReady, setConfigBackupReady] = useState(false);
   const [defaultConfigMode, setDefaultConfigMode] = useState(false);
+  const [boardConfig, setBoardConfig] = useState<DeviceConfig>(
+    normalizeDeviceConfig(DEFAULT_DEVICE_CONFIG),
+  );
+  const [configDraft, setConfigDraft] = useState<DeviceConfig>(
+    normalizeDeviceConfig(DEFAULT_DEVICE_CONFIG),
+  );
+  const [configModalOpen, setConfigModalOpen] = useState(false);
 
   const portRef = useRef<any>(null);
   const rememberedPortRef = useRef<any>(null);
@@ -222,6 +265,7 @@ export default function Page() {
   const configBackupRef = useRef<any | null>(null);
   const restoreAfterReconnectRef = useRef(false);
   const configTransferRef = useRef<ConfigTransferState | null>(null);
+  const configOverridesRef = useRef<Partial<DeviceConfig> | null>(null);
 
   useEffect(() => {
     setSerialSupported(
@@ -314,6 +358,77 @@ export default function Page() {
               : configBackupReady
                 ? t.flash.restoreConfig
                 : t.flash.autoFlow;
+
+  function syncBoardConfig(configPayload: any) {
+    const normalized = normalizeDeviceConfig(configPayload);
+    setBoardConfig(normalized);
+    setConfigDraft(normalized);
+    return normalized;
+  }
+
+  function getMergedConfigPayload(baseConfig: any) {
+    const normalized = {
+      ...(baseConfig || {}),
+      ...normalizeDeviceConfig(baseConfig),
+      ...(configOverridesRef.current || {}),
+    };
+    normalized.mqttPort = Number(normalized.mqttPort || 1883) || 1883;
+    delete normalized.adminPassword;
+    return normalized;
+  }
+
+  function hasConfigOverrides() {
+    return Boolean(configOverridesRef.current);
+  }
+
+  function openConfigModal() {
+    const draft = normalizeDeviceConfig({
+      ...boardConfig,
+      ...(configOverridesRef.current || {}),
+    });
+    setConfigDraft(draft);
+    setConfigModalOpen(true);
+  }
+
+  function updateConfigDraft(field: keyof DeviceConfig, value: string) {
+    setConfigDraft((prev) =>
+      normalizeDeviceConfig({
+        ...prev,
+        [field]: field === "mqttPort" ? Number(value || 1883) : value,
+      }),
+    );
+  }
+
+  function saveConfigDraft() {
+    const normalized = normalizeDeviceConfig(configDraft);
+    const overrides: Partial<DeviceConfig> = {
+      wifiSsid: normalized.wifiSsid,
+      wifiPass: normalized.wifiPass,
+      mqttHost: normalized.mqttHost,
+      mqttPort: normalized.mqttPort,
+      mqttTopic: normalized.mqttTopic,
+      mqttUser: normalized.mqttUser,
+      mqttPass: normalized.mqttPass,
+    };
+
+    configOverridesRef.current = overrides;
+
+    const merged = getMergedConfigPayload({
+      ...boardConfig,
+      ...overrides,
+    });
+
+    syncBoardConfig(merged);
+
+    if (configBackupRef.current) {
+      configBackupRef.current = getMergedConfigPayload(configBackupRef.current);
+      setConfigBackupReady(true);
+      setDefaultConfigMode(false);
+    }
+
+    setFlashStatus(t.config.staged);
+    setConfigModalOpen(false);
+  }
 
   useEffect(() => {
     if (!selectedRelease || !firmwareAsset || !littlefsAsset) {
@@ -625,7 +740,10 @@ export default function Page() {
       await openBoardPort(port);
       await new Promise((resolve) => setTimeout(resolve, 2500));
       try {
-        configBackupRef.current = await backupConfigWithRetry();
+        configBackupRef.current = getMergedConfigPayload(
+          await backupConfigWithRetry(),
+        );
+        syncBoardConfig(configBackupRef.current);
         setConfigBackupReady(Boolean(configBackupRef.current));
         setDefaultConfigMode(false);
         setFlashStatus(t.flash.configReadOk);
@@ -660,8 +778,9 @@ export default function Page() {
 
     if (!configBackupRef.current && !defaultConfigMode) {
       try {
-        const backup = await backupConfigWithRetry();
+        const backup = getMergedConfigPayload(await backupConfigWithRetry());
         configBackupRef.current = backup;
+        syncBoardConfig(backup);
         setConfigBackupReady(Boolean(backup));
         setDefaultConfigMode(false);
       } catch (backupError) {
@@ -720,7 +839,8 @@ export default function Page() {
     setFlashStatus(t.flash.stageFlashed);
     if (!reconnectAfterFlashRef.current) return;
     reconnectAfterFlashRef.current = false;
-    restoreAfterReconnectRef.current = Boolean(configBackupRef.current);
+    restoreAfterReconnectRef.current =
+      Boolean(configBackupRef.current || hasConfigOverrides());
     await new Promise((resolve) => setTimeout(resolve, 500));
     await reconnectBoardAfterFlash();
     if (!restoreAfterReconnectRef.current) {
@@ -808,21 +928,30 @@ export default function Page() {
     if (
       flashBusy &&
       portState === "connected" &&
-      restoreAfterReconnectRef.current &&
-      configBackupRef.current
+      restoreAfterReconnectRef.current
     ) {
       restoreAfterReconnectRef.current = false;
       void (async () => {
         try {
           await new Promise((resolve) => setTimeout(resolve, 1500));
+          if (!configBackupRef.current) {
+            const flashedConfig = await backupConfigWithRetry(3);
+            configBackupRef.current = getMergedConfigPayload(flashedConfig);
+            syncBoardConfig(configBackupRef.current);
+          }
           setFlashStage("restoring");
           setFlashStatus(t.flash.stageRestoring);
-          await restoreConfigViaSerial(configBackupRef.current);
+          await restoreConfigViaSerial(
+            getMergedConfigPayload(configBackupRef.current),
+          );
           await disconnectPort({ preserveBackupState: true });
           await new Promise((resolve) => setTimeout(resolve, 3000));
           await reconnectBoardAfterFlash();
           try {
-            configBackupRef.current = await backupConfigWithRetry(2);
+            configBackupRef.current = getMergedConfigPayload(
+              await backupConfigWithRetry(2),
+            );
+            syncBoardConfig(configBackupRef.current);
             setConfigBackupReady(Boolean(configBackupRef.current));
             setDefaultConfigMode(false);
           } catch {
@@ -1074,6 +1203,34 @@ export default function Page() {
               </div>
             </div>
 
+            <div className="config-summary">
+              <div className="panel-head">
+                <div>
+                  <div className="panel-label">{t.config.title}</div>
+                  <h3 className="panel-title">{t.config.subtitle}</h3>
+                </div>
+                <button
+                  type="button"
+                  className="inline-btn"
+                  onClick={openConfigModal}
+                  disabled={flashBusy}
+                >
+                  {t.config.edit}
+                </button>
+              </div>
+
+              <div className="board-grid">
+                <div className="info-tile">
+                  <span>{t.config.configuredWifi}</span>
+                  <strong>{boardConfig.wifiSsid || t.config.notSet}</strong>
+                </div>
+                <div className="info-tile">
+                  <span>{t.config.configuredMqtt}</span>
+                  <strong>{boardConfig.mqttHost || t.config.notSet}</strong>
+                </div>
+              </div>
+            </div>
+
             <div className="board-grid">
               <div className="info-tile">
                 <span>{t.page.wifi}</span>
@@ -1135,6 +1292,124 @@ export default function Page() {
           </section>
         </div>
       </section>
+
+      {configModalOpen ? (
+        <div
+          className="config-modal-backdrop"
+          onClick={() => setConfigModalOpen(false)}
+        >
+          <div
+            className="config-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-head">
+              <div>
+                <div className="panel-label">{t.config.title}</div>
+                <h2 className="panel-title">{t.config.subtitle}</h2>
+              </div>
+            </div>
+
+            <div className="config-section">
+              <div className="panel-label">{t.config.wifiTitle}</div>
+              <div className="config-form-grid">
+                <label className="config-field">
+                  <span>{t.config.ssid}</span>
+                  <input
+                    type="text"
+                    value={configDraft.wifiSsid}
+                    onChange={(event) =>
+                      updateConfigDraft("wifiSsid", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="config-field">
+                  <span>{t.config.wifiPassword}</span>
+                  <input
+                    type="text"
+                    value={configDraft.wifiPass}
+                    onChange={(event) =>
+                      updateConfigDraft("wifiPass", event.target.value)
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="config-section">
+              <div className="panel-label">{t.config.mqttTitle}</div>
+              <div className="config-form-grid">
+                <label className="config-field">
+                  <span>{t.config.host}</span>
+                  <input
+                    type="text"
+                    value={configDraft.mqttHost}
+                    onChange={(event) =>
+                      updateConfigDraft("mqttHost", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="config-field">
+                  <span>{t.config.port}</span>
+                  <input
+                    type="number"
+                    value={configDraft.mqttPort}
+                    onChange={(event) =>
+                      updateConfigDraft("mqttPort", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="config-field">
+                  <span>{t.config.topic}</span>
+                  <input
+                    type="text"
+                    value={configDraft.mqttTopic}
+                    onChange={(event) =>
+                      updateConfigDraft("mqttTopic", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="config-field">
+                  <span>{t.config.user}</span>
+                  <input
+                    type="text"
+                    value={configDraft.mqttUser}
+                    onChange={(event) =>
+                      updateConfigDraft("mqttUser", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="config-field">
+                  <span>{t.config.mqttPassword}</span>
+                  <input
+                    type="text"
+                    value={configDraft.mqttPass}
+                    onChange={(event) =>
+                      updateConfigDraft("mqttPass", event.target.value)
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="button-stack config-modal-actions">
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setConfigModalOpen(false)}
+              >
+                {t.config.close}
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={saveConfigDraft}
+              >
+                {t.config.save}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

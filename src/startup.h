@@ -134,13 +134,17 @@ bool startupWifiWithEffect(uint8_t ledCount)
     const Color apSecondary = capColorForAnimation(ukraineYellowColor(apCfg.maxBrightness), apCfg, night);
 
     WiFi.mode(WIFI_STA);
-    WiFi.begin();
+    if (strlen(gConfig.wifiSsid))
+        WiFi.begin(gConfig.wifiSsid, gConfig.wifiPass);
+    else
+        WiFi.begin();
     unsigned long t0 = millis();
     unsigned long lastStartupFrame = 0;
     while (millis() - t0 < 15000)
     {
         if (WiFi.status() == WL_CONNECTED)
         {
+            storageSyncWifiCredentials();
             LOG_INFO(LOG_CAT_WIFI, "OK IP: %s", WiFi.localIP().toString().c_str());
             return true;
         }
@@ -185,6 +189,7 @@ bool startupWifiWithEffect(uint8_t ledCount)
 
         if (WiFi.status() == WL_CONNECTED)
         {
+            storageSyncWifiCredentials();
             LOG_INFO(LOG_CAT_WIFI, "Connected via portal. IP: %s", WiFi.localIP().toString().c_str());
             dns.stop();
             const uint8_t modeCap = modeBrightnessLimit(night);

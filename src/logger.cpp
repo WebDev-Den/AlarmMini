@@ -137,10 +137,14 @@ void loggerWritef(uint8_t level, uint16_t category, const char *fmt, ...)
     loggerWrite(level, category, buffer);
 }
 
-size_t loggerExportJson(JsonArray out)
+size_t loggerExportJson(JsonArray out, size_t limit)
 {
     size_t exported = 0;
-    for (size_t i = 0; i < gLogSize; i++)
+    size_t count = gLogSize;
+    if (limit && limit < count)
+        count = limit;
+
+    for (size_t i = 0; i < count; i++)
     {
         const size_t index = (gLogHead + LOG_BUFFER_SIZE - 1 - i) % LOG_BUFFER_SIZE;
         const LogEntry &entry = gLogEntries[index];
@@ -153,4 +157,9 @@ size_t loggerExportJson(JsonArray out)
         exported++;
     }
     return exported;
+}
+
+size_t loggerExportJson(JsonArray out)
+{
+    return loggerExportJson(out, 0);
 }
