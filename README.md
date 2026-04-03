@@ -16,6 +16,10 @@
 <img src="https://img.shields.io/badge/Зворотний%20зв'язок-Telegram-0B2A4F?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram група">
 </a>
 
+## Онлайн installer
+
+- Vercel URL: [https://alarmmini.vercel.app](https://alarmmini.vercel.app)
+
 ## Підтримка та зворотний зв'язок
 
 - Підтримати автора: [Monobank](https://send.monobank.ua/jar/2PMhPjRk9j)
