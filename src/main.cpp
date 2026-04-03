@@ -86,6 +86,7 @@ static void handleSerialProtocolLine(const String &line)
 {
     if (line == "AMCFG GET")
     {
+        Serial.println("AMCFG READY");
         serialConfigSendCurrent();
         return;
     }

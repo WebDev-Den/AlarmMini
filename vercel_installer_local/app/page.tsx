@@ -321,21 +321,31 @@ export default function Page() {
       return;
     }
 
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "";
+    const firmwarePath = `${origin}/api/release-asset?source=${encodeURIComponent(
+      firmwareAsset.browser_download_url,
+    )}`;
+    const littlefsPath = `${origin}/api/release-asset?source=${encodeURIComponent(
+      littlefsAsset.browser_download_url,
+    )}`;
+
     const manifest = {
       name: "AlarmMini",
       version:
         selectedRelease.tag_name || selectedRelease.name || "unversioned",
       new_install_prompt_erase: false,
+      new_install_improv_wait_time: 0,
       builds: [
         {
           chipFamily: "ESP8266",
           parts: [
             {
-              path: `/api/release-asset?source=${encodeURIComponent(firmwareAsset.browser_download_url)}`,
+              path: firmwarePath,
               offset: 0,
             },
             {
-              path: `/api/release-asset?source=${encodeURIComponent(littlefsAsset.browser_download_url)}`,
+              path: littlefsPath,
               offset: 2097152,
             },
           ],
@@ -396,6 +406,11 @@ export default function Page() {
     const transfer = configTransferRef.current;
     if (transfer?.timeoutId) clearTimeout(transfer.timeoutId);
     if (transfer) transfer.timeoutId = null;
+  }
+
+  function resetConfigTransferState() {
+    clearConfigTransferTimeout();
+    configTransferRef.current = null;
   }
 
   function rejectConfigTransfer(reason: string) {
@@ -461,6 +476,7 @@ export default function Page() {
     if (!activePort?.readable || !activePort?.writable) return null;
 
     setFlashStatus(t.flash.readingConfig);
+    resetConfigTransferState();
 
     return await new Promise<any>(async (resolve, reject) => {
       configTransferRef.current = {
@@ -470,7 +486,7 @@ export default function Page() {
         buffer: "",
         timeoutId: setTimeout(
           () => rejectConfigTransfer("backup_timeout"),
-          9000,
+          15000,
         ),
       };
 
@@ -485,6 +501,7 @@ export default function Page() {
   async function restoreConfigViaSerial(configPayload: any) {
     const serialized = JSON.stringify(configPayload || {});
     setFlashStatus(t.flash.restoringConfig);
+    resetConfigTransferState();
 
     await new Promise<boolean>(async (resolve, reject) => {
       configTransferRef.current = {
@@ -556,6 +573,27 @@ export default function Page() {
       });
   }
 
+  async function backupConfigWithRetry(attempts = 3) {
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+        const backup = await backupConfigViaSerial();
+        if (backup) return backup;
+      } catch (backupError) {
+        lastError = backupError;
+        resetConfigTransferState();
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("backup_timeout");
+  }
+
   async function openBoardPort(port: any) {
     if (!isPortOpen(port)) {
       await port.open({ baudRate: 115200 });
@@ -585,9 +623,9 @@ export default function Page() {
       const serial = (navigator as Navigator & { serial: any }).serial;
       const port = await serial.requestPort();
       await openBoardPort(port);
-      await new Promise((resolve) => setTimeout(resolve, 1800));
+      await new Promise((resolve) => setTimeout(resolve, 2500));
       try {
-        configBackupRef.current = await backupConfigViaSerial();
+        configBackupRef.current = await backupConfigWithRetry();
         setConfigBackupReady(Boolean(configBackupRef.current));
         setDefaultConfigMode(false);
         setFlashStatus(t.flash.configReadOk);
@@ -617,12 +655,12 @@ export default function Page() {
       const knownPorts = await serial.getPorts();
       const port = knownPorts[0] ?? (await serial.requestPort());
       await openBoardPort(port);
-      await new Promise((resolve) => setTimeout(resolve, 1800));
+      await new Promise((resolve) => setTimeout(resolve, 2500));
     }
 
     if (!configBackupRef.current && !defaultConfigMode) {
       try {
-        const backup = await backupConfigViaSerial();
+        const backup = await backupConfigWithRetry();
         configBackupRef.current = backup;
         setConfigBackupReady(Boolean(backup));
         setDefaultConfigMode(false);
@@ -781,10 +819,10 @@ export default function Page() {
           setFlashStatus(t.flash.stageRestoring);
           await restoreConfigViaSerial(configBackupRef.current);
           await disconnectPort({ preserveBackupState: true });
-          await new Promise((resolve) => setTimeout(resolve, 2500));
+          await new Promise((resolve) => setTimeout(resolve, 3000));
           await reconnectBoardAfterFlash();
           try {
-            configBackupRef.current = await backupConfigViaSerial();
+            configBackupRef.current = await backupConfigWithRetry(2);
             setConfigBackupReady(Boolean(configBackupRef.current));
             setDefaultConfigMode(false);
           } catch {
