@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>AlarmMini Control</title>
+  <link rel="stylesheet" href="/bootstrap.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <script>
+    const LANG = {
+      tabs: {
+        overview: { eyebrow: "Огляд системи", title: "Швидкий доступ до стану мапи та налаштувань" },
+        label: { eyebrow: "QR / Друк", title: "QR-наклейки та друковані картки" },
+        colors: { eyebrow: "Кольори", title: "Налаштування денних і нічних кольорів мапи" },
+        night: { eyebrow: "Нічний режим", title: "Автоматичне обмеження яскравості в нічний час" },
+        buzzer: { eyebrow: "Бузер", title: "Звук сповіщення для тривоги та відбою" },
+        regions: { eyebrow: "Регіони", title: "Області, для яких активні звукові сповіщення" },
+        mqtt: { eyebrow: "MQTT", title: "Підключення до брокера для отримання стану мапи" },
+        system: { eyebrow: "Система", title: "Доступ до пристрою, mDNS та системні параметри" },
+        calibration: { eyebrow: "Калібрування", title: "Привʼязка фізичних LED до областей із швидким переходом по LED" },
+        logs: { eyebrow: "Логи", title: "Журнал подій, мережі та системних повідомлень" }
+      },
+      nav: {
+        overview: "Огляд",
+        label: "QR / Друк",
+        colors: "Кольори",
+        night: "Нічний режим",
+        buzzer: "Бузер",
+        regions: "Регіони",
+        mqtt: "MQTT",
+        system: "Система",
+        calibration: "Калібрування",
+        logs: "Логи"
+      },
+      actions: {
+        import: "Імпорт",
+        export: "Експорт",
+        support: "Підтримати автора",
+        restart: "Перезавантажити",
+        logout: "Вийти",
+        save: "Зберегти",
+        refresh: "Оновити",
+        clear: "Очистити",
+        disableLogs: "Вимкнути логи",
+        openCalibration: "Відкрити калібрування",
+        start: "Почати",
+        cancel: "Скасувати",
+        clearSelection: "Очистити",
+        back: "Назад",
+        next: "Далі",
+        finish: "Фінал",
+        saveMap: "Зберегти мапу",
+        all: "Всі",
+        none: "Жодного",
+        testAlert: "Тест тривоги",
+        testClear: "Тест відбою",
+        downloadPng: "Завантажити PNG"
+      },
+      auth: {
+        title: "Вхід в адмін-панель",
+        subtitle: "Введи пароль адміністратора, щоб відкрити налаштування мапи, LED та системних функцій.",
+        password: "Пароль",
+        placeholder: "Введи пароль",
+        login: "Увійти"
+      },
+      loading: { subtitle: "Ініціалізація інтерфейсу та мапи" },
+      overview: {
+        label: "Попередній перегляд мапи",
+        title: "Поточний стан тривог",
+        text: "Ця мапа лише показує, які області зараз у тривозі. Для привʼязки LED переходь у вкладку калібрування.",
+        empty: "Мапа ще не завантажена",
+        loading: "Завантаження мапи...",
+        ready: "Мапа готова"
+      },
+      labels: {
+        label: "QR наклейки",
+        title: "Дві окремі компактні картки",
+        text: "Окрема наклейка для входу в адмін-панель і окрема наклейка для підключення до AP.",
+        adminTitle: "Веб-панель",
+        apTitle: "Точка доступу",
+        url: "URL",
+        password: "Пароль",
+        ssid: "SSID"
+      },
+      colors: {
+        title: "Денні та нічні кольори тривоги",
+        day: "День",
+        night: "Ніч",
+        alert: "Тривога",
+        clear: "Відбій"
+      },
+      nightMode: {
+        title: "Автоматичне обмеження яскравості вночі",
+        active: "Активний",
+        start: "Початок",
+        end: "Кінець"
+      },
+      buzzer: {
+        title: "Звук для тривоги та відбою",
+        active: "Активний",
+        dayVolume: "Гучність вдень",
+        nightVolume: "Гучність вночі"
+      },
+      regions: {
+        title: "Обери області, для яких активний бузер"
+      },
+      mqtt: {
+        title: "Підключення до брокера",
+        broker: "Broker",
+        port: "Порт",
+        topic: "Топік",
+        login: "Логін",
+        loginPlaceholder: "(без авторизації)",
+        password: "Пароль"
+      },
+      system: {
+        title: "Доступ та синхронізація часу",
+        adminPassword: "Пароль адміністратора",
+        mdns: "mDNS адреса",
+        ip: "IP адреса",
+        labelUrl: "URL для наклейки",
+        ledPin: "Пін стрічки",
+        buzzerPin: "Пін бузера",
+        ntpTitle: "NTP сервери",
+        ntpHint: "Якщо поле порожнє, використовується значення за замовчуванням."
+      },
+      logs: {
+        title: "Логи та останні події",
+        text: "Останні події зберігаються лише в RAM. Старі записи автоматично витісняються без зносу flash-памʼяті.",
+        loading: "Завантаження логів...",
+        empty: "Логів ще не накопичено.",
+        categories: {
+          system: "Система",
+          wifi: "Wi‑Fi",
+          internet: "Інтернет",
+          mqtt: "MQTT",
+          web: "Веб",
+          config: "Конфіг",
+          calibration: "Калібрування",
+          test: "Тести"
+        }
+      },
+      calibration: {
+        title: "Привʼязка LED до областей",
+        intro: "Калібрування працює у двох режимах одночасно: крок за кроком і швидкий перехід по будь-якому LED. Логіка вибору області лишається тією ж: мапа, список областей, кнопки назад/далі та підсвітка фізичного LED.",
+        stepHint: "Підсвічено фізично на пристрої",
+        quickNote: "Швидкий перехід по LED справа",
+        mapTab: "Мапа",
+        regionsTab: "Області",
+        ledTab: "LED",
+        selected: "Обрано:",
+        selectedNow: "Обрано зараз",
+        assigned: "Вже призначено",
+        multi: "Кілька LED",
+        currentChoice: "Поточний вибір",
+        currentChoiceHint: "Можна клацати по мапі або швидко вибирати область у списку нижче.",
+        quickRegionTitle: "Швидкий вибір області",
+        regionSearch: "Пошук області...",
+        quickLedTitle: "Швидкий перехід по LED",
+        quickLedHint: "Додатковий режим без зламу покрокової логіки",
+        unassigned: "- не призначено -",
+        finalTitle: "Фінал",
+        finalHint: "Перевір призначення перед збереженням"
+      },
+      regionsBySvg: {
+        "UA-05": "Вінницька область",
+        "UA-07": "Волинська область",
+        "UA-12": "Дніпропетровська область",
+        "UA-14": "Донецька область",
+        "UA-18": "Житомирська область",
+        "UA-21": "Закарпатська область",
+        "UA-23": "Запорізька область",
+        "UA-26": "Івано-Франківська область",
+        "UA-32": "Київська область",
+        "UA-35": "Кіровоградська область",
+        "UA-09": "Луганська область",
+        "UA-46": "Львівська область",
+        "UA-48": "Миколаївська область",
+        "UA-51": "Одеська область",
+        "UA-53": "Полтавська область",
+        "UA-56": "Рівненська область",
+        "UA-59": "Сумська область",
+        "UA-61": "Тернопільська область",
+        "UA-63": "Харківська область",
+        "UA-65": "Херсонська область",
+        "UA-68": "Хмельницька область",
+        "UA-71": "Черкаська область",
+        "UA-77": "Чернівецька область",
+        "UA-74": "Чернігівська область",
+        "UA-43": "Автономна Республіка Крим"
+      }
+    };
+    window.LANG = LANG;
+  </script>
+</head>
+
+<body class="is-loading auth-locked">
+  <div class="loading-screen" id="loadingScreen">
+    <div class="loading-panel">
+      <div class="loading-mark">AM</div>
+      <div class="loading-title">AlarmMini</div>
+      <div class="loading-subtitle">Ініціалізація інтерфейсу та мапи</div>
+      <div class="loading-bar">
+        <div class="loading-bar-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-overlay" id="loginOverlay">
+    <div class="auth-card">
+      <div class="auth-mark">AM</div>
+      <h1 class="auth-title">Вхід в адмін-панель</h1>
+      <p class="auth-subtitle">Введи пароль адміністратора, щоб відкрити налаштування мапи, LED та системних функцій.
+      </p>
+      <form class="auth-form" id="loginForm">
+        <label class="field-label" for="loginPassword">Пароль</label>
+        <input class="field-input auth-input" id="loginPassword" type="password" autocomplete="current-password"
+          placeholder="Введи пароль">
+        <button class="auth-submit" type="submit" id="loginBtn">Увійти</button>
+      </form>
+      <div class="auth-error" id="loginError"></div>
+    </div>
+  </div>
+
+  <main class="workspace container-fluid px-3 py-3">
+    <div class="row g-3 align-items-start">
+      <aside class="sidebar col-12 col-lg-4 col-xl-3">
+        <div class="sidebar-top">
+          <div class="brand-row">
+            <div class="brand-mark">AM</div>
+            <div class="brand-copy">
+              <div class="brand-title">AlarmMini</div>
+              <div class="brand-subtitle">Map Controller</div>
+            </div>
+          </div>
+          <a class="device-chip" id="deviceBadge" href="#" title="Відкрити пристрій за mDNS-адресою">
+            <span class="device-dot" id="deviceDot"></span>
+            <span class="device-chip-text" id="deviceName">connecting...</span>
+          </a>
+        </div>
+
+        <nav class="sidebar-nav" id="sidebarNav">
+          <button class="nav-tab active" type="button" data-tab="overview">Огляд</button>
+          <button class="nav-tab" type="button" data-tab="label">QR / Друк</button>
+          <button class="nav-tab" type="button" data-tab="colors">Кольори</button>
+          <button class="nav-tab" type="button" data-tab="night">Нічний режим</button>
+          <button class="nav-tab" type="button" data-tab="buzzer">Бузер</button>
+          <button class="nav-tab" type="button" data-tab="regions">Регіони</button>
+          <button class="nav-tab" type="button" data-tab="mqtt">MQTT</button>
+          <button class="nav-tab" type="button" data-tab="system">Система</button>
+          <button class="nav-tab nav-tab-accent" type="button" data-tab="calibration">Калібрування</button>
+          <button class="nav-tab" type="button" data-tab="logs">Logs</button>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <a class="sidebar-action sidebar-action-primary sidebar-action-support" id="supportAuthorBtn"
+            href="https://send.monobank.ua/jar/2PMhPjRk9j" target="_blank" rel="noreferrer"
+            data-i18n="actions.support"></a>
+          <a class="sidebar-action sidebar-action-telegram" id="feedbackTelegramBtn"
+            href="https://t.me/+j3zFZHE5gGoyNGYy" target="_blank" rel="noreferrer">Telegram група</a>
+          <div class="sidebar-actions-row sidebar-actions-row-compact">
+            <button class="sidebar-action" onclick="triggerImportSettings()" type="button">Імпорт</button>
+            <button class="sidebar-action" onclick="exportSettings()" type="button">Експорт</button>
+          </div>
+          <div class="sidebar-actions-row sidebar-actions-row-compact">
+            <button class="sidebar-action sidebar-action-danger restart-trigger" id="restartBtn"
+              onclick="restartDevice()" type="button">Перезавантажити</button>
+            <button class="sidebar-action" id="logoutBtn" type="button">Вийти</button>
+          </div>
+          <button class="sidebar-action sidebar-action-primary hidden" id="saveBtn" onclick="save()" type="button"
+            disabled>
+            Зберегти
+          </button>
+          <input type="file" id="importSettingsInput" accept="application/json,.json" hidden>
+        </div>
+      </aside>
+
+      <section class="content-area col-12 col-lg-8 col-xl-9">
+        <header class="content-header">
+          <div>
+            <div class="content-eyebrow" id="contentEyebrow">Огляд системи</div>
+            <h1 class="content-title" id="contentTitle">Швидкий доступ до стану мапи та налаштувань</h1>
+          </div>
+        </header>
+
+        <div class="content-stack d-flex flex-column gap-3">
+          <section class="content-pane active" id="tab-overview">
+            <article class="panel-card panel-card-map">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">Попередній перегляд мапи</div>
+                  <h2 class="panel-title">Поточний стан тривог</h2>
+                </div>
+                <div class="panel-badge" id="mapStatusText">Завантаження мапи...</div>
+              </div>
+              <p class="panel-text">Ця мапа лише показує, які області зараз у тривозі. Для привʼязки LED переходь у
+                вкладку калібрування.</p>
+              <div class="map-preview-wrap" id="mapPreviewWrap">
+                <div class="map-preview-empty">Мапа ще не завантажена</div>
+              </div>
+            </article>
+          </section>
+
+          <section class="content-pane" id="tab-label">
+            <article class="panel-card panel-card-label">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">QR наклейки</div>
+                  <h2 class="panel-title">Дві окремі компактні картки</h2>
+                </div>
+              </div>
+              <p class="panel-text">Окрема наклейка для входу в адмін-панель і окрема наклейка для підключення до AP.
+              </p>
+              <div class="label-layout label-layout-split row g-3">
+                <div class="label-card col-12 col-xl-6">
+                  <div class="label-card-head">
+                    <div>
+                      <div class="label-key">Admin</div>
+                      <div class="label-card-title">Веб-панель</div>
+                    </div>
+                    <button class="inline-btn inline-btn-primary" type="button"
+                      onclick="downloadAdminLabel()">Завантажити PNG</button>
+                  </div>
+                  <div class="qr-box qr-box-compact">
+                    <img id="adminLabelPreview" alt="Admin label preview">
+                    <canvas id="adminLabelCanvas" width="460" height="220"></canvas>
+                  </div>
+                  <div class="label-meta label-meta-compact">
+                    <div class="label-line">
+                      <span class="label-key">URL</span>
+                      <span class="label-value" id="labelMdns">-</span>
+                    </div>
+                    <div class="label-line">
+                      <span class="label-key">Пароль</span>
+                      <span class="label-value" id="labelAdminPassword">-</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="label-card col-12 col-xl-6">
+                  <div class="label-card-head">
+                    <div>
+                      <div class="label-key">AP</div>
+                      <div class="label-card-title">Точка доступу</div>
+                    </div>
+                    <button class="inline-btn inline-btn-primary" type="button" onclick="downloadApLabel()">Завантажити
+                      PNG</button>
+                  </div>
+                  <div class="qr-box qr-box-compact">
+                    <img id="apLabelPreview" alt="AP label preview">
+                    <canvas id="apLabelCanvas" width="460" height="220"></canvas>
+                  </div>
+                  <div class="label-meta label-meta-compact">
+                    <div class="label-line">
+                      <span class="label-key">SSID</span>
+                      <span class="label-value" id="labelApSsid">-</span>
+                    </div>
+                    <div class="label-line">
+                      <span class="label-key">Пароль</span>
+                      <span class="label-value" id="labelApPassword">-</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+          </section>
+
+          <section class="content-pane" id="tab-colors">
+            <article class="panel-card">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">Кольори LED</div>
+                  <h2 class="panel-title">Денні та нічні кольори тривоги</h2>
+                </div>
+              </div>
+
+              <div class="mode-divider"><span>День</span></div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Тривога</div>
+                  <div class="row-sub">ALERT · DAY</div>
+                </div>
+                <div class="color-control">
+                  <div class="color-swatch-wrap">
+                    <div class="color-swatch" id="dayAlertSwatch" style="background:#ff0000"></div>
+                    <input type="color" id="dayAlertColor" value="#ff0000"
+                      oninput="document.getElementById('dayAlertSwatch').style.background=this.value">
+                  </div>
+                  <div class="brightness-control">
+                    <input type="range" id="dayAlertBright" min="0" max="255" value="255"
+                      oninput="document.getElementById('dayAlertBrightVal').textContent=Math.round(this.value/2.55)+'%'">
+                    <span class="brightness-label" id="dayAlertBrightVal">100%</span>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Відбій</div>
+                  <div class="row-sub">CLEAR · DAY</div>
+                </div>
+                <div class="color-control">
+                  <div class="color-swatch-wrap">
+                    <div class="color-swatch" id="dayClearSwatch" style="background:#005000"></div>
+                    <input type="color" id="dayClearColor" value="#005000"
+                      oninput="document.getElementById('dayClearSwatch').style.background=this.value">
+                  </div>
+                  <div class="brightness-control">
+                    <input type="range" id="dayClearBright" min="0" max="255" value="80"
+                      oninput="document.getElementById('dayClearBrightVal').textContent=Math.round(this.value/2.55)+'%'">
+                    <span class="brightness-label" id="dayClearBrightVal">31%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mode-divider"><span>Ніч</span></div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Тривога</div>
+                  <div class="row-sub">ALERT · NIGHT</div>
+                </div>
+                <div class="color-control">
+                  <div class="color-swatch-wrap">
+                    <div class="color-swatch" id="nightAlertSwatch" style="background:#500000"></div>
+                    <input type="color" id="nightAlertColor" value="#500000"
+                      oninput="document.getElementById('nightAlertSwatch').style.background=this.value">
+                  </div>
+                  <div class="brightness-control">
+                    <input type="range" id="nightAlertBright" min="0" max="255" value="255"
+                      oninput="document.getElementById('nightAlertBrightVal').textContent=Math.round(this.value/2.55)+'%'">
+                    <span class="brightness-label" id="nightAlertBrightVal">100%</span>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Відбій</div>
+                  <div class="row-sub">CLEAR · NIGHT</div>
+                </div>
+                <div class="color-control">
+                  <div class="color-swatch-wrap">
+                    <div class="color-swatch" id="nightClearSwatch" style="background:#000f00"></div>
+                    <input type="color" id="nightClearColor" value="#000f00"
+                      oninput="document.getElementById('nightClearSwatch').style.background=this.value">
+                  </div>
+                  <div class="brightness-control">
+                    <input type="range" id="nightClearBright" min="0" max="255" value="255"
+                      oninput="document.getElementById('nightClearBrightVal').textContent=Math.round(this.value/2.55)+'%'">
+                    <span class="brightness-label" id="nightClearBrightVal">100%</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <section class="content-pane" id="tab-night">
+            <article class="panel-card">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">Нічний режим</div>
+                  <h2 class="panel-title">Автоматичне обмеження яскравості вночі</h2>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Активний</div>
+                  <div class="row-sub">NIGHT MODE</div>
+                </div>
+                <label class="toggle-wrap">
+                  <input type="checkbox" id="nightEnabled" checked>
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </label>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Початок</div>
+                  <div class="row-sub">START TIME</div>
+                </div>
+                <input type="time" id="nightStart" value="22:00">
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Кінець</div>
+                  <div class="row-sub">END TIME</div>
+                </div>
+                <input type="time" id="nightEnd" value="07:00">
+              </div>
+            </article>
+          </section>
+
+          <section class="content-pane" id="tab-buzzer">
+            <article class="panel-card">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">Бузер</div>
+                  <h2 class="panel-title">Звук для тривоги та відбою</h2>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Активний</div>
+                  <div class="row-sub">BUZZER ON</div>
+                </div>
+                <label class="toggle-wrap">
+                  <input type="checkbox" id="buzzerEnabled" checked>
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </label>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Гучність вдень</div>
+                  <div class="row-sub">DAY VOLUME</div>
+                </div>
+                <div class="brightness-control">
+                  <input type="range" id="dayVol" min="0" max="100" value="80"
+                    oninput="document.getElementById('dayVolVal').textContent=this.value+'%'">
+                  <span class="brightness-label" id="dayVolVal">80%</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Гучність вночі</div>
+                  <div class="row-sub">NIGHT VOLUME</div>
+                </div>
+                <div class="brightness-control">
+                  <input type="range" id="nightVol" min="0" max="100" value="30"
+                    oninput="document.getElementById('nightVolVal').textContent=this.value+'%'">
+                  <span class="brightness-label" id="nightVolVal">30%</span>
+                </div>
+              </div>
+              <div class="panel-actions panel-actions-pad">
+                <button class="inline-btn" onclick="testBuzzer(true)" type="button">Тест тривоги</button>
+                <button class="inline-btn" onclick="testBuzzer(false)" type="button">Тест відбою</button>
+              </div>
+            </article>
+          </section>
+
+          <section class="content-pane" id="tab-regions">
+            <article class="panel-card">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">Регіони сповіщень</div>
+                  <h2 class="panel-title">Обері області, для яких активний бузер</h2>
+                </div>
+                <div class="panel-actions">
+                  <button class="inline-btn" onclick="selectAll(true)" type="button">Всі</button>
+                  <button class="inline-btn" onclick="selectAll(false)" type="button">Жодного</button>
+                  <button class="inline-btn inline-btn-primary" onclick="testSubscribedAlert()" type="button">Тест
+                    тривоги</button>
+                </div>
+              </div>
+              <div class="regions-grid" id="regions"></div>
+            </article>
+          </section>
+
+          <section class="content-pane" id="tab-mqtt">
+            <article class="panel-card">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">MQTT</div>
+                  <h2 class="panel-title">Підключення до брокера</h2>
+                </div>
+              </div>
+
+              <div class="form-stack">
+
+                <div class="form-grid row g-3">
+                  <div class="col-12 col-md-6">
+                    <label class="field-label">Broker</label>
+                    <input type="text" id="mqttHost" placeholder="192.168.1.100" class="field-input">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="field-label">Порт</label>
+                    <input type="number" id="mqttPort" placeholder="1883" min="1" max="65535" class="field-input">
+                  </div>
+                </div>
+
+                <div>
+                  <label class="field-label">Топік</label>
+                  <input type="text" id="mqttTopic" placeholder="alerts/status" class="field-input">
+                </div>
+                <div class="form-grid row g-3">
+                  <div class="col-12 col-md-6">
+                    <label class="field-label">Логін</label>
+                    <input type="text" id="mqttUser" placeholder="(без авторизації)" class="field-input">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="field-label">Пароль</label>
+                    <input type="password" id="mqttPass" placeholder="••••••••" class="field-input">
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <section class="content-pane" id="tab-system">
+            <article class="panel-card">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">Система</div>
+                  <h2 class="panel-title">Доступ та синхронізація часу</h2>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Пароль адміністратора</div>
+                  <div class="row-sub">WEB LOGIN PASSWORD</div>
+                </div>
+                <input type="text" id="adminPassword" class="field-input compact-input" readonly
+                  data-label-id="systemAdminPasswordLabel">
+              </div>
+              <div class="settings-row" id="deviceInfoRow" style="display:none;">
+                <div>
+                  <div class="row-label">mDNS адреса</div>
+                  <div class="row-sub">LOCAL HOSTNAME</div>
+                </div>
+                <a id="mdnsLink" href="#" class="inline-link" target="_blank" rel="noreferrer"
+                  data-label-id="systemMdnsLabel"></a>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">IP адреса</div>
+                  <div class="row-sub">DEVICE IP</div>
+                </div>
+                <span id="deviceIp" class="inline-value" data-label-id="systemIpLabel">-</span>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">URL для наклейки</div>
+                  <div class="row-sub">PRINT LABEL LINK</div>
+                </div>
+                <span id="labelMdnsMirror" class="inline-value" data-label-id="systemLabelUrlLabel">-</span>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Пін стрічки</div>
+                  <div class="row-sub">WS2812 / DATA PIN</div>
+                </div>
+                <span id="ledPinValue" class="inline-value" data-label-id="systemLedPinLabel">-</span>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Пін бузера</div>
+                  <div class="row-sub">BUZZER PIN</div>
+                </div>
+                <span id="buzzerPinValue" class="inline-value" data-label-id="systemBuzzerPinLabel">-</span>
+              </div>
+              <div class="form-stack">
+                <div class="row-label">NTP сервери</div>
+                <div class="row-sub">Якщо поле порожнє, використовується значення за замовчуванням.</div>
+                <div class="form-grid row g-3">
+                  <div class="col-12 col-md-6">
+                    <label class="field-label">NTP 1</label>
+                    <input type="text" id="ntpServer1" placeholder="pool.ntp.org" class="field-input">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="field-label">NTP 2</label>
+                    <input type="text" id="ntpServer2" placeholder="time.nist.gov" class="field-input">
+                  </div>
+                </div>
+                <div>
+                  <label class="field-label">NTP 3</label>
+                  <input type="text" id="ntpServer3" placeholder="time.google.com" class="field-input">
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <section class="content-pane" id="tab-logs">
+            <article class="panel-card">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">Logs</div>
+                  <h2 class="panel-title" data-i18n="logs.title"></h2>
+                </div>
+                <div class="panel-actions">
+                  <button class="inline-btn" onclick="refreshLogs()" type="button" data-i18n="actions.refresh"></button>
+                  <button class="inline-btn" onclick="clearLogs()" type="button" data-i18n="actions.clear"></button>
+                  <button class="inline-btn inline-btn-danger" onclick="disableLogs()" type="button"
+                    data-i18n="actions.disableLogs"></button>
+                </div>
+              </div>
+              <p class="panel-text" data-i18n="logs.text"></p>
+              <div class="logs-filter-grid" id="logsFilterGrid">
+                <label class="log-filter"><input type="checkbox" id="logCat_system"><span
+                    data-i18n="logs.categories.system"></span></label>
+                <label class="log-filter"><input type="checkbox" id="logCat_wifi"><span
+                    data-i18n="logs.categories.wifi"></span></label>
+                <label class="log-filter"><input type="checkbox" id="logCat_internet"><span
+                    data-i18n="logs.categories.internet"></span></label>
+                <label class="log-filter"><input type="checkbox" id="logCat_mqtt"><span>MQTT</span></label>
+                <label class="log-filter"><input type="checkbox" id="logCat_web"><span
+                    data-i18n="logs.categories.web"></span></label>
+                <label class="log-filter"><input type="checkbox" id="logCat_config"><span
+                    data-i18n="logs.categories.config"></span></label>
+                <label class="log-filter"><input type="checkbox" id="logCat_calibration"><span
+                    data-i18n="logs.categories.calibration"></span></label>
+                <label class="log-filter"><input type="checkbox" id="logCat_test"><span
+                    data-i18n="logs.categories.test"></span></label>
+              </div>
+              <div class="logs-meta-row">
+                <span class="row-sub" id="logsMeta" data-i18n="logs.loading"></span>
+              </div>
+              <div class="logs-feed" id="logsFeed">
+                <div class="logs-empty" data-i18n="logs.empty"></div>
+              </div>
+            </article>
+          </section>
+
+          <section class="content-pane" id="tab-calibration">
+            <article class="panel-card">
+              <div class="panel-card-head">
+                <div>
+                  <div class="panel-label">Калібрування</div>
+                  <h2 class="panel-title">Привʼязка LED до областей</h2>
+                </div>
+                <div class="panel-actions">
+                  <button class="inline-btn inline-btn-primary" id="calStartBtn" onclick="calOpen()"
+                    type="button">Почати</button>
+                  <button class="inline-btn" id="calCancelBtn" onclick="calClose()" type="button">Скасувати</button>
+                </div>
+              </div>
+
+              <div class="calibration-intro" id="calIntro">
+                <p class="panel-text">Калібрування працює у двох режимах одночасно: крок за кроком і швидкий перехід по
+                  будь-якому LED. Логіка вибору області лишається тією ж самою: мапа, список областей, кнопки
+                  назад/далі, підсвітка фізичного LED.</p>
+                <div class="panel-actions panel-actions-pad">
+                  <button class="inline-btn inline-btn-primary" onclick="calOpen()" type="button">Відкрити
+                    калібрування</button>
+                </div>
+              </div>
+
+              <div id="calWorkspace" class="calibration-workspace hidden">
+                <div id="calStepMain" class="cal-step-panel">
+                  <div class="cal-toolbar">
+                    <div class="cal-progress-block">
+                      <div class="cal-progress-bar">
+                        <div class="cal-progress-fill" id="calProgressFill"></div>
+                      </div>
+                      <div class="cal-progress-info">
+                        <span class="cal-step-num" id="calStepLabel">LED 1 / 27</span>
+                        <span id="calStepHint">Підсвічено фізично на пристрої</span>
+                      </div>
+                    </div>
+                    <div class="cal-mode-note">Швидкий перехід по LED нижче</div>
+                  </div>
+
+                  <div class="cal-mobile-nav" id="calMobileNav">
+                    <button class="cal-mobile-tab active" type="button" data-view="map"
+                      data-i18n="calibration.mapTab"></button>
+                    <button class="cal-mobile-tab" type="button" data-view="regions"
+                      data-i18n="calibration.regionsTab"></button>
+                    <button class="cal-mobile-tab" type="button" data-view="led">LED</button>
+                  </div>
+
+                  <div class="cal-main-grid row g-3">
+                    <div class="cal-main-left col-12 col-xl-8" data-mobile-panel="map">
+                      <div class="cal-selected-row">
+                        <div class="cal-led-badge">
+                          <div class="cal-led-dot"></div>
+                          <span class="cal-led-label" id="calLedName">Світлодіод №1</span>
+                        </div>
+                        <div class="cal-selected-meta">
+                          <span class="cal-selected-caption">Обрано:</span>
+                          <span id="calSelectedRegion" class="cal-selected-value">- не призначено -</span>
+                        </div>
+                        <button onclick="calClearCurrent()" class="cal-mini-btn" type="button"
+                          data-i18n="actions.clearSelection"></button>
+                      </div>
+
+                      <div class="cal-map-wrap" id="calMapWrap">
+                        <div class="cal-region-tooltip" id="calTooltip"></div>
+                      </div>
+
+                      <div class="cal-legend">
+                        <div class="cal-legend-item">
+                          <div class="cal-legend-dot"
+                            style="background:rgba(249,115,22,0.55);border:1px solid var(--accent);"></div>
+                          Обрано зараз
+                        </div>
+                        <div class="cal-legend-item">
+                          <div class="cal-legend-dot"
+                            style="background:rgba(34,197,94,0.25);border:1px solid rgba(34,197,94,0.5);"></div>
+                          Вже призначено
+                        </div>
+                        <div class="cal-legend-item">
+                          <div class="cal-legend-dot"
+                            style="background:rgba(59,130,246,0.3);border:1px solid rgba(59,130,246,0.6);"></div>
+                          Кілька LED
+                        </div>
+                      </div>
+
+                      <div class="cal-footer">
+                        <button class="cal-btn cal-btn-prev" id="calPrevBtn" onclick="calPrev()"
+                          type="button">Назад</button>
+                        <button class="cal-btn cal-btn-next" id="calNextBtn" onclick="calNext()"
+                          type="button">Далі</button>
+                      </div>
+                    </div>
+
+                    <aside class="cal-main-right col-12 col-xl-4">
+                      <div class="cal-quick-card" data-mobile-panel="regions">
+                        <div class="cal-quick-title">Поточний вибір</div>
+                        <div class="cal-current-choice" id="calCurrentChoice">- не призначено -</div>
+                        <div class="cal-quick-copy">Можна клацати по мапі або швидко вибирати область у списку нижче.
+                        </div>
+                      </div>
+
+                      <div class="cal-quick-card" data-mobile-panel="regions">
+                        <div class="cal-quick-head">
+                          <div class="cal-quick-title">Швидкий вибір області</div>
+                          <input type="text" id="calRegionSearch" class="field-input cal-region-search"
+                            placeholder="Пошук області...">
+                        </div>
+                        <div class="cal-region-list" id="calRegionList"></div>
+                      </div>
+
+                    </aside>
+
+                    <div class="col-12" data-mobile-panel="led">
+                      <div class="cal-quick-card">
+                        <div class="cal-quick-head">
+                          <div class="cal-quick-title">Швидкий перехід по LED</div>
+                          <span class="row-sub">Додатковий режим без зламу покрокової логіки</span>
+                        </div>
+                        <div class="cal-led-grid" id="calLedGrid"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="calStepFinal" class="cal-step-panel hidden">
+                  <div class="cal-toolbar">
+                    <div class="cal-progress-block">
+                      <div class="cal-progress-bar">
+                        <div class="cal-progress-fill" style="width:100%"></div>
+                      </div>
+                      <div class="cal-progress-info">
+                        <span class="cal-step-num" data-i18n="calibration.finalTitle"></span>
+                        <span data-i18n="calibration.finalHint"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="cal-summary" id="calSummary"></div>
+                  <div class="cal-final-actions">
+                    <button class="cal-save-btn" onclick="calSave()" type="button" data-i18n="actions.saveMap"></button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+        </div>
+
+        <div id="svgSourceStore" hidden></div>
+      </section>
+    </div>
+  </main>
+
+  <div class="toast" id="toast">
+    <span id="toastIcon"></span>
+    <span id="toastMsg"></span>
+  </div>
+
+  <script src="/qrcode.min.js"></script>
+  <script src="/bootstrap.bundle.min.js"></script>
+  <script src="/main.js"></script>
+</body>
+
+</html>

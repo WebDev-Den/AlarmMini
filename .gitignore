@@ -1,0 +1,24 @@
+.pio/
+
+# Generated web build output
+data/*.gz
+data/config.json
+data_build/
+work_data/config.json
+
+# VS Code local files
+.vscode/
+
+# OS junk
+Thumbs.db
+Desktop.ini
+
+# Private local docs
+LOCAL_RELEASE_GUIDE.md
+
+# Local assistant files
+.claude/
+
+# Vercel installer build artifacts
+vercel_installer_local/node_modules/
+vercel_installer_local/.next/
