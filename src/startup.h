@@ -13,7 +13,7 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
                                             const Color& secondary,
                                             unsigned long frameIntervalMs)
 {
-    constexpr float STARTUP_SWEEP_MS = 1000.0f;
+    constexpr float STARTUP_SWEEP_MS = 1100.0f;
     static float activeIndex = 0.0f;
     static int8_t direction = 1;
     static unsigned long lastStepMs = 0;
@@ -52,7 +52,7 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
         }
     }
 
-    const float tailLength = 2.4f;
+    const float tailLength = 5.2f;
 
     for (uint8_t i = 0; i < ledCount; i++)
     {
@@ -66,27 +66,17 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
             continue;
         }
 
-        uint32_t color = 0;
-        if (phaseOffset <= 1.0f)
-        {
-            const float t = phaseOffset;
-            const float fade = 1.0f - 0.15f * t;
-            const float brightness = fade * fade;
-            Color mixed = {
-                (uint8_t)(primary.r + (secondary.r - primary.r) * t),
-                (uint8_t)(primary.g + (secondary.g - primary.g) * t),
-                (uint8_t)(primary.b + (secondary.b - primary.b) * t),
-                (uint8_t)(primary.a)
-            };
-            color = applyColorBrightness(mixed, brightness);
-        }
-        else
-        {
-            const float t = (phaseOffset - 1.0f) / (tailLength - 1.0f);
-            const float fade = 1.0f - constrain(t, 0.0f, 1.0f);
-            const float brightness = fade * fade * fade;
-            color = applyColorBrightness(secondary, brightness);
-        }
+        const float normalized = constrain(phaseOffset / tailLength, 0.0f, 1.0f);
+        const float wave = 0.5f + 0.5f * cosf(normalized * 3.1415926f);
+        const float blend = normalized * normalized * (3.0f - 2.0f * normalized);
+        const float brightness = wave * wave;
+        Color mixed = {
+            (uint8_t)(primary.r + (secondary.r - primary.r) * blend),
+            (uint8_t)(primary.g + (secondary.g - primary.g) * blend),
+            (uint8_t)(primary.b + (secondary.b - primary.b) * blend),
+            (uint8_t)(primary.a)
+        };
+        uint32_t color = applyColorBrightness(mixed, brightness);
 
         strip.setPixelColor(i, color);
     }
