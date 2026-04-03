@@ -15,6 +15,43 @@ static String gSerialLineBuffer;
 static String gIncomingConfigJson;
 static bool gReceivingConfig = false;
 
+static String hexEncodeBytes(const uint8_t *data, size_t length)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    String encoded;
+    encoded.reserve(length * 2);
+    for (size_t i = 0; i < length; i++)
+    {
+        encoded += hex[(data[i] >> 4) & 0x0F];
+        encoded += hex[data[i] & 0x0F];
+    }
+    return encoded;
+}
+
+static int hexNibble(char ch)
+{
+    if (ch >= '0' && ch <= '9') return ch - '0';
+    if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+    if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+    return -1;
+}
+
+static bool appendHexDecoded(const String &encoded, String &target)
+{
+    if (encoded.length() % 2 != 0)
+        return false;
+
+    for (unsigned int i = 0; i < encoded.length(); i += 2)
+    {
+        int hi = hexNibble(encoded[i]);
+        int lo = hexNibble(encoded[i + 1]);
+        if (hi < 0 || lo < 0)
+            return false;
+        target += (char)((hi << 4) | lo);
+    }
+    return true;
+}
+
 static void serialSendJsonStatus(const char *eventName, const char *extraKey = nullptr, const char *extraValue = nullptr)
 {
     DynamicJsonDocument doc(256);
@@ -52,10 +89,11 @@ static void serialConfigSendCurrent()
         Serial.println();
     }
 
-    constexpr size_t chunkSize = 160;
+    constexpr size_t chunkSize = 80;
     for (size_t offset = 0; offset < json.length(); offset += chunkSize)
     {
-        String chunk = json.substring(offset, offset + chunkSize);
+        size_t bytesToSend = min(chunkSize, json.length() - offset);
+        String chunk = hexEncodeBytes((const uint8_t *)json.c_str() + offset, bytesToSend);
         DynamicJsonDocument dataDoc(256);
         dataDoc["event"] = "config_data";
         dataDoc["data"] = chunk;
@@ -184,7 +222,17 @@ static bool handleSerialJsonMessage(const String &line)
         }
 
         String chunk = doc["data"] | "";
-        if (gIncomingConfigJson.length() + chunk.length() > CONFIG_JSON_CAPACITY - 1)
+        String decodedChunk;
+        decodedChunk.reserve(chunk.length() / 2);
+        if (!appendHexDecoded(chunk, decodedChunk))
+        {
+            gReceivingConfig = false;
+            gIncomingConfigJson = "";
+            serialSendJsonStatus("error", "reason", "hex_invalid");
+            return true;
+        }
+
+        if (gIncomingConfigJson.length() + decodedChunk.length() > CONFIG_JSON_CAPACITY - 1)
         {
             gReceivingConfig = false;
             gIncomingConfigJson = "";
@@ -192,7 +240,7 @@ static bool handleSerialJsonMessage(const String &line)
             return true;
         }
 
-        gIncomingConfigJson += chunk;
+        gIncomingConfigJson += decodedChunk;
         return true;
     }
 
@@ -242,7 +290,17 @@ static void handleSerialProtocolLine(const String &line)
         }
 
         String chunk = line.substring(strlen("AMCFG SET DATA "));
-        if (gIncomingConfigJson.length() + chunk.length() > CONFIG_JSON_CAPACITY - 1)
+        String decodedChunk;
+        decodedChunk.reserve(chunk.length() / 2);
+        if (!appendHexDecoded(chunk, decodedChunk))
+        {
+            gReceivingConfig = false;
+            gIncomingConfigJson = "";
+            serialSendJsonStatus("error", "reason", "hex_invalid");
+            return;
+        }
+
+        if (gIncomingConfigJson.length() + decodedChunk.length() > CONFIG_JSON_CAPACITY - 1)
         {
             gReceivingConfig = false;
             gIncomingConfigJson = "";
@@ -250,7 +308,7 @@ static void handleSerialProtocolLine(const String &line)
             return;
         }
 
-        gIncomingConfigJson += chunk;
+        gIncomingConfigJson += decodedChunk;
         return;
     }
 }

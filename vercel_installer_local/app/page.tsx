@@ -100,6 +100,43 @@ function normalizeDeviceConfig(config: Partial<DeviceConfig> | null | undefined)
   };
 }
 
+function sanitizeConfigPayload(configPayload: any): DeviceConfig {
+  const normalized = normalizeDeviceConfig(configPayload);
+  delete normalized.adminPassword;
+  delete normalized.animations;
+  return normalized;
+}
+
+function stableStringify(value: any): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function encodeHexBytes(bytes: Uint8Array) {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0").toUpperCase())
+    .join("");
+}
+
+function decodeHex(encoded: string) {
+  if (!encoded || encoded.length % 2 !== 0) return "";
+  const bytes = new Uint8Array(encoded.length / 2);
+  for (let i = 0; i < encoded.length; i += 2) {
+    bytes[i / 2] = Number.parseInt(encoded.slice(i, i + 2), 16);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 function formatDate(iso: string) {
   try {
     return new Intl.DateTimeFormat("uk-UA", {
@@ -402,7 +439,7 @@ export default function Page() {
                 : t.flash.autoFlow;
 
   function syncBoardConfig(configPayload: any) {
-    const normalized = normalizeDeviceConfig(configPayload);
+    const normalized = sanitizeConfigPayload(configPayload);
     setBoardConfig(normalized);
     setConfigDraft(normalized);
     return normalized;
@@ -415,7 +452,7 @@ export default function Page() {
         window.localStorage.removeItem(CONFIG_STORAGE_KEY);
         return;
       }
-      const normalized = normalizeDeviceConfig(configPayload);
+      const normalized = sanitizeConfigPayload(configPayload);
       window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(normalized));
     } catch (storageError) {
       console.error("[config-storage-save]", storageError);
@@ -423,29 +460,18 @@ export default function Page() {
   }
 
   function getMergedConfigPayload(baseConfig: any) {
-    const normalized = {
+    const normalized = sanitizeConfigPayload({
       ...(baseConfig || {}),
-      ...normalizeDeviceConfig(baseConfig),
       ...(configOverridesRef.current || {}),
-    };
+    });
     normalized.mqttPort = Number(normalized.mqttPort || 1883) || 1883;
-    delete normalized.adminPassword;
     return normalized;
   }
 
   function isExpectedConfigApplied(expectedConfig: any, actualConfig: any) {
-    const expected = normalizeDeviceConfig(expectedConfig);
-    const actual = normalizeDeviceConfig(actualConfig);
-
-    return (
-      expected.wifiSsid === actual.wifiSsid &&
-      expected.wifiPass === actual.wifiPass &&
-      expected.mqttHost === actual.mqttHost &&
-      expected.mqttPort === actual.mqttPort &&
-      expected.mqttTopic === actual.mqttTopic &&
-      expected.mqttUser === actual.mqttUser &&
-      expected.mqttPass === actual.mqttPass
-    );
+    const expected = sanitizeConfigPayload(expectedConfig);
+    const actual = sanitizeConfigPayload(actualConfig);
+    return stableStringify(expected) === stableStringify(actual);
   }
 
   function hasConfigOverrides() {
@@ -453,7 +479,7 @@ export default function Page() {
   }
 
   function openConfigModal() {
-    const draft = normalizeDeviceConfig({
+    const draft = sanitizeConfigPayload({
       ...boardConfig,
       ...(configOverridesRef.current || {}),
     });
@@ -463,7 +489,7 @@ export default function Page() {
 
   function updateConfigDraft(field: keyof DeviceConfig, value: string) {
     setConfigDraft((prev) =>
-      normalizeDeviceConfig({
+      sanitizeConfigPayload({
         ...prev,
         [field]: field === "mqttPort" ? Number(value || 1883) : value,
       }),
@@ -514,24 +540,13 @@ export default function Page() {
   }
 
   async function saveConfigDraft() {
-    const normalized = normalizeDeviceConfig(configDraft);
-    const overrides: Partial<DeviceConfig> = {
-      wifiSsid: normalized.wifiSsid,
-      wifiPass: normalized.wifiPass,
-      mqttHost: normalized.mqttHost,
-      mqttPort: normalized.mqttPort,
-      mqttTopic: normalized.mqttTopic,
-      mqttUser: normalized.mqttUser,
-      mqttPass: normalized.mqttPass,
-    };
-
-    configOverridesRef.current = overrides;
-    persistConfigToLocal(overrides);
-
     const merged = getMergedConfigPayload({
       ...boardConfig,
-      ...overrides,
+      ...sanitizeConfigPayload(configDraft),
     });
+
+    configOverridesRef.current = merged;
+    persistConfigToLocal(merged);
 
     configBackupRef.current = merged;
     syncBoardConfig(merged);
@@ -586,7 +601,7 @@ export default function Page() {
 
     try {
       const text = await file.text();
-      const parsed = normalizeDeviceConfig(JSON.parse(text));
+      const parsed = sanitizeConfigPayload(JSON.parse(text));
       configOverridesRef.current = parsed;
       configBackupRef.current = getMergedConfigPayload({
         ...boardConfig,
@@ -781,7 +796,7 @@ export default function Page() {
         }
 
         if (payload.event === "config_data" && transfer.mode === "backup") {
-          transfer.buffer += String(payload.data || "");
+          transfer.buffer += decodeHex(String(payload.data || ""));
           armConfigTransferTimeout("backup_timeout", 12000);
           return true;
         }
@@ -906,6 +921,7 @@ export default function Page() {
 
   async function restoreConfigViaSerial(configPayload: any) {
     const serialized = JSON.stringify(configPayload || {});
+    const payloadBytes = new TextEncoder().encode(serialized);
     setFlashStatus(t.flash.restoringConfig);
     resetConfigTransferState();
 
@@ -933,10 +949,10 @@ export default function Page() {
           );
           transfer.readyResolve = readyResolve;
         });
-        const chunkSize = 160;
-        for (let offset = 0; offset < serialized.length; offset += chunkSize) {
+        const chunkSize = 80;
+        for (let offset = 0; offset < payloadBytes.length; offset += chunkSize) {
           await writeSerialLine(
-            `AMCFG SET DATA ${serialized.slice(offset, offset + chunkSize)}`,
+            `AMCFG SET DATA ${encodeHexBytes(payloadBytes.slice(offset, offset + chunkSize))}`,
           );
           await new Promise((resolve) => setTimeout(resolve, 20));
         }

@@ -16,9 +16,6 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
                                             unsigned long frameIntervalMs)
 {
     constexpr float STARTUP_SWEEP_MS = 2200.0f;
-    static float activeIndex = 0.0f;
-    static int8_t direction = 1;
-    static unsigned long lastStepMs = 0;
 
     if (ledCount == 0)
     {
@@ -27,38 +24,22 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
         return;
     }
 
-    const unsigned long now = millis();
-    if (lastStepMs == 0 || now - lastStepMs >= frameIntervalMs)
-    {
-        const float step = (ledCount > 1)
-            ? ((ledCount - 1) * frameIntervalMs) / STARTUP_SWEEP_MS
-            : 0.0f;
-        lastStepMs = now;
-        if (ledCount > 1)
-        {
-            activeIndex += step * direction;
-            if (activeIndex >= (ledCount - 1))
-            {
-                activeIndex = (float)(ledCount - 1);
-                direction = -1;
-            }
-            else if (activeIndex <= 0.0f)
-            {
-                activeIndex = 0.0f;
-                direction = 1;
-            }
-        }
-        else
-        {
-            activeIndex = 0.0f;
-        }
-    }
+    const float nowMs = (float)millis();
+    const float sweepPosition = fmodf(nowMs, STARTUP_SWEEP_MS * 2.0f);
+    const bool forward = sweepPosition < STARTUP_SWEEP_MS;
+    const float segmentProgress = forward
+        ? (sweepPosition / STARTUP_SWEEP_MS)
+        : ((sweepPosition - STARTUP_SWEEP_MS) / STARTUP_SWEEP_MS);
+    const float easedProgress = 0.5f - 0.5f * cosf(segmentProgress * 3.1415926f);
+    const float activeIndex = (ledCount > 1)
+        ? easedProgress * (float)(ledCount - 1)
+        : 0.0f;
 
     const float tailLength = 5.2f;
 
     for (uint8_t i = 0; i < ledCount; i++)
     {
-        const float phaseOffset = (direction > 0)
+        const float phaseOffset = forward
             ? (activeIndex - i)
             : (i - activeIndex);
 
@@ -94,9 +75,6 @@ static void _showApFlagBlendAnimation(uint8_t ledCount,
                                       const Color& secondary,
                                       unsigned long frameIntervalMs)
 {
-    static unsigned long lastStepMs = 0;
-    static float phase = 0.0f;
-
     if (ledCount == 0)
     {
         strip.clear();
@@ -104,14 +82,7 @@ static void _showApFlagBlendAnimation(uint8_t ledCount,
         return;
     }
 
-    const unsigned long now = millis();
-    if (lastStepMs == 0 || now - lastStepMs >= frameIntervalMs)
-    {
-        lastStepMs = now;
-        phase += 0.18f;
-        if (phase >= 1000.0f)
-            phase = 0.0f;
-    }
+    const float phase = millis() / (float)max<unsigned long>(frameIntervalMs, 1UL);
 
     for (uint8_t i = 0; i < ledCount; i++)
     {
@@ -169,7 +140,6 @@ bool startupWifiWithEffect(uint8_t ledCount)
     else
         WiFi.begin();
     unsigned long t0 = millis();
-    unsigned long lastStartupFrame = 0;
     while (millis() - t0 < 15000)
     {
         serialProtocolHandle();
@@ -179,12 +149,7 @@ bool startupWifiWithEffect(uint8_t ledCount)
             LOG_INFO(LOG_CAT_WIFI, "OK IP: %s", WiFi.localIP().toString().c_str());
             return true;
         }
-        unsigned long now = millis();
-        if (lastStartupFrame == 0 || now - lastStartupFrame >= 24)
-        {
-            _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, 55);
-            lastStartupFrame = now;
-        }
+        _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, 55);
         yield();
     }
 
@@ -213,7 +178,6 @@ bool startupWifiWithEffect(uint8_t ledCount)
     wm.startWebPortal();
 
     unsigned long apStart = millis();
-    unsigned long lastApFrame = 0;
     while (millis() - apStart < 180000UL)
     {
         serialProtocolHandle();
@@ -230,12 +194,7 @@ bool startupWifiWithEffect(uint8_t ledCount)
             return true;
         }
 
-        unsigned long now = millis();
-        if (lastApFrame == 0 || now - lastApFrame >= 20)
-        {
-            _showApFlagBlendAnimation(ledCount, apPrimary, apSecondary, 40);
-            lastApFrame = now;
-        }
+        _showApFlagBlendAnimation(ledCount, apPrimary, apSecondary, 40);
         yield();
     }
 
