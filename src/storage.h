@@ -7,6 +7,7 @@
 AppConfig gConfig;
 
 constexpr size_t CONFIG_JSON_CAPACITY = 8192;
+constexpr int DEFAULT_BUZZER_REGION_INDEX = 20;
 
 int findRegionIndex(const char* query) {
     if (!query || strlen(query) == 0) return -1;
@@ -16,117 +17,209 @@ int findRegionIndex(const char* query) {
     return -1;
 }
 
+int regionIndexFromVariant(JsonVariantConst value) {
+    if (value.is<int>() || value.is<long>() || value.is<unsigned int>() || value.is<unsigned long>()) {
+        int idx = value.as<int>();
+        return (idx >= 0 && idx < REGIONS_COUNT) ? idx : -1;
+    }
+
+    const char* region = value.as<const char*>();
+    return findRegionIndex(region);
+}
+
+uint8_t readU8(JsonVariantConst value, uint8_t fallback = 0) {
+    if (value.isNull()) return fallback;
+    return (uint8_t)value.as<int>();
+}
+
+uint16_t readU16(JsonVariantConst value, uint16_t fallback = 0) {
+    if (value.isNull()) return fallback;
+    return (uint16_t)value.as<unsigned int>();
+}
+
+bool readBool(JsonVariantConst value, bool fallback = false) {
+    if (value.isNull()) return fallback;
+    return value.as<bool>();
+}
+
+const char* readStr(JsonVariantConst value, const char* fallback = "") {
+    if (value.isNull()) return fallback;
+    const char* text = value.as<const char*>();
+    return text ? text : fallback;
+}
+
+void copyBounded(char* dst, size_t size, const char* value) {
+    strncpy(dst, value ? value : "", size - 1);
+    dst[size - 1] = '\0';
+}
+
+Color readColor(JsonVariantConst compactValue,
+                JsonVariantConst legacyR,
+                JsonVariantConst legacyG,
+                JsonVariantConst legacyB,
+                JsonVariantConst legacyA)
+{
+    JsonArrayConst compact = compactValue.as<JsonArrayConst>();
+    if (!compact.isNull() && compact.size() >= 4) {
+        return {readU8(compact[0]), readU8(compact[1]), readU8(compact[2]), readU8(compact[3])};
+    }
+
+    return {readU8(legacyR), readU8(legacyG), readU8(legacyB), readU8(legacyA)};
+}
+
 void storageApplyJson(DynamicJsonDocument& doc) {
-    auto u8  = [&](const char* k) -> uint8_t { return (uint8_t)doc[k].as<int>(); };
-    auto str = [&](const char* k, char* dst, size_t n) {
-        const char* v = doc[k] | "";
-        strncpy(dst, v, n - 1);
-        dst[n - 1] = '\0';
-    };
+    JsonObjectConst compactColors = doc["c"];
+    JsonObjectConst compactDay = compactColors["d"];
+    JsonObjectConst compactNightColors = compactColors["n"];
+    JsonObjectConst compactNight = doc["n"];
+    JsonObjectConst compactBuzzer = doc["z"];
+    JsonObjectConst compactBlink = doc["k"];
+    JsonObjectConst compactWifi = doc["w"];
+    JsonObjectConst compactMqtt = doc["m"];
 
-    gConfig.dayMode.alertColor   = {u8("dayAlertR"),   u8("dayAlertG"),   u8("dayAlertB"),   u8("dayAlertA")};
-    gConfig.dayMode.clearColor   = {u8("dayClearR"),   u8("dayClearG"),   u8("dayClearB"),   u8("dayClearA")};
-    gConfig.nightMode.alertColor = {u8("nightAlertR"), u8("nightAlertG"), u8("nightAlertB"), u8("nightAlertA")};
-    gConfig.nightMode.clearColor = {u8("nightClearR"), u8("nightClearG"), u8("nightClearB"), u8("nightClearA")};
+    gConfig.dayMode.alertColor = readColor(compactDay["a"], doc["dayAlertR"], doc["dayAlertG"], doc["dayAlertB"], doc["dayAlertA"]);
+    gConfig.dayMode.clearColor = readColor(compactDay["c"], doc["dayClearR"], doc["dayClearG"], doc["dayClearB"], doc["dayClearA"]);
+    gConfig.nightMode.alertColor = readColor(compactNightColors["a"], doc["nightAlertR"], doc["nightAlertG"], doc["nightAlertB"], doc["nightAlertA"]);
+    gConfig.nightMode.clearColor = readColor(compactNightColors["c"], doc["nightClearR"], doc["nightClearG"], doc["nightClearB"], doc["nightClearA"]);
 
-    gConfig.night.enabled       = doc["nightEnabled"].as<bool>();
-    gConfig.night.startHour     = u8("nightStartH");
-    gConfig.night.startMinute   = u8("nightStartM");
-    gConfig.night.endHour       = u8("nightEndH");
-    gConfig.night.endMinute     = u8("nightEndM");
-    gConfig.night.maxBrightness = u8("nightMaxBright");
-    gConfig.night.pulseOnAlert  = doc["nightPulseAlert"].as<bool>();
-    gConfig.night.pulseOnClear  = doc["nightPulseClear"].as<bool>();
+    JsonArrayConst nightStart = compactNight["s"];
+    JsonArrayConst nightEnd = compactNight["x"];
+    JsonArrayConst nightPulse = compactNight["p"];
+    gConfig.night.enabled = compactNight.containsKey("e") ? readBool(compactNight["e"]) : readBool(doc["nightEnabled"]);
+    gConfig.night.startHour = !nightStart.isNull() && nightStart.size() > 0 ? readU8(nightStart[0]) : readU8(doc["nightStartH"]);
+    gConfig.night.startMinute = !nightStart.isNull() && nightStart.size() > 1 ? readU8(nightStart[1]) : readU8(doc["nightStartM"]);
+    gConfig.night.endHour = !nightEnd.isNull() && nightEnd.size() > 0 ? readU8(nightEnd[0]) : readU8(doc["nightEndH"]);
+    gConfig.night.endMinute = !nightEnd.isNull() && nightEnd.size() > 1 ? readU8(nightEnd[1]) : readU8(doc["nightEndM"]);
+    gConfig.night.maxBrightness = compactNight.containsKey("b") ? readU8(compactNight["b"], 150) : readU8(doc["nightMaxBright"], 150);
+    gConfig.night.pulseOnAlert = !nightPulse.isNull() && nightPulse.size() > 0 ? readBool(nightPulse[0]) : readBool(doc["nightPulseAlert"]);
+    gConfig.night.pulseOnClear = !nightPulse.isNull() && nightPulse.size() > 1 ? readBool(nightPulse[1]) : readBool(doc["nightPulseClear"]);
 
-    gConfig.buzzer.enabled     = doc["buzzerEnabled"].as<bool>();
-    gConfig.buzzer.dayVolume   = u8("buzzerDayVol");
-    gConfig.buzzer.nightVolume = u8("buzzerNightVol");
+    JsonArrayConst buzzerVolume = compactBuzzer["v"];
+    gConfig.buzzer.enabled = compactBuzzer.containsKey("e") ? readBool(compactBuzzer["e"]) : readBool(doc["buzzerEnabled"]);
+    gConfig.buzzer.dayVolume = !buzzerVolume.isNull() && buzzerVolume.size() > 0 ? readU8(buzzerVolume[0], 80) : readU8(doc["buzzerDayVol"], 80);
+    gConfig.buzzer.nightVolume = !buzzerVolume.isNull() && buzzerVolume.size() > 1 ? readU8(buzzerVolume[1], 30) : readU8(doc["buzzerNightVol"], 30);
 
-    gConfig.blink.enabled        = doc["blinkEnabled"].as<bool>();
-    gConfig.blink.dayIntensity   = u8("blinkDayInt");
-    gConfig.blink.nightIntensity = u8("blinkNightInt");
+    JsonArrayConst blinkIntensity = compactBlink["i"];
+    gConfig.blink.enabled = compactBlink.containsKey("e") ? readBool(compactBlink["e"], true) : readBool(doc["blinkEnabled"], true);
+    gConfig.blink.dayIntensity = !blinkIntensity.isNull() && blinkIntensity.size() > 0 ? readU8(blinkIntensity[0], 75) : readU8(doc["blinkDayInt"], 75);
+    gConfig.blink.nightIntensity = !blinkIntensity.isNull() && blinkIntensity.size() > 1 ? readU8(blinkIntensity[1], 30) : readU8(doc["blinkNightInt"], 30);
 
-    str("wifiSsid",  gConfig.wifiSsid,  WIFI_SSID_MAXLEN);
-    str("wifiPass",  gConfig.wifiPass,  WIFI_PASS_MAXLEN);
-    str("mqttHost",  gConfig.mqttHost,  MQTT_HOST_MAXLEN);
-    str("mqttTopic", gConfig.mqttTopic, MQTT_TOPIC_MAXLEN);
-    str("mqttUser",  gConfig.mqttUser,  MQTT_USER_MAXLEN);
-    str("mqttPass",  gConfig.mqttPass,  MQTT_PASS_MAXLEN);
-    str("ntpServer1", gConfig.ntpServer1, NTP_SERVER_MAXLEN);
-    str("ntpServer2", gConfig.ntpServer2, NTP_SERVER_MAXLEN);
-    str("ntpServer3", gConfig.ntpServer3, NTP_SERVER_MAXLEN);
-    gConfig.mqttPort = (uint16_t)(doc["mqttPort"] | 1883);
-    gConfig.logMask = (uint16_t)(doc["logMask"] | LOG_MASK_ALL);
+    copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, compactWifi.containsKey("s") ? readStr(compactWifi["s"]) : readStr(doc["wifiSsid"]));
+    copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, compactWifi.containsKey("p") ? readStr(compactWifi["p"]) : readStr(doc["wifiPass"]));
+    copyBounded(gConfig.mqttHost, MQTT_HOST_MAXLEN, compactMqtt.containsKey("h") ? readStr(compactMqtt["h"]) : readStr(doc["mqttHost"]));
+    copyBounded(gConfig.mqttTopic, MQTT_TOPIC_MAXLEN, compactMqtt.containsKey("t") ? readStr(compactMqtt["t"]) : readStr(doc["mqttTopic"]));
+    copyBounded(gConfig.mqttUser, MQTT_USER_MAXLEN, compactMqtt.containsKey("u") ? readStr(compactMqtt["u"]) : readStr(doc["mqttUser"]));
+    copyBounded(gConfig.mqttPass, MQTT_PASS_MAXLEN, compactMqtt.containsKey("s") ? readStr(compactMqtt["s"]) : readStr(doc["mqttPass"]));
 
-    JsonArray leds = doc["leds"];
+    JsonArrayConst ntp = doc["t"];
+    copyBounded(gConfig.ntpServer1, NTP_SERVER_MAXLEN, !ntp.isNull() && ntp.size() > 0 ? readStr(ntp[0]) : readStr(doc["ntpServer1"]));
+    copyBounded(gConfig.ntpServer2, NTP_SERVER_MAXLEN, !ntp.isNull() && ntp.size() > 1 ? readStr(ntp[1]) : readStr(doc["ntpServer2"]));
+    copyBounded(gConfig.ntpServer3, NTP_SERVER_MAXLEN, !ntp.isNull() && ntp.size() > 2 ? readStr(ntp[2]) : readStr(doc["ntpServer3"]));
+
+    gConfig.mqttPort = compactMqtt.containsKey("p") ? readU16(compactMqtt["p"], 1883) : readU16(doc["mqttPort"], 1883);
+    gConfig.logMask = doc.containsKey("g") ? readU16(doc["g"], LOG_MASK_ALL) : readU16(doc["logMask"], LOG_MASK_ALL);
+
+    JsonArrayConst ledsCompact = doc["l"].as<JsonArrayConst>();
+    JsonArrayConst ledsCurrent = doc["ledRegionIds"].as<JsonArrayConst>();
+    JsonArrayConst ledsLegacy = doc["leds"].as<JsonArrayConst>();
+    JsonArrayConst leds = !ledsCompact.isNull() ? ledsCompact : (!ledsCurrent.isNull() ? ledsCurrent : ledsLegacy);
     gConfig.ledCount = MAX_LEDS;
     for (int i = 0; i < MAX_LEDS; i++) {
         gConfig.ledRegion[i] = -1;
-        if (i < (int)leds.size())
-            gConfig.ledRegion[i] = findRegionIndex(leds[i].as<const char*>());
+        if (i < (int)leds.size()) {
+            gConfig.ledRegion[i] = regionIndexFromVariant(leds[i]);
+        }
     }
 
     for (int i = 0; i < REGIONS_COUNT; i++) gConfig.buzzer.regions[i] = false;
-    JsonArray buzRegions = doc["buzzerRegions"];
-    for (JsonVariant v : buzRegions) {
-        int idx = findRegionIndex(v.as<const char*>());
+    JsonArrayConst buzCompact = compactBuzzer["r"].as<JsonArrayConst>();
+    JsonArrayConst buzCurrent = doc["buzzerRegionIds"].as<JsonArrayConst>();
+    JsonArrayConst buzLegacy = doc["buzzerRegions"].as<JsonArrayConst>();
+    JsonArrayConst buzRegions = !buzCompact.isNull() ? buzCompact : (!buzCurrent.isNull() ? buzCurrent : buzLegacy);
+    for (JsonVariantConst v : buzRegions) {
+        int idx = regionIndexFromVariant(v);
         if (idx >= 0) gConfig.buzzer.regions[idx] = true;
     }
 }
 
 void storagePopulateJson(DynamicJsonDocument& doc) {
-    doc["dayAlertR"] = gConfig.dayMode.alertColor.r;
-    doc["dayAlertG"] = gConfig.dayMode.alertColor.g;
-    doc["dayAlertB"] = gConfig.dayMode.alertColor.b;
-    doc["dayAlertA"] = gConfig.dayMode.alertColor.a;
-    doc["dayClearR"] = gConfig.dayMode.clearColor.r;
-    doc["dayClearG"] = gConfig.dayMode.clearColor.g;
-    doc["dayClearB"] = gConfig.dayMode.clearColor.b;
-    doc["dayClearA"] = gConfig.dayMode.clearColor.a;
-    doc["nightAlertR"] = gConfig.nightMode.alertColor.r;
-    doc["nightAlertG"] = gConfig.nightMode.alertColor.g;
-    doc["nightAlertB"] = gConfig.nightMode.alertColor.b;
-    doc["nightAlertA"] = gConfig.nightMode.alertColor.a;
-    doc["nightClearR"] = gConfig.nightMode.clearColor.r;
-    doc["nightClearG"] = gConfig.nightMode.clearColor.g;
-    doc["nightClearB"] = gConfig.nightMode.clearColor.b;
-    doc["nightClearA"] = gConfig.nightMode.clearColor.a;
-    doc["nightEnabled"] = gConfig.night.enabled;
-    doc["nightStartH"] = gConfig.night.startHour;
-    doc["nightStartM"] = gConfig.night.startMinute;
-    doc["nightEndH"] = gConfig.night.endHour;
-    doc["nightEndM"] = gConfig.night.endMinute;
-    doc["nightMaxBright"] = gConfig.night.maxBrightness;
-    doc["nightPulseAlert"] = gConfig.night.pulseOnAlert;
-    doc["nightPulseClear"] = gConfig.night.pulseOnClear;
-    doc["buzzerEnabled"] = gConfig.buzzer.enabled;
-    doc["buzzerDayVol"] = gConfig.buzzer.dayVolume;
-    doc["buzzerNightVol"] = gConfig.buzzer.nightVolume;
-    doc["blinkEnabled"] = gConfig.blink.enabled;
-    doc["blinkDayInt"] = gConfig.blink.dayIntensity;
-    doc["blinkNightInt"] = gConfig.blink.nightIntensity;
-    doc["wifiSsid"] = gConfig.wifiSsid;
-    doc["wifiPass"] = gConfig.wifiPass;
-    doc["mqttHost"] = gConfig.mqttHost;
-    doc["mqttPort"] = gConfig.mqttPort;
-    doc["mqttTopic"] = gConfig.mqttTopic;
-    doc["mqttUser"] = gConfig.mqttUser;
-    doc["mqttPass"] = gConfig.mqttPass;
-    doc["ntpServer1"] = gConfig.ntpServer1;
-    doc["ntpServer2"] = gConfig.ntpServer2;
-    doc["ntpServer3"] = gConfig.ntpServer3;
-    doc["logMask"] = gConfig.logMask;
+    JsonObject colors = doc.createNestedObject("c");
+    JsonObject day = colors.createNestedObject("d");
+    JsonArray dayAlert = day.createNestedArray("a");
+    dayAlert.add(gConfig.dayMode.alertColor.r);
+    dayAlert.add(gConfig.dayMode.alertColor.g);
+    dayAlert.add(gConfig.dayMode.alertColor.b);
+    dayAlert.add(gConfig.dayMode.alertColor.a);
+    JsonArray dayClear = day.createNestedArray("c");
+    dayClear.add(gConfig.dayMode.clearColor.r);
+    dayClear.add(gConfig.dayMode.clearColor.g);
+    dayClear.add(gConfig.dayMode.clearColor.b);
+    dayClear.add(gConfig.dayMode.clearColor.a);
 
-    JsonArray buz = doc.createNestedArray("buzzerRegions");
+    JsonObject nightColors = colors.createNestedObject("n");
+    JsonArray nightAlert = nightColors.createNestedArray("a");
+    nightAlert.add(gConfig.nightMode.alertColor.r);
+    nightAlert.add(gConfig.nightMode.alertColor.g);
+    nightAlert.add(gConfig.nightMode.alertColor.b);
+    nightAlert.add(gConfig.nightMode.alertColor.a);
+    JsonArray nightClear = nightColors.createNestedArray("c");
+    nightClear.add(gConfig.nightMode.clearColor.r);
+    nightClear.add(gConfig.nightMode.clearColor.g);
+    nightClear.add(gConfig.nightMode.clearColor.b);
+    nightClear.add(gConfig.nightMode.clearColor.a);
+
+    JsonObject night = doc.createNestedObject("n");
+    night["e"] = gConfig.night.enabled;
+    JsonArray nightStart = night.createNestedArray("s");
+    nightStart.add(gConfig.night.startHour);
+    nightStart.add(gConfig.night.startMinute);
+    JsonArray nightEnd = night.createNestedArray("x");
+    nightEnd.add(gConfig.night.endHour);
+    nightEnd.add(gConfig.night.endMinute);
+    night["b"] = gConfig.night.maxBrightness;
+    JsonArray nightPulse = night.createNestedArray("p");
+    nightPulse.add(gConfig.night.pulseOnAlert);
+    nightPulse.add(gConfig.night.pulseOnClear);
+
+    JsonObject buzzer = doc.createNestedObject("z");
+    buzzer["e"] = gConfig.buzzer.enabled;
+    JsonArray buzzerVolume = buzzer.createNestedArray("v");
+    buzzerVolume.add(gConfig.buzzer.dayVolume);
+    buzzerVolume.add(gConfig.buzzer.nightVolume);
+    JsonArray buzzerRegions = buzzer.createNestedArray("r");
     for (int i = 0; i < REGIONS_COUNT; i++) {
-        if (gConfig.buzzer.regions[i]) buz.add(REGIONS[i]);
+        if (gConfig.buzzer.regions[i]) buzzerRegions.add(i);
     }
 
-    JsonArray leds = doc.createNestedArray("leds");
+    JsonObject blink = doc.createNestedObject("k");
+    blink["e"] = gConfig.blink.enabled;
+    JsonArray blinkIntensity = blink.createNestedArray("i");
+    blinkIntensity.add(gConfig.blink.dayIntensity);
+    blinkIntensity.add(gConfig.blink.nightIntensity);
+
+    JsonArray leds = doc.createNestedArray("l");
     for (int i = 0; i < MAX_LEDS; i++) {
         int8_t regionIndex = gConfig.ledRegion[i];
-        leds.add((regionIndex >= 0 && regionIndex < REGIONS_COUNT) ? REGIONS[regionIndex] : "");
+        leds.add((regionIndex >= 0 && regionIndex < REGIONS_COUNT) ? regionIndex : -1);
     }
+
+    JsonObject mqtt = doc.createNestedObject("m");
+    mqtt["h"] = gConfig.mqttHost;
+    mqtt["p"] = gConfig.mqttPort;
+    mqtt["t"] = gConfig.mqttTopic;
+    mqtt["u"] = gConfig.mqttUser;
+    mqtt["s"] = gConfig.mqttPass;
+
+    JsonObject wifi = doc.createNestedObject("w");
+    wifi["s"] = gConfig.wifiSsid;
+    wifi["p"] = gConfig.wifiPass;
+
+    JsonArray ntp = doc.createNestedArray("t");
+    ntp.add(gConfig.ntpServer1);
+    ntp.add(gConfig.ntpServer2);
+    ntp.add(gConfig.ntpServer3);
+
+    doc["g"] = gConfig.logMask;
 }
 
 void storageSaveCurrentConfig() {
@@ -151,10 +244,8 @@ bool storageSyncWifiCredentials() {
     bool changed = currentSsid != String(gConfig.wifiSsid) || currentPass != String(gConfig.wifiPass);
     if (!changed) return false;
 
-    strncpy(gConfig.wifiSsid, currentSsid.c_str(), WIFI_SSID_MAXLEN - 1);
-    gConfig.wifiSsid[WIFI_SSID_MAXLEN - 1] = '\0';
-    strncpy(gConfig.wifiPass, currentPass.c_str(), WIFI_PASS_MAXLEN - 1);
-    gConfig.wifiPass[WIFI_PASS_MAXLEN - 1] = '\0';
+    copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, currentSsid.c_str());
+    copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, currentPass.c_str());
     storageSaveCurrentConfig();
     LOG_INFO(LOG_CAT_CONFIG, "WiFi credentials synced to config");
     return true;
@@ -162,41 +253,65 @@ bool storageSyncWifiCredentials() {
 
 void createDefaultConfig() {
     DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
-    doc["dayAlertR"]  = 255; doc["dayAlertG"]  = 0;  doc["dayAlertB"]  = 0;  doc["dayAlertA"]  = 255;
-    doc["dayClearR"]  = 0;   doc["dayClearG"]  = 80; doc["dayClearB"]  = 0;  doc["dayClearA"]  = 255;
-    doc["nightAlertR"]= 80;  doc["nightAlertG"]= 0;  doc["nightAlertB"]= 0;  doc["nightAlertA"]= 255;
-    doc["nightClearR"]= 0;   doc["nightClearG"]= 15; doc["nightClearB"]= 0;  doc["nightClearA"]= 255;
-    doc["nightEnabled"]= true; doc["nightStartH"]= 22; doc["nightStartM"]= 0;
-    doc["nightEndH"]= 7; doc["nightEndM"]= 0;
-    doc["nightMaxBright"]= 150;
-    doc["nightPulseAlert"]= false;
-    doc["nightPulseClear"]= false;
-    doc["buzzerEnabled"]= true; doc["buzzerDayVol"]= 80; doc["buzzerNightVol"]= 30;
 
-    doc["blinkEnabled"]= true; doc["blinkDayInt"]= 75; doc["blinkNightInt"]= 30;
+    JsonObject colors = doc.createNestedObject("c");
+    JsonObject day = colors.createNestedObject("d");
+    JsonArray dayAlert = day.createNestedArray("a");
+    dayAlert.add(255); dayAlert.add(0); dayAlert.add(0); dayAlert.add(255);
+    JsonArray dayClear = day.createNestedArray("c");
+    dayClear.add(0); dayClear.add(80); dayClear.add(0); dayClear.add(255);
 
-    doc["wifiSsid"]  = "";
-    doc["wifiPass"]  = "";
-    doc["mqttHost"]  = "";
-    doc["mqttPort"]  = 1883;
-    doc["mqttTopic"] = "alerts/status";
-    doc["mqttUser"]  = "";
-    doc["mqttPass"]  = "";
-    doc["ntpServer1"] = "";
-    doc["ntpServer2"] = "";
-    doc["ntpServer3"] = "";
-    doc["logMask"] = LOG_MASK_ALL;
+    JsonObject nightColors = colors.createNestedObject("n");
+    JsonArray nightAlert = nightColors.createNestedArray("a");
+    nightAlert.add(80); nightAlert.add(0); nightAlert.add(0); nightAlert.add(255);
+    JsonArray nightClear = nightColors.createNestedArray("c");
+    nightClear.add(0); nightClear.add(15); nightClear.add(0); nightClear.add(255);
 
-    JsonArray buz = doc.createNestedArray("buzzerRegions");
-    buz.add("Хмельницька область");
+    JsonObject night = doc.createNestedObject("n");
+    night["e"] = true;
+    JsonArray nightStart = night.createNestedArray("s");
+    nightStart.add(22); nightStart.add(0);
+    JsonArray nightEnd = night.createNestedArray("x");
+    nightEnd.add(7); nightEnd.add(0);
+    night["b"] = 150;
+    JsonArray nightPulse = night.createNestedArray("p");
+    nightPulse.add(false); nightPulse.add(false);
 
-    JsonArray leds = doc.createNestedArray("leds");
-    for (int i = 0; i < MAX_LEDS; i++) leds.add("");
+    JsonObject buzzer = doc.createNestedObject("z");
+    buzzer["e"] = true;
+    JsonArray buzzerVolume = buzzer.createNestedArray("v");
+    buzzerVolume.add(80); buzzerVolume.add(30);
+    JsonArray buzzerRegions = buzzer.createNestedArray("r");
+    buzzerRegions.add(DEFAULT_BUZZER_REGION_INDEX);
 
-    File f = LittleFS.open("/config.json", "w");
-    serializeJson(doc, f);
-    f.close();
+    JsonObject blink = doc.createNestedObject("k");
+    blink["e"] = true;
+    JsonArray blinkIntensity = blink.createNestedArray("i");
+    blinkIntensity.add(75); blinkIntensity.add(30);
+
+    JsonArray leds = doc.createNestedArray("l");
+    for (int i = 0; i < MAX_LEDS; i++) leds.add(-1);
+
+    JsonObject mqtt = doc.createNestedObject("m");
+    mqtt["h"] = "";
+    mqtt["p"] = 1883;
+    mqtt["t"] = "alerts/status";
+    mqtt["u"] = "";
+    mqtt["s"] = "";
+
+    JsonObject wifi = doc.createNestedObject("w");
+    wifi["s"] = "";
+    wifi["p"] = "";
+
+    JsonArray ntp = doc.createNestedArray("t");
+    ntp.add("");
+    ntp.add("");
+    ntp.add("");
+
+    doc["g"] = LOG_MASK_ALL;
+
     storageApplyJson(doc);
+    storageSaveCurrentConfig();
     LOG_INFO(LOG_CAT_CONFIG, "Default config.json created");
 }
 

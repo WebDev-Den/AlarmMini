@@ -71,6 +71,73 @@ const DEFAULT_DEVICE_CONFIG: DeviceConfig = {
   mqttPass: "",
 };
 
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value ?? {}));
+}
+
+function isPlainObject(value: any): value is Record<string, any> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getCompactValue(source: any, path: (string | number)[], fallback: any) {
+  let current = source;
+  for (const key of path) {
+    if (current == null) return fallback;
+    current = current[key as keyof typeof current];
+  }
+  return current == null ? fallback : current;
+}
+
+function buildCompactConfig(source: any): any {
+  const normalized = normalizeDeviceConfig(source);
+  const compact = cloneJson(source || {});
+  compact.w = { ...(compact.w || {}), s: normalized.wifiSsid, p: normalized.wifiPass };
+  compact.m = {
+    ...(compact.m || {}),
+    h: normalized.mqttHost,
+    p: normalized.mqttPort,
+    t: normalized.mqttTopic,
+    u: normalized.mqttUser,
+    s: normalized.mqttPass,
+  };
+  delete compact.wifiSsid;
+  delete compact.wifiPass;
+  delete compact.mqttHost;
+  delete compact.mqttPort;
+  delete compact.mqttTopic;
+  delete compact.mqttUser;
+  delete compact.mqttPass;
+  delete compact.adminPassword;
+  delete compact.animations;
+  return compact;
+}
+
+function mergeConfigObjects(baseConfig: any, overrideConfig: any): any {
+  const base = cloneJson(baseConfig || {});
+  const overrides = cloneJson(overrideConfig || {});
+
+  if (!isPlainObject(base)) return cloneJson(overrides);
+  if (!isPlainObject(overrides)) return base;
+
+  const merged: Record<string, any> = { ...base };
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (Array.isArray(value)) {
+      merged[key] = [...value];
+      continue;
+    }
+
+    if (isPlainObject(value)) {
+      merged[key] = mergeConfigObjects(merged[key], value);
+      continue;
+    }
+
+    merged[key] = value;
+  }
+
+  return merged;
+}
+
 function getEmptyBoard(): BoardSnapshot {
   return {
     wifiStatus: t.board.waitingForConnection,
@@ -90,21 +157,18 @@ function normalizeDeviceConfig(config: Partial<DeviceConfig> | null | undefined)
   return {
     ...DEFAULT_DEVICE_CONFIG,
     ...source,
-    wifiSsid: String(source.wifiSsid || ""),
-    wifiPass: String(source.wifiPass || ""),
-    mqttHost: String(source.mqttHost || ""),
-    mqttPort: Number(source.mqttPort || 1883) || 1883,
-    mqttTopic: String(source.mqttTopic || DEFAULT_DEVICE_CONFIG.mqttTopic),
-    mqttUser: String(source.mqttUser || ""),
-    mqttPass: String(source.mqttPass || ""),
+    wifiSsid: String(getCompactValue(source, ["w", "s"], source.wifiSsid || "")),
+    wifiPass: String(getCompactValue(source, ["w", "p"], source.wifiPass || "")),
+    mqttHost: String(getCompactValue(source, ["m", "h"], source.mqttHost || "")),
+    mqttPort: Number(getCompactValue(source, ["m", "p"], source.mqttPort || 1883)) || 1883,
+    mqttTopic: String(getCompactValue(source, ["m", "t"], source.mqttTopic || DEFAULT_DEVICE_CONFIG.mqttTopic)),
+    mqttUser: String(getCompactValue(source, ["m", "u"], source.mqttUser || "")),
+    mqttPass: String(getCompactValue(source, ["m", "s"], source.mqttPass || "")),
   };
 }
 
-function sanitizeConfigPayload(configPayload: any): DeviceConfig {
-  const normalized = normalizeDeviceConfig(configPayload);
-  delete normalized.adminPassword;
-  delete normalized.animations;
-  return normalized;
+function sanitizeConfigPayload(configPayload: any): any {
+  return buildCompactConfig(configPayload);
 }
 
 function stableStringify(value: any): string {
@@ -308,6 +372,7 @@ export default function Page() {
   const configOverridesRef = useRef<Partial<DeviceConfig> | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const backupStartedAtRef = useRef<number>(0);
+  const boardConfigPayloadRef = useRef<any>(sanitizeConfigPayload(DEFAULT_DEVICE_CONFIG));
 
   useEffect(() => {
     if (backupProgress === null) return;
@@ -344,10 +409,9 @@ export default function Page() {
     try {
       const raw = window.localStorage.getItem(CONFIG_STORAGE_KEY);
       if (!raw) return;
-      const parsed = normalizeDeviceConfig(JSON.parse(raw));
+      const parsed = sanitizeConfigPayload(JSON.parse(raw));
       configOverridesRef.current = parsed;
-      setBoardConfig(parsed);
-      setConfigDraft(parsed);
+      syncBoardConfig(parsed);
       setConfigBackupReady(true);
       setDefaultConfigMode(false);
       setFlashStatus(t.config.localLoaded);
@@ -439,10 +503,12 @@ export default function Page() {
                 : t.flash.autoFlow;
 
   function syncBoardConfig(configPayload: any) {
-    const normalized = sanitizeConfigPayload(configPayload);
+    const compact = sanitizeConfigPayload(configPayload);
+    const normalized = normalizeDeviceConfig(compact);
+    boardConfigPayloadRef.current = compact;
     setBoardConfig(normalized);
     setConfigDraft(normalized);
-    return normalized;
+    return compact;
   }
 
   function persistConfigToLocal(configPayload: Partial<DeviceConfig> | null) {
@@ -452,20 +518,23 @@ export default function Page() {
         window.localStorage.removeItem(CONFIG_STORAGE_KEY);
         return;
       }
-      const normalized = sanitizeConfigPayload(configPayload);
-      window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(normalized));
+      const compact = sanitizeConfigPayload(configPayload);
+      window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(compact));
     } catch (storageError) {
       console.error("[config-storage-save]", storageError);
     }
   }
 
   function getMergedConfigPayload(baseConfig: any) {
-    const normalized = sanitizeConfigPayload({
-      ...(baseConfig || {}),
-      ...(configOverridesRef.current || {}),
-    });
-    normalized.mqttPort = Number(normalized.mqttPort || 1883) || 1883;
-    return normalized;
+    const merged = mergeConfigObjects(
+      sanitizeConfigPayload(baseConfig),
+      sanitizeConfigPayload(configOverridesRef.current || {}),
+    );
+    merged.m = {
+      ...(merged.m || {}),
+      p: Number(getCompactValue(merged, ["m", "p"], 1883)) || 1883,
+    };
+    return merged;
   }
 
   function isExpectedConfigApplied(expectedConfig: any, actualConfig: any) {
@@ -479,10 +548,9 @@ export default function Page() {
   }
 
   function openConfigModal() {
-    const draft = sanitizeConfigPayload({
-      ...boardConfig,
-      ...(configOverridesRef.current || {}),
-    });
+    const draft = normalizeDeviceConfig(
+      getMergedConfigPayload(boardConfigPayloadRef.current),
+    );
     setConfigDraft(draft);
     setConfigModalOpen(true);
   }
@@ -510,6 +578,10 @@ export default function Page() {
     try {
       setFlashStatus(t.config.applying);
       const expectedConfig = getMergedConfigPayload(merged);
+      const boardReady = await waitForBoardReady(12000);
+      if (!boardReady) {
+        throw new Error("board_not_ready");
+      }
       await restoreConfigWithRetry(expectedConfig);
       await disconnectPort({ preserveBackupState: true });
       await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -540,10 +612,10 @@ export default function Page() {
   }
 
   async function saveConfigDraft() {
-    const merged = getMergedConfigPayload({
-      ...boardConfig,
-      ...sanitizeConfigPayload(configDraft),
-    });
+    const merged = mergeConfigObjects(
+      sanitizeConfigPayload(boardConfigPayloadRef.current),
+      sanitizeConfigPayload(configDraft),
+    );
 
     configOverridesRef.current = merged;
     persistConfigToLocal(merged);
@@ -568,10 +640,7 @@ export default function Page() {
   }
 
   async function applyStagedConfigToBoard() {
-    const merged = getMergedConfigPayload({
-      ...boardConfig,
-      ...(configOverridesRef.current || {}),
-    });
+    const merged = getMergedConfigPayload(boardConfigPayloadRef.current);
     configBackupRef.current = merged;
     syncBoardConfig(merged);
     setConfigBackupReady(true);
@@ -580,10 +649,7 @@ export default function Page() {
   }
 
   function exportConfigDraft() {
-    const payload = getMergedConfigPayload({
-      ...boardConfig,
-      ...(configOverridesRef.current || {}),
-    });
+    const payload = getMergedConfigPayload(boardConfigPayloadRef.current);
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
     });
@@ -603,10 +669,9 @@ export default function Page() {
       const text = await file.text();
       const parsed = sanitizeConfigPayload(JSON.parse(text));
       configOverridesRef.current = parsed;
-      configBackupRef.current = getMergedConfigPayload({
-        ...boardConfig,
-        ...parsed,
-      });
+      configBackupRef.current = getMergedConfigPayload(
+        mergeConfigObjects(boardConfigPayloadRef.current, parsed),
+      );
       syncBoardConfig(configBackupRef.current);
       setConfigBackupReady(true);
       setDefaultConfigMode(false);
@@ -912,7 +977,7 @@ export default function Page() {
       };
 
       try {
-        await writeSerialLine("AMCFG GET");
+        await writeSerialLine('{"cmd":"get_config"}');
       } catch {
         rejectConfigTransfer("backup_write_failed");
       }
@@ -925,6 +990,11 @@ export default function Page() {
     setFlashStatus(t.flash.restoringConfig);
     resetConfigTransferState();
 
+    const boardReady = await waitForBoardReady(12000);
+    if (!boardReady) {
+      throw new Error("restore_ready_timeout");
+    }
+
     await new Promise<boolean>(async (resolve, reject) => {
       configTransferRef.current = {
         mode: "restore",
@@ -936,13 +1006,14 @@ export default function Page() {
       };
 
       try {
-        await writeSerialLine("AMCFG SET BEGIN");
+        await writeSerialLine('{"cmd":"set_begin"}');
         await new Promise<void>((readyResolve, readyReject) => {
           const transfer = configTransferRef.current;
           if (!transfer) {
             readyReject(new Error("restore_not_initialized"));
             return;
           }
+          clearConfigTransferTimeout();
           transfer.timeoutId = setTimeout(
             () => rejectConfigTransfer("restore_ready_timeout"),
             8000,
@@ -952,7 +1023,10 @@ export default function Page() {
         const chunkSize = 80;
         for (let offset = 0; offset < payloadBytes.length; offset += chunkSize) {
           await writeSerialLine(
-            `AMCFG SET DATA ${encodeHexBytes(payloadBytes.slice(offset, offset + chunkSize))}`,
+            JSON.stringify({
+              cmd: "set_data",
+              data: encodeHexBytes(payloadBytes.slice(offset, offset + chunkSize)),
+            }),
           );
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
@@ -960,7 +1034,7 @@ export default function Page() {
         if (configTransferRef.current) {
           armConfigTransferTimeout("restore_timeout", 30000);
         }
-        await writeSerialLine("AMCFG SET END");
+        await writeSerialLine('{"cmd":"set_end"}');
       } catch {
         rejectConfigTransfer("restore_write_failed");
       }
@@ -987,7 +1061,7 @@ export default function Page() {
         const transfer = configTransferRef.current;
         if (!transfer || transfer.mode !== "probe") return;
         try {
-          await writeSerialLine("AMCFG GET");
+          await writeSerialLine('{"cmd":"hello"}');
         } catch {}
         window.setTimeout(poll, 1200);
       };
@@ -1346,6 +1420,10 @@ export default function Page() {
           setFlashStage("restoring");
           setFlashStatus(t.flash.stageRestoring);
           const expectedConfig = getMergedConfigPayload(configBackupRef.current);
+          const boardReady = await waitForBoardReady(15000);
+          if (!boardReady) {
+            throw new Error("board_not_ready_after_flash");
+          }
           await restoreConfigWithRetry(expectedConfig);
           await disconnectPort({ preserveBackupState: true });
           await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -1597,6 +1675,21 @@ export default function Page() {
                 </button>
               </div>
               <div className="hero-hint">{flashHint}</div>
+              {defaultConfigMode && !flashBusy ? (
+                <div className="button-stack hero-action-stack">
+                  <button
+                    className="ghost-btn"
+                    type="button"
+                    disabled={!canFlashSelectedRelease}
+                    onClick={() => void handleFlashStart()}
+                  >
+                    {t.flash.flashAsNewDevice}
+                  </button>
+                </div>
+              ) : null}
+              {defaultConfigMode && !flashBusy ? (
+                <div className="hero-hint">{t.flash.flashAsNewDeviceHint}</div>
+              ) : null}
               {backupProgress !== null ? (
                 <div className="flash-progress">
                   <div className="flash-progress-bar">

@@ -15,7 +15,11 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
                                             const Color& secondary,
                                             unsigned long frameIntervalMs)
 {
-    constexpr float STARTUP_SWEEP_MS = 2200.0f;
+    static unsigned long lastFrameAt = 0;
+    const unsigned long nowTick = millis();
+    if (frameIntervalMs > 0 && nowTick - lastFrameAt < frameIntervalMs)
+        return;
+    lastFrameAt = nowTick;
 
     if (ledCount == 0)
     {
@@ -25,17 +29,15 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
     }
 
     const float nowMs = (float)millis();
-    const float sweepPosition = fmodf(nowMs, STARTUP_SWEEP_MS * 2.0f);
-    const bool forward = sweepPosition < STARTUP_SWEEP_MS;
-    const float segmentProgress = forward
-        ? (sweepPosition / STARTUP_SWEEP_MS)
-        : ((sweepPosition - STARTUP_SWEEP_MS) / STARTUP_SWEEP_MS);
-    const float easedProgress = 0.5f - 0.5f * cosf(segmentProgress * 3.1415926f);
+    const float cycleMs = STARTUP_ANIMATION_SWEEP_MS * 2.0f;
+    const float cyclePosition = fmodf(nowMs, cycleMs);
+    const float normalized = cyclePosition / cycleMs;
+    const float pingPong = 1.0f - fabsf((normalized * 2.0f) - 1.0f);
+    const float easedProgress = 0.5f - 0.5f * cosf(pingPong * 3.1415926f);
     const float activeIndex = (ledCount > 1)
         ? easedProgress * (float)(ledCount - 1)
         : 0.0f;
-
-    const float tailLength = 5.2f;
+    const bool forward = normalized < 0.5f;
 
     for (uint8_t i = 0; i < ledCount; i++)
     {
@@ -43,16 +45,16 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
             ? (activeIndex - i)
             : (i - activeIndex);
 
-        if (phaseOffset < 0.0f || phaseOffset > tailLength)
+        if (phaseOffset < 0.0f || phaseOffset > STARTUP_ANIMATION_TAIL_LENGTH)
         {
             strip.setPixelColor(i, 0);
             continue;
         }
 
-        const float normalized = constrain(phaseOffset / tailLength, 0.0f, 1.0f);
-        const float wave = 0.5f + 0.5f * cosf(normalized * 3.1415926f);
-        const float blend = normalized * normalized * (3.0f - 2.0f * normalized);
-        const float brightness = wave * wave;
+        const float tailProgress = constrain(phaseOffset / STARTUP_ANIMATION_TAIL_LENGTH, 0.0f, 1.0f);
+        const float fade = 1.0f - tailProgress;
+        const float brightness = powf(fade, STARTUP_ANIMATION_BRIGHTNESS_POWER);
+        const float blend = 0.15f + (0.85f * (1.0f - tailProgress));
         Color mixed = {
             (uint8_t)(primary.r + (secondary.r - primary.r) * blend),
             (uint8_t)(primary.g + (secondary.g - primary.g) * blend),
@@ -75,6 +77,12 @@ static void _showApFlagBlendAnimation(uint8_t ledCount,
                                       const Color& secondary,
                                       unsigned long frameIntervalMs)
 {
+    static unsigned long lastFrameAt = 0;
+    const unsigned long nowTick = millis();
+    if (frameIntervalMs > 0 && nowTick - lastFrameAt < frameIntervalMs)
+        return;
+    lastFrameAt = nowTick;
+
     if (ledCount == 0)
     {
         strip.clear();
@@ -88,8 +96,8 @@ static void _showApFlagBlendAnimation(uint8_t ledCount,
     {
         const uint32_t seed = (uint32_t)(i + 1) * 2654435761UL;
         const float offset = (seed & 0xFF) / 255.0f;
-        const float wave = 0.5f + 0.5f * sinf((phase * 0.85f) + offset * 6.2831853f);
-        const float brightness = 0.22f + wave * 0.78f;
+        const float wave = 0.5f + 0.5f * sinf((phase * AP_ANIMATION_PHASE_SPEED) + offset * 6.2831853f);
+        const float brightness = AP_ANIMATION_MIN_BRIGHTNESS + wave * AP_ANIMATION_BRIGHTNESS_RANGE;
         Color mixed = {
             (uint8_t)(primary.r + (secondary.r - primary.r) * wave),
             (uint8_t)(primary.g + (secondary.g - primary.g) * wave),
@@ -149,57 +157,59 @@ bool startupWifiWithEffect(uint8_t ledCount)
             LOG_INFO(LOG_CAT_WIFI, "OK IP: %s", WiFi.localIP().toString().c_str());
             return true;
         }
-        _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, 55);
+        _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, STARTUP_ANIMATION_FRAME_MS);
         yield();
     }
 
     LOG_WARN(LOG_CAT_WIFI, "Saved network unavailable, switching to AP");
     const unsigned long startupTailStart = millis();
-    while (millis() - startupTailStart < 1200)
+    while (millis() - startupTailStart < STARTUP_ANIMATION_TAIL_EXTRA_MS)
     {
         serialProtocolHandle();
-        _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, 55);
+        _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, STARTUP_ANIMATION_FRAME_MS);
         yield();
     }
     strip.clear();
     strip.show();
 
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(AP_NAME, AP_PASSWORD);
+    WiFiManager wm;
+    wm.setConfigPortalBlocking(false);
+    wm.setConfigPortalTimeout(180);
+    wm.setBreakAfterConfig(true);
+    wm.startConfigPortal(AP_NAME, AP_PASSWORD);
     LOG_INFO(LOG_CAT_WIFI, "AP mode SSID='%s' IP=%s",
              AP_NAME, WiFi.softAPIP().toString().c_str());
 
-    DNSServer dns;
-    dns.start(53, "*", WiFi.softAPIP());
-
-    WiFiManager wm;
-    wm.setConfigPortalTimeout(180);
-    wm.setBreakAfterConfig(true);
-    wm.startWebPortal();
-
     unsigned long apStart = millis();
+    unsigned long lastPortalProcessAt = 0;
     while (millis() - apStart < 180000UL)
     {
         serialProtocolHandle();
-        dns.processNextRequest();
-        wm.process();
+
+        const unsigned long now = millis();
+        if (now - lastPortalProcessAt >= 15UL)
+        {
+            wm.process();
+            lastPortalProcessAt = now;
+        }
 
         if (WiFi.status() == WL_CONNECTED)
         {
             storageSyncWifiCredentials();
             LOG_INFO(LOG_CAT_WIFI, "Connected via portal. IP: %s", WiFi.localIP().toString().c_str());
-            dns.stop();
             const uint8_t modeCap = modeBrightnessLimit(night);
             _showSolidFor(ledCount, strip.Color(0, min<uint8_t>(startupCfg.maxBrightness, modeCap), 0), 800);
             return true;
         }
 
-        _showApFlagBlendAnimation(ledCount, apPrimary, apSecondary, 40);
+        if (!wm.getConfigPortalActive())
+            break;
+
+        _showApFlagBlendAnimation(ledCount, apPrimary, apSecondary, AP_ANIMATION_FRAME_MS);
         yield();
     }
 
     LOG_WARN(LOG_CAT_WIFI, "Portal timeout -> restart");
-    dns.stop();
     const uint8_t modeCap = modeBrightnessLimit(night);
     _showSolidFor(ledCount, strip.Color(min<uint8_t>(startupCfg.maxBrightness, modeCap), 0, 0), 500);
     strip.clear();

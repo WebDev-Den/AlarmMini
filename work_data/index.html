@@ -25,7 +25,7 @@
         mqtt: { eyebrow: "MQTT", title: "Підключення до брокера для отримання стану мапи" },
         system: { eyebrow: "Система", title: "Доступ до пристрою, mDNS та системні параметри" },
         calibration: { eyebrow: "Калібрування", title: "Привʼязка фізичних LED до областей із швидким переходом по LED" },
-        logs: { eyebrow: "Логи", title: "Журнал подій" }
+        
       },
       nav: {
         overview: "Огляд",
@@ -37,7 +37,7 @@
         mqtt: "MQTT",
         system: "Система",
         calibration: "Калібрування",
-        logs: "Логи"
+        
       },
       actions: {
         import: "Імпорт",
@@ -48,7 +48,7 @@
         save: "Зберегти",
         refresh: "Оновити",
         clear: "Очистити",
-        disableLogs: "Вимкнути логи",
+        
         openCalibration: "Відкрити калібрування",
         start: "Почати",
         cancel: "Скасувати",
@@ -131,22 +131,7 @@
         ntpTitle: "NTP сервери",
         ntpHint: "Якщо поле порожнє, використовується значення за замовчуванням."
       },
-      logs: {
-        title: "Логи та останні події",
-        text: "Останні події зберігаються лише в RAM. Старі записи автоматично витісняються без зносу flash-памʼяті.",
-        loading: "Завантаження логів...",
-        empty: "Логів ще не накопичено.",
-        categories: {
-          system: "Система",
-          wifi: "Wi‑Fi",
-          internet: "Інтернет",
-          mqtt: "MQTT",
-          web: "Веб",
-          config: "Конфіг",
-          calibration: "Калібрування",
-          test: "Тести"
-        }
-      },
+      
       calibration: {
         title: "Привʼязка LED до областей",
         intro: "Калібрування працює у двох режимах одночасно: крок за кроком і швидкий перехід по будь-якому LED. Логіка вибору області лишається тією ж: мапа, список областей, кнопки назад/далі та підсвітка фізичного LED.",
@@ -256,7 +241,6 @@
           <button class="nav-tab" type="button" data-tab="mqtt">MQTT</button>
           <button class="nav-tab" type="button" data-tab="system">Система</button>
           <button class="nav-tab nav-tab-accent" type="button" data-tab="calibration">Калібрування</button>
-          <button class="nav-tab" type="button" data-tab="logs">Logs</button>
         </nav>
 
         <div class="sidebar-bottom">
@@ -672,47 +656,6 @@
                   <label class="field-label">NTP 3</label>
                   <input type="text" id="ntpServer3" placeholder="time.google.com" class="field-input">
                 </div>
-              </div>
-            </article>
-          </section>
-
-          <section class="content-pane" id="tab-logs">
-            <article class="panel-card">
-              <div class="panel-card-head">
-                <div>
-                  <div class="panel-label">Logs</div>
-                  <h2 class="panel-title" data-i18n="logs.title"></h2>
-                </div>
-                <div class="panel-actions">
-                  <button class="inline-btn" onclick="refreshLogs()" type="button" data-i18n="actions.refresh"></button>
-                  <button class="inline-btn" onclick="clearLogs()" type="button" data-i18n="actions.clear"></button>
-                  <button class="inline-btn inline-btn-danger" onclick="disableLogs()" type="button"
-                    data-i18n="actions.disableLogs"></button>
-                </div>
-              </div>
-              <p class="panel-text" data-i18n="logs.text"></p>
-              <div class="logs-filter-grid" id="logsFilterGrid">
-                <label class="log-filter"><input type="checkbox" id="logCat_system"><span
-                    data-i18n="logs.categories.system"></span></label>
-                <label class="log-filter"><input type="checkbox" id="logCat_wifi"><span
-                    data-i18n="logs.categories.wifi"></span></label>
-                <label class="log-filter"><input type="checkbox" id="logCat_internet"><span
-                    data-i18n="logs.categories.internet"></span></label>
-                <label class="log-filter"><input type="checkbox" id="logCat_mqtt"><span>MQTT</span></label>
-                <label class="log-filter"><input type="checkbox" id="logCat_web"><span
-                    data-i18n="logs.categories.web"></span></label>
-                <label class="log-filter"><input type="checkbox" id="logCat_config"><span
-                    data-i18n="logs.categories.config"></span></label>
-                <label class="log-filter"><input type="checkbox" id="logCat_calibration"><span
-                    data-i18n="logs.categories.calibration"></span></label>
-                <label class="log-filter"><input type="checkbox" id="logCat_test"><span
-                    data-i18n="logs.categories.test"></span></label>
-              </div>
-              <div class="logs-meta-row">
-                <span class="row-sub" id="logsMeta" data-i18n="logs.loading"></span>
-              </div>
-              <div class="logs-feed" id="logsFeed">
-                <div class="logs-empty" data-i18n="logs.empty"></div>
               </div>
             </article>
           </section>

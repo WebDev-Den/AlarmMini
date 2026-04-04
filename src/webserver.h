@@ -88,6 +88,79 @@ void sendJson(DynamicJsonDocument &doc, int status = 200)
     gServer.send(status, "application/json", json);
 }
 
+void mergeMissingRecursive(JsonVariant dst, JsonVariantConst src)
+{
+    if (dst.is<JsonObject>() && src.is<JsonObjectConst>())
+    {
+        JsonObject dstObj = dst.as<JsonObject>();
+        JsonObjectConst srcObj = src.as<JsonObjectConst>();
+        for (JsonPairConst kv : srcObj)
+        {
+            const char *key = kv.key().c_str();
+            if (!dstObj.containsKey(key))
+            {
+                dstObj[key] = kv.value();
+                continue;
+            }
+
+            JsonVariant childDst = dstObj[key];
+            JsonVariantConst childSrc = kv.value();
+            if ((childDst.is<JsonObject>() && childSrc.is<JsonObjectConst>()) ||
+                (childDst.is<JsonArray>() && childSrc.is<JsonArrayConst>()))
+            {
+                mergeMissingRecursive(childDst, childSrc);
+            }
+        }
+        return;
+    }
+
+    if (dst.is<JsonArray>() && src.is<JsonArrayConst>())
+    {
+        JsonArray dstArr = dst.as<JsonArray>();
+        JsonArrayConst srcArr = src.as<JsonArrayConst>();
+        if (dstArr.size() == 0)
+        {
+            for (JsonVariantConst item : srcArr)
+                dstArr.add(item);
+        }
+    }
+}
+
+void mergeOverrideRecursive(JsonVariant dst, JsonVariantConst src)
+{
+    if (dst.is<JsonObject>() && src.is<JsonObjectConst>())
+    {
+        JsonObject dstObj = dst.as<JsonObject>();
+        JsonObjectConst srcObj = src.as<JsonObjectConst>();
+        for (JsonPairConst kv : srcObj)
+        {
+            const char *key = kv.key().c_str();
+            JsonVariant dstChild = dstObj[key];
+            JsonVariantConst srcChild = kv.value();
+
+            if ((dstChild.is<JsonObject>() && srcChild.is<JsonObjectConst>()) ||
+                (dstChild.is<JsonArray>() && srcChild.is<JsonArrayConst>()))
+            {
+                mergeOverrideRecursive(dstChild, srcChild);
+            }
+            else
+            {
+                dstObj[key] = srcChild;
+            }
+        }
+        return;
+    }
+
+    if (dst.is<JsonArray>() && src.is<JsonArrayConst>())
+    {
+        JsonArray dstArr = dst.as<JsonArray>();
+        JsonArrayConst srcArr = src.as<JsonArrayConst>();
+        dstArr.clear();
+        for (JsonVariantConst item : srcArr)
+            dstArr.add(item);
+    }
+}
+
 void handleSession()
 {
     DynamicJsonDocument doc(128);
@@ -226,8 +299,8 @@ void handleSaveSettings()
         return;
     }
 
-    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
-    DeserializationError err = deserializeJson(doc, gServer.arg("plain"));
+    DynamicJsonDocument requestDoc(CONFIG_JSON_CAPACITY);
+    DeserializationError err = deserializeJson(requestDoc, gServer.arg("plain"));
     if (err)
     {
         addCors();
@@ -235,38 +308,66 @@ void handleSaveSettings()
         return;
     }
 
-    DynamicJsonDocument currentDoc(CONFIG_JSON_CAPACITY);
-    File currentFile = LittleFS.open("/config.json", "r");
-    if (currentFile)
-    {
-        deserializeJson(currentDoc, currentFile);
-        currentFile.close();
-    }
+    requestDoc.remove("adminPassword");
+    requestDoc.remove("animations");
 
+    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
+    storagePopulateJson(doc);
+    mergeOverrideRecursive(doc.as<JsonVariant>(), requestDoc.as<JsonVariantConst>());
     doc.remove("adminPassword");
     doc.remove("animations");
 
-    for (JsonPair kv : currentDoc.as<JsonObject>())
-    {
-        if (!doc.containsKey(kv.key().c_str()))
-            doc[kv.key().c_str()] = kv.value();
-    }
-    doc.remove("adminPassword");
-    doc.remove("animations");
-
-    File f = LittleFS.open("/config.json", "w");
-    serializeJson(doc, f);
-    f.close();
+    const String prevWifiSsid = String(gConfig.wifiSsid);
+    const String prevWifiPass = String(gConfig.wifiPass);
+    const String prevMqttHost = String(gConfig.mqttHost);
+    const uint16_t prevMqttPort = gConfig.mqttPort;
+    const String prevMqttTopic = String(gConfig.mqttTopic);
+    const String prevMqttUser = String(gConfig.mqttUser);
+    const String prevMqttPass = String(gConfig.mqttPass);
 
     storageApplyJson(doc);
+    File f = LittleFS.open("/config.json", "w");
+    if (!f)
+    {
+        LOG_ERROR(LOG_CAT_CONFIG, "Failed to open config.json for write");
+        addCors();
+        gServer.send(500, "text/plain", "Write failed");
+        return;
+    }
+    serializeJson(doc, f);
+    f.close();
     loggerSetMask(gConfig.logMask);
-    gSessionToken = "";
-    LOG_INFO(LOG_CAT_CONFIG, "Settings saved, restart scheduled");
+
+    const bool wifiChanged =
+        prevWifiSsid != String(gConfig.wifiSsid) ||
+        prevWifiPass != String(gConfig.wifiPass);
+    const bool mqttChanged =
+        prevMqttHost != String(gConfig.mqttHost) ||
+        prevMqttPort != gConfig.mqttPort ||
+        prevMqttTopic != String(gConfig.mqttTopic) ||
+        prevMqttUser != String(gConfig.mqttUser) ||
+        prevMqttPass != String(gConfig.mqttPass);
+
+    if (wifiChanged)
+    {
+        LOG_INFO(LOG_CAT_CONFIG, "Settings saved, WiFi reconnect scheduled");
+        if (strlen(gConfig.wifiSsid))
+            WiFi.begin(gConfig.wifiSsid, gConfig.wifiPass);
+        else
+            WiFi.begin();
+    }
+    else if (mqttChanged)
+    {
+        LOG_INFO(LOG_CAT_CONFIG, "Settings saved, MQTT settings updated");
+        alertsReloadClientConfig();
+    }
+    else
+    {
+        LOG_INFO(LOG_CAT_CONFIG, "Settings saved without restart");
+    }
 
     addCors();
-    gServer.sendHeader("Set-Cookie", "ESPSESSION=deleted; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
     gServer.send(200, "text/plain", "OK");
-    scheduleRestart();
 }
 
 void handleTestBuzzer()
@@ -380,23 +481,10 @@ void handleDisableLogs()
     if (!ensureAuthorized())
         return;
 
-    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
-    File currentFile = LittleFS.open("/config.json", "r");
-    if (currentFile)
-    {
-        deserializeJson(doc, currentFile);
-        currentFile.close();
-    }
-
-    doc["logMask"] = 0;
-
-    File outFile = LittleFS.open("/config.json", "w");
-    serializeJson(doc, outFile);
-    outFile.close();
-
     loggerClear();
     gConfig.logMask = 0;
     loggerSetMask(0);
+    storageSaveCurrentConfig();
 
     addCors();
     gServer.send(200, "application/json", "{\"ok\":true,\"disabled\":true}");

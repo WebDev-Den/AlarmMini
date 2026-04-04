@@ -89,6 +89,17 @@ struct StateAnimationBinding {
 constexpr uint16_t ALERT_CLEAR_HOLD_MS = 30000;
 constexpr uint8_t SYSTEM_EFFECTS_MAX_BRIGHTNESS = 15;
 
+constexpr float STARTUP_ANIMATION_SWEEP_MS = 2200.0f;
+constexpr float STARTUP_ANIMATION_TAIL_LENGTH = 4.2f;
+constexpr float STARTUP_ANIMATION_BRIGHTNESS_POWER = 1.6f;
+constexpr uint16_t STARTUP_ANIMATION_FRAME_MS = 55;
+constexpr uint16_t STARTUP_ANIMATION_TAIL_EXTRA_MS = 1200;
+
+constexpr float AP_ANIMATION_PHASE_SPEED = 0.425f;
+constexpr float AP_ANIMATION_MIN_BRIGHTNESS = 0.22f;
+constexpr float AP_ANIMATION_BRIGHTNESS_RANGE = 0.78f;
+constexpr uint16_t AP_ANIMATION_FRAME_MS = 40;
+
 // Main animation presets for map states.
 // Change effect/speed/scale/size/maxBrightness here instead of the web UI.
 constexpr StateAnimationBinding STATE_ANIMATIONS[MAP_STATE_COUNT] = {

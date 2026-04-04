@@ -125,17 +125,15 @@ static void serialConfigApplyIncoming()
     doc.remove("adminPassword");
     doc.remove("animations");
 
-    File configFile = LittleFS.open("/config.json", "w");
-    if (!configFile)
+    storageApplyJson(doc);
+    File f = LittleFS.open("/config.json", "w");
+    if (!f)
     {
         serialSendJsonStatus("error", "reason", "write_failed");
         return;
     }
-
-    serializeJson(doc, configFile);
-    configFile.close();
-
-    storageApplyJson(doc);
+    serializeJson(doc, f);
+    f.close();
     loggerSetMask(gConfig.logMask);
     serialSendJsonStatus("ok");
     Serial.flush();
@@ -329,6 +327,10 @@ void serialProtocolHandle()
             if (line.startsWith("AMCFG "))
             {
                 handleSerialProtocolLine(line);
+            }
+            else if (line.startsWith("{"))
+            {
+                handleSerialJsonMessage(line);
             }
             continue;
         }

@@ -1,72 +1,42 @@
 {
-  "dayAlertR": 255,
-  "dayAlertG": 0,
-  "dayAlertB": 0,
-  "dayAlertA": 255,
-  "dayClearR": 0,
-  "dayClearG": 80,
-  "dayClearB": 0,
-  "dayClearA": 80,
-  "nightAlertR": 25,
-  "nightAlertG": 0,
-  "nightAlertB": 0,
-  "nightAlertA": 24,
-  "nightClearR": 0,
-  "nightClearG": 0,
-  "nightClearB": 0,
-  "nightClearA": 0,
-  "nightEnabled": true,
-  "nightStartH": 20,
-  "nightStartM": 0,
-  "nightEndH": 8,
-  "nightEndM": 0,
-  "nightMaxBright": 150,
-  "nightPulseAlert": false,
-  "nightPulseClear": false,
-  "buzzerEnabled": false,
-  "buzzerDayVol": 80,
-  "buzzerNightVol": 30,
-  "blinkEnabled": true,
-  "blinkDayInt": 75,
-  "blinkNightInt": 30,
-  "buzzerRegions": [
-    "Хмельницька область"
-  ],
-  "leds": [
-    "Автономна Республіка Крим",
-    "Херсонська область",
-    "Запорізька область",
-    "Донецька область",
-    "Луганська область",
-    "Харківська область",
-    "Дніпропетровська область",
-    "Дніпропетровська область",
-    "Полтавська область",
-    "Сумська область",
-    "Чернігівська область",
-    "Київська область",
-    "Житомирська область",
-    "Рівненська область",
-    "Волинська область",
-    "Львівська область",
-    "Закарпатська область",
-    "Івано-Франківська область",
-    "Чернівецька область",
-    "Тернопільська область",
-    "Хмельницька область",
-    "Вінницька область",
-    "Черкаська область",
-    "Кіровоградська область",
-    "Миколаївська область",
-    "Одеська область",
-    "Одеська область"
-  ],
-  "mqttHost": "mqtt.example.com",
-  "mqttPort": 1883,
-  "mqttTopic": "ukraine/alarm/map/full",
-  "mqttUser": "mqtt_user",
-  "mqttPass": "change_me",
-  "wifiSsid": "",
-  "wifiPass": "",
-  "logMask": 255
+  "c": {
+    "d": {
+      "a": [255, 0, 0, 255],
+      "c": [0, 80, 0, 80]
+    },
+    "n": {
+      "a": [25, 0, 0, 24],
+      "c": [0, 0, 0, 0]
+    }
+  },
+  "n": {
+    "e": true,
+    "s": [20, 0],
+    "x": [8, 0],
+    "b": 150,
+    "p": [false, false]
+  },
+  "z": {
+    "e": false,
+    "v": [80, 30],
+    "r": [20]
+  },
+  "k": {
+    "e": true,
+    "i": [75, 30]
+  },
+  "l": [24, 19, 6, 3, 10, 18, 2, 2, 14, 16, 23, 8, 4, 15, 1, 11, 5, 7, 22, 17, 20, 0, 21, 9, 12, 13, 13],
+  "m": {
+    "h": "mqtt.example.com",
+    "p": 1883,
+    "t": "ukraine/alarm/map/full",
+    "u": "mqtt_user",
+    "s": "change_me"
+  },
+  "w": {
+    "s": "",
+    "p": ""
+  },
+  "t": ["", "", ""],
+  "g": 255
 }

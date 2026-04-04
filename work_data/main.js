@@ -2,6 +2,7 @@ let REGIONS = [];
 let MAX_LEDS = 0;
 let gLedMap = {};
 let currentConfig = {};
+let currentConfigSource = {};
 let currentAlerts = [];
 let currentSessionReady = false;
 let adminLabelDownloadName = "alarmmini-admin.png";
@@ -31,7 +32,6 @@ const TAB_META = {
   mqtt: { eyebrow: UI_LANG.tabs.mqtt.eyebrow, title: UI_LANG.tabs.mqtt.title },
   system: { eyebrow: UI_LANG.tabs.system.eyebrow, title: UI_LANG.tabs.system.title },
   calibration: { eyebrow: UI_LANG.tabs.calibration.eyebrow, title: UI_LANG.tabs.calibration.title },
-  logs: { eyebrow: UI_LANG.tabs.logs.eyebrow, title: UI_LANG.tabs.logs.title },
 };
 
 const SVG_ID_TO_REGION = { ...UI_LANG.regionsBySvg };
@@ -107,14 +107,14 @@ function applyStaticLang() {
   set("#tab-colors .settings-row:nth-of-type(4) .row-label", UI_LANG.colors.clear);
   set("#tab-night .panel-label", UI_LANG.tabs.night.eyebrow);
   set("#tab-night .panel-title", UI_LANG.nightMode.title);
-  set("#tab-night .settings-row:nth-of-type(1) .row-label", UI_LANG.nightMode.active);
-  set("#tab-night .settings-row:nth-of-type(2) .row-label", UI_LANG.nightMode.start);
-  set("#tab-night .settings-row:nth-of-type(3) .row-label", UI_LANG.nightMode.end);
+  set("#tab-night .settings-row:nth-of-type(2) .row-label", UI_LANG.nightMode.active);
+  set("#tab-night .settings-row:nth-of-type(3) .row-label", UI_LANG.nightMode.start);
+  set("#tab-night .settings-row:nth-of-type(4) .row-label", UI_LANG.nightMode.end);
   set("#tab-buzzer .panel-label", UI_LANG.tabs.buzzer.eyebrow);
   set("#tab-buzzer .panel-title", UI_LANG.buzzer.title);
-  set("#tab-buzzer .settings-row:nth-of-type(1) .row-label", UI_LANG.buzzer.active);
-  set("#tab-buzzer .settings-row:nth-of-type(2) .row-label", UI_LANG.buzzer.dayVolume);
-  set("#tab-buzzer .settings-row:nth-of-type(3) .row-label", UI_LANG.buzzer.nightVolume);
+  set("#tab-buzzer .settings-row:nth-of-type(2) .row-label", UI_LANG.buzzer.active);
+  set("#tab-buzzer .settings-row:nth-of-type(3) .row-label", UI_LANG.buzzer.dayVolume);
+  set("#tab-buzzer .settings-row:nth-of-type(4) .row-label", UI_LANG.buzzer.nightVolume);
   document.querySelectorAll("#tab-buzzer .panel-actions .inline-btn").forEach((btn, index) => {
     btn.textContent = index === 0 ? UI_LANG.actions.testAlert : UI_LANG.actions.testClear;
   });
@@ -125,12 +125,12 @@ function applyStaticLang() {
   if (regionButtons[1]) regionButtons[1].textContent = UI_LANG.actions.none;
   if (regionButtons[2]) regionButtons[2].textContent = UI_LANG.actions.testAlert;
   set("#tab-mqtt .panel-title", UI_LANG.mqtt.title);
-  set("#tab-mqtt .form-grid.row.g-3 .field-label", UI_LANG.mqtt.broker);
-  set("#tab-mqtt .form-grid.row.g-3 .col-12.col-md-6:nth-child(2) .field-label", UI_LANG.mqtt.port);
-  set("#tab-mqtt .form-stack > div:nth-child(1) .field-label", UI_LANG.mqtt.topic);
-  set("#tab-mqtt .form-stack .form-grid.row.g-3 .col-12.col-md-6:nth-child(1) .field-label", UI_LANG.mqtt.login);
+  set("#tab-mqtt .form-stack > div:nth-child(1) .col-12.col-md-6:nth-child(1) .field-label", UI_LANG.mqtt.broker);
+  set("#tab-mqtt .form-stack > div:nth-child(1) .col-12.col-md-6:nth-child(2) .field-label", UI_LANG.mqtt.port);
+  set("#tab-mqtt .form-stack > div:nth-child(2) .field-label", UI_LANG.mqtt.topic);
+  set("#tab-mqtt .form-stack > div:nth-child(3) .col-12.col-md-6:nth-child(1) .field-label", UI_LANG.mqtt.login);
   setAttr("#mqttUser", "placeholder", UI_LANG.mqtt.loginPlaceholder);
-  set("#tab-mqtt .form-stack .form-grid.row.g-3 .col-12.col-md-6:nth-child(2) .field-label", UI_LANG.mqtt.password);
+  set("#tab-mqtt .form-stack > div:nth-child(3) .col-12.col-md-6:nth-child(2) .field-label", UI_LANG.mqtt.password);
   set("#tab-system .panel-label", UI_LANG.tabs.system.eyebrow);
   set("#tab-system .panel-title", UI_LANG.system.title);
   const systemLabelMap = {
@@ -148,13 +148,6 @@ function applyStaticLang() {
   });
   set("#tab-system .form-stack .row-label", UI_LANG.system.ntpTitle);
   set("#tab-system .form-stack .row-sub", UI_LANG.system.ntpHint);
-  set("#tab-logs .panel-title", UI_LANG.logs.title);
-  set("#tab-logs .panel-text", UI_LANG.logs.text);
-  set("#tab-logs .panel-actions .inline-btn:nth-child(1)", UI_LANG.actions.refresh);
-  set("#tab-logs .panel-actions .inline-btn:nth-child(2)", UI_LANG.actions.clear);
-  set("#tab-logs .panel-actions .inline-btn:nth-child(3)", UI_LANG.actions.disableLogs);
-  set("#logsMeta", UI_LANG.logs.loading);
-  set("#logsFeed .logs-empty", UI_LANG.logs.empty);
   set("#tab-calibration .panel-label", UI_LANG.tabs.calibration.eyebrow);
   set("#tab-calibration .panel-title", UI_LANG.calibration.title);
   set("#calIntro .panel-text", UI_LANG.calibration.intro);
@@ -195,7 +188,90 @@ function ensureSvgViewBox(svg) {
 }
 
 function normalizeConfig(cfg) {
-  return JSON.parse(JSON.stringify(cfg || {}));
+  const source = JSON.parse(JSON.stringify(cfg || {}));
+  const colors = source.c || {};
+  const day = colors.d || {};
+  const nightColors = colors.n || {};
+  const night = source.n || {};
+  const buzzer = source.z || {};
+  const blink = source.k || {};
+  const wifi = source.w || {};
+  const mqtt = source.m || {};
+  const ntp = Array.isArray(source.t) ? source.t : [];
+
+  const readColor = (compact, legacyPrefix) => {
+    if (Array.isArray(compact) && compact.length >= 4) {
+      return {
+        r: Number(compact[0] ?? 0),
+        g: Number(compact[1] ?? 0),
+        b: Number(compact[2] ?? 0),
+        a: Number(compact[3] ?? 0),
+      };
+    }
+    return {
+      r: Number(source[`${legacyPrefix}R`] ?? 0),
+      g: Number(source[`${legacyPrefix}G`] ?? 0),
+      b: Number(source[`${legacyPrefix}B`] ?? 0),
+      a: Number(source[`${legacyPrefix}A`] ?? 0),
+    };
+  };
+
+  const dayAlert = readColor(day.a, "dayAlert");
+  const dayClear = readColor(day.c, "dayClear");
+  const nightAlert = readColor(nightColors.a, "nightAlert");
+  const nightClear = readColor(nightColors.c, "nightClear");
+  const nightStart = Array.isArray(night.s) ? night.s : [source.nightStartH, source.nightStartM];
+  const nightEnd = Array.isArray(night.x) ? night.x : [source.nightEndH, source.nightEndM];
+  const nightPulse = Array.isArray(night.p) ? night.p : [source.nightPulseAlert, source.nightPulseClear];
+  const buzzerVolume = Array.isArray(buzzer.v) ? buzzer.v : [source.buzzerDayVol, source.buzzerNightVol];
+  const blinkIntensity = Array.isArray(blink.i) ? blink.i : [source.blinkDayInt, source.blinkNightInt];
+
+  return {
+    ...source,
+    dayAlertR: dayAlert.r,
+    dayAlertG: dayAlert.g,
+    dayAlertB: dayAlert.b,
+    dayAlertA: dayAlert.a,
+    dayClearR: dayClear.r,
+    dayClearG: dayClear.g,
+    dayClearB: dayClear.b,
+    dayClearA: dayClear.a,
+    nightAlertR: nightAlert.r,
+    nightAlertG: nightAlert.g,
+    nightAlertB: nightAlert.b,
+    nightAlertA: nightAlert.a,
+    nightClearR: nightClear.r,
+    nightClearG: nightClear.g,
+    nightClearB: nightClear.b,
+    nightClearA: nightClear.a,
+    nightEnabled: night.e ?? source.nightEnabled ?? false,
+    nightStartH: Number(nightStart[0] ?? 0),
+    nightStartM: Number(nightStart[1] ?? 0),
+    nightEndH: Number(nightEnd[0] ?? 0),
+    nightEndM: Number(nightEnd[1] ?? 0),
+    nightMaxBright: Number(night.b ?? source.nightMaxBright ?? 150),
+    nightPulseAlert: Boolean(nightPulse[0] ?? source.nightPulseAlert ?? false),
+    nightPulseClear: Boolean(nightPulse[1] ?? source.nightPulseClear ?? false),
+    buzzerEnabled: buzzer.e ?? source.buzzerEnabled ?? false,
+    buzzerDayVol: Number(buzzerVolume[0] ?? source.buzzerDayVol ?? 80),
+    buzzerNightVol: Number(buzzerVolume[1] ?? source.buzzerNightVol ?? 30),
+    blinkEnabled: blink.e ?? source.blinkEnabled ?? true,
+    blinkDayInt: Number(blinkIntensity[0] ?? source.blinkDayInt ?? 75),
+    blinkNightInt: Number(blinkIntensity[1] ?? source.blinkNightInt ?? 30),
+    buzzerRegionIds: buzzer.r || source.buzzerRegionIds || source.buzzerRegions || [],
+    ledRegionIds: source.l || source.ledRegionIds || source.leds || [],
+    mqttHost: mqtt.h ?? source.mqttHost ?? "",
+    mqttPort: Number(mqtt.p ?? source.mqttPort ?? 1883),
+    mqttTopic: mqtt.t ?? source.mqttTopic ?? "alerts/status",
+    mqttUser: mqtt.u ?? source.mqttUser ?? "",
+    mqttPass: mqtt.s ?? source.mqttPass ?? "",
+    wifiSsid: wifi.s ?? source.wifiSsid ?? "",
+    wifiPass: wifi.p ?? source.wifiPass ?? "",
+    ntpServer1: ntp[0] ?? source.ntpServer1 ?? "",
+    ntpServer2: ntp[1] ?? source.ntpServer2 ?? "",
+    ntpServer3: ntp[2] ?? source.ntpServer3 ?? "",
+    logMask: Number(source.g ?? source.logMask ?? 0),
+  };
 }
 
 function showToast(message, isError = false) {
@@ -529,6 +605,20 @@ function findExactRegion(value) {
   return REGIONS.find((region) => region === value || region.includes(value)) || "";
 }
 
+function regionIndexByName(value) {
+  if (!value) return -1;
+  return REGIONS.findIndex((region) => region === value);
+}
+
+function regionNameFromConfigValue(value) {
+  if (typeof value === "number") {
+    return REGIONS[value] || "";
+  }
+
+  if (!value) return "";
+  return findExactRegion(value);
+}
+
 function roundedRect(ctx, x, y, width, height, radius) {
   ctx.beginPath();
   ctx.moveTo(x + radius, y);
@@ -711,28 +801,29 @@ function applyDeviceInfo(info) {
 
 function applyConfig(cfg) {
   const previousLogCategoryBits = currentConfig.logCategoryBits || {};
+  currentConfigSource = JSON.parse(JSON.stringify(cfg || {}));
   currentConfig = normalizeConfig(cfg);
   currentConfig.logCategoryBits = previousLogCategoryBits;
 
-  applyColor("dayAlertColor", "dayAlertSwatch", cfg.dayAlertR, cfg.dayAlertG, cfg.dayAlertB);
-  applyColor("dayClearColor", "dayClearSwatch", cfg.dayClearR, cfg.dayClearG, cfg.dayClearB);
-  applyColor("nightAlertColor", "nightAlertSwatch", cfg.nightAlertR, cfg.nightAlertG, cfg.nightAlertB);
-  applyColor("nightClearColor", "nightClearSwatch", cfg.nightClearR, cfg.nightClearG, cfg.nightClearB);
-  applySliderValue("dayAlertBright", "dayAlertBrightVal", cfg.dayAlertA, (v) => `${Math.round(v / 2.55)}%`);
-  applySliderValue("dayClearBright", "dayClearBrightVal", cfg.dayClearA, (v) => `${Math.round(v / 2.55)}%`);
-  applySliderValue("nightAlertBright", "nightAlertBrightVal", cfg.nightAlertA, (v) => `${Math.round(v / 2.55)}%`);
-  applySliderValue("nightClearBright", "nightClearBrightVal", cfg.nightClearA, (v) => `${Math.round(v / 2.55)}%`);
-  applySliderValue("dayVol", "dayVolVal", cfg.buzzerDayVol, (v) => `${v}%`);
-  applySliderValue("nightVol", "nightVolVal", cfg.buzzerNightVol, (v) => `${v}%`);
+  applyColor("dayAlertColor", "dayAlertSwatch", currentConfig.dayAlertR, currentConfig.dayAlertG, currentConfig.dayAlertB);
+  applyColor("dayClearColor", "dayClearSwatch", currentConfig.dayClearR, currentConfig.dayClearG, currentConfig.dayClearB);
+  applyColor("nightAlertColor", "nightAlertSwatch", currentConfig.nightAlertR, currentConfig.nightAlertG, currentConfig.nightAlertB);
+  applyColor("nightClearColor", "nightClearSwatch", currentConfig.nightClearR, currentConfig.nightClearG, currentConfig.nightClearB);
+  applySliderValue("dayAlertBright", "dayAlertBrightVal", currentConfig.dayAlertA, (v) => `${Math.round(v / 2.55)}%`);
+  applySliderValue("dayClearBright", "dayClearBrightVal", currentConfig.dayClearA, (v) => `${Math.round(v / 2.55)}%`);
+  applySliderValue("nightAlertBright", "nightAlertBrightVal", currentConfig.nightAlertA, (v) => `${Math.round(v / 2.55)}%`);
+  applySliderValue("nightClearBright", "nightClearBrightVal", currentConfig.nightClearA, (v) => `${Math.round(v / 2.55)}%`);
+  applySliderValue("dayVol", "dayVolVal", currentConfig.buzzerDayVol, (v) => `${v}%`);
+  applySliderValue("nightVol", "nightVolVal", currentConfig.buzzerNightVol, (v) => `${v}%`);
 
-  $("nightEnabled").checked = Boolean(cfg.nightEnabled);
-  $("buzzerEnabled").checked = Boolean(cfg.buzzerEnabled);
-  $("nightStart").value = `${pad(cfg.nightStartH)}:${pad(cfg.nightStartM)}`;
-  $("nightEnd").value = `${pad(cfg.nightEndH)}:${pad(cfg.nightEndM)}`;
-  $("ntpServer1").value = cfg.ntpServer1 || "";
-  $("ntpServer2").value = cfg.ntpServer2 || "";
-  $("ntpServer3").value = cfg.ntpServer3 || "";
-  latestLogMask = Number(cfg.logMask || latestLogMask || 0);
+  $("nightEnabled").checked = Boolean(currentConfig.nightEnabled);
+  $("buzzerEnabled").checked = Boolean(currentConfig.buzzerEnabled);
+  $("nightStart").value = `${pad(currentConfig.nightStartH)}:${pad(currentConfig.nightStartM)}`;
+  $("nightEnd").value = `${pad(currentConfig.nightEndH)}:${pad(currentConfig.nightEndM)}`;
+  $("ntpServer1").value = currentConfig.ntpServer1 || "";
+  $("ntpServer2").value = currentConfig.ntpServer2 || "";
+  $("ntpServer3").value = currentConfig.ntpServer3 || "";
+  latestLogMask = Number(currentConfig.logMask || latestLogMask || 0);
 
   REGIONS.forEach((name) => {
     const checkbox = $(`buz_${name}`);
@@ -742,8 +833,9 @@ function applyConfig(cfg) {
     chip.classList.remove("active");
   });
 
-  (cfg.buzzerRegions || []).forEach((regionRoot) => {
-    const exact = findExactRegion(regionRoot);
+  const buzzerRegions = currentConfig.buzzerRegionIds || [];
+  buzzerRegions.forEach((regionRoot) => {
+    const exact = regionNameFromConfigValue(regionRoot);
     if (!exact) return;
     const checkbox = $(`buz_${exact}`);
     const chip = $(`chip_${exact}`);
@@ -754,9 +846,10 @@ function applyConfig(cfg) {
   });
 
   gLedMap = {};
-  (cfg.leds || []).forEach((regionRoot, index) => {
-    if (index >= MAX_LEDS || !regionRoot) return;
-    const exact = findExactRegion(regionRoot);
+  const ledAssignments = currentConfig.ledRegionIds || [];
+  ledAssignments.forEach((regionRoot, index) => {
+    if (index >= MAX_LEDS || regionRoot == null || regionRoot === "" || regionRoot === -1) return;
+    const exact = regionNameFromConfigValue(regionRoot);
     if (exact) gLedMap[index] = exact;
   });
 
@@ -765,29 +858,64 @@ function applyConfig(cfg) {
 }
 
 function buildPayload() {
+  const payload = JSON.parse(JSON.stringify(currentConfigSource || {}));
   const [nightStartH, nightStartM] = $("nightStart").value.split(":").map(Number);
   const [nightEndH, nightEndM] = $("nightEnd").value.split(":").map(Number);
   const dayAlert = hexToRgb($("dayAlertColor").value);
   const dayClear = hexToRgb($("dayClearColor").value);
   const nightAlert = hexToRgb($("nightAlertColor").value);
   const nightClear = hexToRgb($("nightClearColor").value);
-  const buzzerRegions = REGIONS.filter((name) => $(`buz_${name}`)?.checked);
-  const leds = Array.from({ length: MAX_LEDS }, (_, index) => gLedMap[index] || "");
+  const buzzerRegionIds = REGIONS.reduce((acc, name, index) => {
+    if ($(`buz_${name}`)?.checked) acc.push(index);
+    return acc;
+  }, []);
+  const ledRegionIds = Array.from({ length: MAX_LEDS }, (_, index) => regionIndexByName(gLedMap[index] || ""));
 
-  return {
-    dayAlertR: dayAlert.r, dayAlertG: dayAlert.g, dayAlertB: dayAlert.b, dayAlertA: Number($("dayAlertBright").value),
-    dayClearR: dayClear.r, dayClearG: dayClear.g, dayClearB: dayClear.b, dayClearA: Number($("dayClearBright").value),
-    nightAlertR: nightAlert.r, nightAlertG: nightAlert.g, nightAlertB: nightAlert.b, nightAlertA: Number($("nightAlertBright").value),
-    nightClearR: nightClear.r, nightClearG: nightClear.g, nightClearB: nightClear.b, nightClearA: Number($("nightClearBright").value),
-    nightEnabled: $("nightEnabled").checked, nightStartH, nightStartM, nightEndH, nightEndM,
-    nightMaxBright: currentConfig.nightMaxBright ?? 150, nightPulseAlert: currentConfig.nightPulseAlert ?? false, nightPulseClear: currentConfig.nightPulseClear ?? false,
-    buzzerEnabled: $("buzzerEnabled").checked, buzzerDayVol: Number($("dayVol").value), buzzerNightVol: Number($("nightVol").value), buzzerRegions,
-    blinkEnabled: currentConfig.blinkEnabled ?? true, blinkDayInt: currentConfig.blinkDayInt ?? 75, blinkNightInt: currentConfig.blinkNightInt ?? 30,
-    leds,
-    mqttHost: $("mqttHost").value.trim(), mqttPort: parseInt($("mqttPort").value, 10) || 1883, mqttTopic: $("mqttTopic").value.trim() || "alerts/status", mqttUser: $("mqttUser").value.trim(), mqttPass: $("mqttPass").value.trim(),
-    ntpServer1: $("ntpServer1").value.trim(), ntpServer2: $("ntpServer2").value.trim(), ntpServer3: $("ntpServer3").value.trim(),
-    logMask: readLogMaskInputs(),
+  payload.c = {
+    d: {
+      a: [dayAlert.r, dayAlert.g, dayAlert.b, Number($("dayAlertBright").value)],
+      c: [dayClear.r, dayClear.g, dayClear.b, Number($("dayClearBright").value)],
+    },
+    n: {
+      a: [nightAlert.r, nightAlert.g, nightAlert.b, Number($("nightAlertBright").value)],
+      c: [nightClear.r, nightClear.g, nightClear.b, Number($("nightClearBright").value)],
+    },
   };
+  payload.n = {
+    e: $("nightEnabled").checked,
+    s: [nightStartH, nightStartM],
+    x: [nightEndH, nightEndM],
+    b: currentConfig.nightMaxBright ?? 150,
+    p: [currentConfig.nightPulseAlert ?? false, currentConfig.nightPulseClear ?? false],
+  };
+  payload.z = {
+    e: $("buzzerEnabled").checked,
+    v: [Number($("dayVol").value), Number($("nightVol").value)],
+    r: buzzerRegionIds,
+  };
+  payload.k = {
+    e: currentConfig.blinkEnabled ?? true,
+    i: [currentConfig.blinkDayInt ?? 75, currentConfig.blinkNightInt ?? 30],
+  };
+  payload.l = ledRegionIds;
+  payload.m = {
+    h: $("mqttHost").value.trim(),
+    p: parseInt($("mqttPort").value, 10) || 1883,
+    t: $("mqttTopic").value.trim() || "alerts/status",
+    u: $("mqttUser").value.trim(),
+    s: $("mqttPass").value.trim(),
+  };
+  payload.w = {
+    s: currentConfig.wifiSsid || payload.w?.s || "",
+    p: currentConfig.wifiPass || payload.w?.p || "",
+  };
+  payload.t = [
+    $("ntpServer1").value.trim(),
+    $("ntpServer2").value.trim(),
+    $("ntpServer3").value.trim(),
+  ];
+  payload.g = readLogMaskInputs();
+  return payload;
 }
 
 async function saveConfig(options = {}) {
@@ -804,8 +932,29 @@ async function saveConfig(options = {}) {
     throw new Error("Unauthorized");
   }
   if (!response.ok) throw new Error(`save failed: ${response.status}`);
+  currentConfigSource = JSON.parse(JSON.stringify(buildPayload()));
   storeDirtySnapshot();
   if (!silentSuccess) showToast("Збережено, налаштування застосовано");
+}
+
+async function saveCalibrationConfig() {
+  const fullPayload = buildPayload();
+  const response = await fetch("/api/saveSettings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(fullPayload),
+  });
+
+  if (response.status === 401) {
+    setAuthLocked(true, "Сесію завершено. Увійди ще раз.");
+    throw new Error("Unauthorized");
+  }
+  if (!response.ok) throw new Error(`save calibration failed: ${response.status}`);
+
+  currentConfigSource = JSON.parse(JSON.stringify(fullPayload));
+  currentConfig = normalizeConfig(currentConfigSource);
+  storeDirtySnapshot();
 }
 
 function sanitizeImportedConfig(rawConfig) {
@@ -814,10 +963,27 @@ function sanitizeImportedConfig(rawConfig) {
   return imported;
 }
 
+function hasConfigData(config) {
+  return Boolean(config && typeof config === "object" && Object.keys(config).length);
+}
+
+function getExportConfig(apiConfig) {
+  const sanitizedApiConfig = sanitizeImportedConfig(apiConfig);
+  if (hasConfigData(sanitizedApiConfig)) return sanitizedApiConfig;
+
+  const sanitizedCurrentSource = sanitizeImportedConfig(currentConfigSource);
+  if (hasConfigData(sanitizedCurrentSource)) return sanitizedCurrentSource;
+
+  const payload = buildPayload();
+  if (hasConfigData(payload)) return sanitizeImportedConfig(payload);
+
+  throw new Error("empty export config");
+}
+
 async function exportSettings() {
   try {
     const cfg = await fetchJson("/api/config");
-    const exported = sanitizeImportedConfig(cfg);
+    const exported = getExportConfig(cfg);
     const hostname = $("deviceName")?.textContent?.trim() || "alarmmini";
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
     const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
@@ -1159,7 +1325,7 @@ async function calSave() {
   }
   refreshMapPreview();
   try {
-    await saveConfig({ silentSuccess: true });
+    await saveCalibrationConfig();
     calClose();
     setActiveTab("overview");
     showToast("Мапу збережено. Налаштування застосовано, можеш перевірити результат у вкладці огляду.");
@@ -1261,14 +1427,11 @@ async function bootAuthenticated() {
   await ensureMapLoaded();
   storeDirtySnapshot();
   updateAlertsOnWeb();
-  if (activeTab === "logs") await refreshLogs();
   setTimeout(updateAlertsOnWeb, 1200);
   clearInterval(alertsTimer);
   alertsTimer = setInterval(updateAlertsOnWeb, 10000);
   clearInterval(logsTimer);
-  logsTimer = setInterval(() => {
-    if (activeTab === "logs" && !document.hidden) refreshLogs();
-  }, 4000);
+  logsTimer = null;
 }
 
 function bindAuthUi() {
@@ -1370,9 +1533,6 @@ window.triggerImportSettings = triggerImportSettings;
 window.downloadAdminLabel = downloadAdminLabel;
 window.downloadApLabel = downloadApLabel;
 window.testSubscribedAlert = testSubscribedAlert;
-window.refreshLogs = refreshLogs;
-window.clearLogs = clearLogs;
-window.disableLogs = disableLogs;
 window.testBuzzer = (isAlert) => {
   fetch(`/api/testBuzzer?alert=${isAlert ? 1 : 0}`, { credentials: "same-origin" }).catch(() => {});
   showToast(isAlert ? "Тест тривоги" : "Тест відбою");

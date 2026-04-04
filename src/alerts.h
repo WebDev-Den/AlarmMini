@@ -182,6 +182,15 @@ void alertsFetch() {
     _rebuildEffectiveAlerts();
 }
 
+void alertsReloadClientConfig() {
+    if (_mqtt.connected()) {
+        _mqtt.disconnect();
+    }
+    gMqttConnected = false;
+    _mqttLastReconnect = 0;
+    _mqttReconnectDelay = 2000;
+}
+
 void alertsHandle() {
     unsigned long now = millis();
 
