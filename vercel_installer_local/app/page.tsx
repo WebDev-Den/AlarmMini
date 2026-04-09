@@ -547,6 +547,33 @@ export default function Page() {
     return Boolean(configOverridesRef.current);
   }
 
+  function hasFullConfigShape(config: any) {
+    return Boolean(
+      isPlainObject(config) &&
+        isPlainObject(config.c) &&
+        isPlainObject(config.n) &&
+        isPlainObject(config.z) &&
+        isPlainObject(config.k) &&
+        Array.isArray(config.l) &&
+        isPlainObject(config.m) &&
+        isPlainObject(config.w),
+    );
+  }
+
+  async function resolveLiveBaseConfig() {
+    const live = await backupConfigWithRetry(2);
+    if (live && hasFullConfigShape(live)) {
+      return sanitizeConfigPayload(live);
+    }
+
+    const current = sanitizeConfigPayload(boardConfigPayloadRef.current);
+    if (hasFullConfigShape(current)) {
+      return current;
+    }
+
+    throw new Error("full_config_not_available");
+  }
+
   function openConfigModal() {
     const draft = normalizeDeviceConfig(
       getMergedConfigPayload(boardConfigPayloadRef.current),
@@ -564,7 +591,7 @@ export default function Page() {
     );
   }
 
-  async function applyConfigToConnectedBoard(merged: DeviceConfig) {
+  async function applyConfigToConnectedBoard(overridesPayload: any) {
     if (
       portState !== "connected" ||
       !isPortOpen(rememberedPortRef.current ?? portRef.current) ||
@@ -577,7 +604,11 @@ export default function Page() {
     setFlashBusy(true);
     try {
       setFlashStatus(t.config.applying);
-      const expectedConfig = getMergedConfigPayload(merged);
+      const baseConfig = await resolveLiveBaseConfig();
+      const expectedConfig = mergeConfigObjects(
+        baseConfig,
+        sanitizeConfigPayload(overridesPayload || {}),
+      );
       const boardReady = await waitForBoardReady(12000);
       if (!boardReady) {
         throw new Error("board_not_ready");
@@ -612,13 +643,14 @@ export default function Page() {
   }
 
   async function saveConfigDraft() {
+    const overrides = sanitizeConfigPayload(configDraft);
     const merged = mergeConfigObjects(
       sanitizeConfigPayload(boardConfigPayloadRef.current),
-      sanitizeConfigPayload(configDraft),
+      overrides,
     );
 
-    configOverridesRef.current = merged;
-    persistConfigToLocal(merged);
+    configOverridesRef.current = overrides;
+    persistConfigToLocal(overrides);
 
     configBackupRef.current = merged;
     syncBoardConfig(merged);
@@ -631,7 +663,7 @@ export default function Page() {
         isPortOpen(rememberedPortRef.current ?? portRef.current) &&
         !flashBusy
       ) {
-        await applyConfigToConnectedBoard(merged);
+        await applyConfigToConnectedBoard(overrides);
       } else {
         setFlashStatus(t.config.staged);
       }
@@ -640,12 +672,16 @@ export default function Page() {
   }
 
   async function applyStagedConfigToBoard() {
-    const merged = getMergedConfigPayload(boardConfigPayloadRef.current);
+    const overrides = sanitizeConfigPayload(configOverridesRef.current || configDraft);
+    const merged = mergeConfigObjects(
+      sanitizeConfigPayload(boardConfigPayloadRef.current),
+      overrides,
+    );
     configBackupRef.current = merged;
     syncBoardConfig(merged);
     setConfigBackupReady(true);
     setDefaultConfigMode(false);
-    await applyConfigToConnectedBoard(merged);
+    await applyConfigToConnectedBoard(overrides);
   }
 
   function exportConfigDraft() {
@@ -820,18 +856,65 @@ export default function Page() {
     return line.startsWith("{") && line.endsWith("}");
   }
 
+  function applyDeviceInfoPayloadToBoard(payload: any) {
+    setBoard((prev) => ({
+      ...prev,
+      ip: String(payload?.ip || prev.ip || "-"),
+      mdnsUrl: String(payload?.mdns || prev.mdnsUrl || "-"),
+      adminPassword: String(payload?.adminPassword || prev.adminPassword || "-"),
+      firmwareVersion: String(payload?.fw || prev.firmwareVersion || "-"),
+      hostname: String(payload?.hostname || prev.hostname || "-"),
+    }));
+  }
+
   function handleConfigProtocolLine(line: string): boolean {
     if (isJsonProtocolLine(line)) {
       try {
         const payload = JSON.parse(line);
         const transfer = configTransferRef.current;
+
+        if (payload?.event === "device_info") {
+          applyDeviceInfoPayloadToBoard(payload);
+          return true;
+        }
+
         if (!transfer) return true;
 
-        if (payload.event === "error") {
+        if (payload.status === "NACK" || payload.event === "error") {
           rejectConfigTransfer(String(payload.reason || "protocol_error"));
           return true;
         }
 
+        if (
+          payload.status === "ACK" &&
+          transfer.mode === "probe" &&
+          (payload.cmd === "hello" || payload.cmd === "ping")
+        ) {
+          clearConfigTransferTimeout();
+          configTransferRef.current = null;
+          transfer.resolve(true);
+          return true;
+        }
+
+        if (
+          payload.status === "ACK" &&
+          transfer.mode === "restore" &&
+          payload.cmd === "import_config"
+        ) {
+          clearConfigTransferTimeout();
+          configTransferRef.current = null;
+          transfer.resolve(true);
+          return true;
+        }
+
+        if (payload.event === "export_config" && transfer.mode === "backup") {
+          clearConfigTransferTimeout();
+          configTransferRef.current = null;
+          transfer.resolve(payload.config || null);
+          return true;
+        }
+
+        // Legacy protocol compatibility.
         if (payload.event === "ready") {
           if (transfer.mode === "probe") {
             clearConfigTransferTimeout();
@@ -977,7 +1060,7 @@ export default function Page() {
       };
 
       try {
-        await writeSerialLine('{"cmd":"get_config"}');
+        await writeSerialLine('{"cmd":"export_config"}');
       } catch {
         rejectConfigTransfer("backup_write_failed");
       }
@@ -985,8 +1068,6 @@ export default function Page() {
   }
 
   async function restoreConfigViaSerial(configPayload: any) {
-    const serialized = JSON.stringify(configPayload || {});
-    const payloadBytes = new TextEncoder().encode(serialized);
     setFlashStatus(t.flash.restoringConfig);
     resetConfigTransferState();
 
@@ -1006,35 +1087,12 @@ export default function Page() {
       };
 
       try {
-        await writeSerialLine('{"cmd":"set_begin"}');
-        await new Promise<void>((readyResolve, readyReject) => {
-          const transfer = configTransferRef.current;
-          if (!transfer) {
-            readyReject(new Error("restore_not_initialized"));
-            return;
-          }
-          clearConfigTransferTimeout();
-          transfer.timeoutId = setTimeout(
-            () => rejectConfigTransfer("restore_ready_timeout"),
-            8000,
-          );
-          transfer.readyResolve = readyResolve;
-        });
-        const chunkSize = 80;
-        for (let offset = 0; offset < payloadBytes.length; offset += chunkSize) {
-          await writeSerialLine(
-            JSON.stringify({
-              cmd: "set_data",
-              data: encodeHexBytes(payloadBytes.slice(offset, offset + chunkSize)),
-            }),
-          );
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        }
-        clearConfigTransferTimeout();
-        if (configTransferRef.current) {
-          armConfigTransferTimeout("restore_timeout", 30000);
-        }
-        await writeSerialLine('{"cmd":"set_end"}');
+        await writeSerialLine(
+          JSON.stringify({
+            cmd: "import_config",
+            config: sanitizeConfigPayload(configPayload || {}),
+          }),
+        );
       } catch {
         rejectConfigTransfer("restore_write_failed");
       }

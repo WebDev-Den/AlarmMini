@@ -24,8 +24,7 @@ static unsigned long _mqttLastReconnect = 0;
 static int           _mqttReconnectDelay = 2000;
 static unsigned long _internetLastCheck = 0;
 static constexpr unsigned long INTERNET_CHECK_INTERVAL_MS = 60000UL;
-static constexpr uint16_t INTERNET_CONNECT_TIMEOUT_MS = 250;
-static constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 3;
+static constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 1;
 
 static void _formatLogClock(char* buffer, size_t size)
 {
@@ -167,13 +166,8 @@ bool _mqttConnect() {
 
 bool _checkInternetConnection() {
     if (WiFi.status() != WL_CONNECTED) return false;
-
-    WiFiClient testClient;
-    testClient.setTimeout(INTERNET_CONNECT_TIMEOUT_MS);
-    bool ok = testClient.connect(IPAddress(1, 1, 1, 1), 80);
-    if (ok) testClient.stop();
-    yield();
-    return ok;
+    IPAddress ip = WiFi.localIP();
+    return ip[0] != 0;
 }
 
 void alertsFetch() {
@@ -207,6 +201,18 @@ void alertsHandle() {
         }
     } else if (WiFi.status() != WL_CONNECTED) {
         gInternetConnected = false;
+    }
+
+    // Never keep stale MQTT sockets when transport is down.
+    if (WiFi.status() != WL_CONNECTED || !gInternetConnected) {
+        if (_mqtt.connected()) {
+            _mqtt.disconnect();
+        }
+        if (gMqttConnected) {
+            gMqttConnected = false;
+            LOG_WARN(LOG_CAT_MQTT, "Paused: waiting for WiFi/Internet recovery");
+        }
+        return;
     }
 
     if (_mqtt.connected()) {

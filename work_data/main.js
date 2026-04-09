@@ -897,7 +897,11 @@ function buildPayload() {
     e: currentConfig.blinkEnabled ?? true,
     i: [currentConfig.blinkDayInt ?? 75, currentConfig.blinkNightInt ?? 30],
   };
-  payload.l = ledRegionIds;
+  if (MAX_LEDS > 0) {
+    payload.l = ledRegionIds;
+  } else if (!Array.isArray(payload.l)) {
+    payload.l = [];
+  }
   payload.m = {
     h: $("mqttHost").value.trim(),
     p: parseInt($("mqttPort").value, 10) || 1883,
@@ -963,6 +967,28 @@ function sanitizeImportedConfig(rawConfig) {
   return imported;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeConfigForSave(baseConfig, overrideConfig) {
+  if (!isPlainObject(baseConfig)) return JSON.parse(JSON.stringify(overrideConfig || {}));
+  const result = JSON.parse(JSON.stringify(baseConfig));
+  const overrides = overrideConfig || {};
+
+  Object.keys(overrides).forEach((key) => {
+    const nextValue = overrides[key];
+    if (nextValue === undefined) return;
+    if (isPlainObject(nextValue) && isPlainObject(result[key])) {
+      result[key] = mergeConfigForSave(result[key], nextValue);
+      return;
+    }
+    result[key] = nextValue;
+  });
+
+  return result;
+}
+
 function hasConfigData(config) {
   return Boolean(config && typeof config === "object" && Object.keys(config).length);
 }
@@ -1009,7 +1035,9 @@ function triggerImportSettings() {
 async function importSettings(file) {
   if (!file) return;
   try {
-    const payload = sanitizeImportedConfig(JSON.parse(await file.text()));
+    const importedConfig = sanitizeImportedConfig(JSON.parse(await file.text()));
+    const currentFullConfig = sanitizeImportedConfig(await fetchJson("/api/config"));
+    const payload = mergeConfigForSave(currentFullConfig, importedConfig);
     const response = await fetch("/api/saveSettings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

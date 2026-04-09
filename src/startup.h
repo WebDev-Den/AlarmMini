@@ -209,17 +209,15 @@ bool startupWifiWithEffect(uint8_t ledCount)
         yield();
     }
 
-    LOG_WARN(LOG_CAT_WIFI, "Portal timeout -> restart");
+    LOG_WARN(LOG_CAT_WIFI, "Portal timeout -> keep AP mode without restart");
     const uint8_t modeCap = modeBrightnessLimit(night);
     _showSolidFor(ledCount, strip.Color(min<uint8_t>(startupCfg.maxBrightness, modeCap), 0, 0), 500);
     strip.clear();
     strip.show();
-    const unsigned long restartPauseStart = millis();
-    while (millis() - restartPauseStart < 300)
-    {
-        serialProtocolHandle();
-        yield();
-    }
-    ESP.restart();
+
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP(AP_NAME, AP_PASSWORD);
+    LOG_INFO(LOG_CAT_WIFI, "Fallback AP active SSID='%s' IP=%s",
+             AP_NAME, WiFi.softAPIP().toString().c_str());
     return false;
 }

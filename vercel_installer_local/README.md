@@ -8,7 +8,9 @@ Local-only starter project for deploying a release picker and future Web Serial 
 - shows firmware versions
 - shows attached `.bin` assets
 - checks whether `Web Serial` is available in the browser
-- provides a starter UI for a future flashing flow
+- backs up config from device over UART via `{"cmd":"export_config"}`
+- restores config over UART via `{"cmd":"import_config","config":{...}}`
+- updates board snapshot from UART `device_info` events
 
 ## Environment
 

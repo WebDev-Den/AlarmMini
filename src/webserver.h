@@ -1,5 +1,6 @@
 #pragma once
 #include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include "config.h"
@@ -12,7 +13,7 @@
 extern char gHostname[];
 
 ESP8266WebServer gServer(80);
-String gSessionToken;
+char gSessionToken[33] = {0};
 bool gRestartScheduled = false;
 unsigned long gRestartAtMs = 0;
 
@@ -67,7 +68,9 @@ String getCookieValue(const String &name)
 
 bool isAuthorized()
 {
-    return gSessionToken.length() && getCookieValue("ESPSESSION") == gSessionToken;
+    if (!gSessionToken[0])
+        return false;
+    return getCookieValue("ESPSESSION") == gSessionToken;
 }
 
 bool ensureAuthorized()
@@ -80,12 +83,12 @@ bool ensureAuthorized()
     return false;
 }
 
-void sendJson(DynamicJsonDocument &doc, int status = 200)
+void sendJson(JsonDocument &doc, int status = 200)
 {
     addCors();
-    String json;
-    serializeJson(doc, json);
-    gServer.send(status, "application/json", json);
+    gServer.setContentLength(measureJson(doc));
+    gServer.send(status, "application/json", "");
+    serializeJson(doc, gServer.client());
 }
 
 void mergeMissingRecursive(JsonVariant dst, JsonVariantConst src)
@@ -161,6 +164,25 @@ void mergeOverrideRecursive(JsonVariant dst, JsonVariantConst src)
     }
 }
 
+bool hasNonEmptyText(JsonVariantConst value)
+{
+    if (value.isNull())
+        return false;
+    const char *text = value.as<const char *>();
+    return text && text[0] != '\0';
+}
+
+void preserveTextIfIncomingEmpty(JsonObject dstObj, JsonObjectConst srcObj, const char *key)
+{
+    if (!key || !dstObj.containsKey(key) || !srcObj.containsKey(key))
+        return;
+
+    JsonVariantConst incoming = dstObj[key];
+    JsonVariantConst previous = srcObj[key];
+    if (!hasNonEmptyText(incoming) && hasNonEmptyText(previous))
+        dstObj[key] = previous;
+}
+
 void handleSession()
 {
     DynamicJsonDocument doc(128);
@@ -194,16 +216,19 @@ void handleLogin()
         return;
     }
 
-    gSessionToken = String(ESP.getChipId(), HEX) + String(micros(), HEX);
+    snprintf(gSessionToken, sizeof(gSessionToken), "%08X%08lX", ESP.getChipId(), micros());
     LOG_INFO(LOG_CAT_WEB, "Login successful");
     addCors();
-    gServer.sendHeader("Set-Cookie", "ESPSESSION=" + gSessionToken + "; Path=/; HttpOnly; SameSite=Lax");
+    String cookie = "ESPSESSION=";
+    cookie += gSessionToken;
+    cookie += "; Path=/; HttpOnly; SameSite=Lax";
+    gServer.sendHeader("Set-Cookie", cookie);
     gServer.send(200, "application/json", "{\"ok\":true}");
 }
 
 void handleLogout()
 {
-    gSessionToken = "";
+    gSessionToken[0] = '\0';
     LOG_INFO(LOG_CAT_WEB, "Session closed");
     addCors();
     gServer.sendHeader("Set-Cookie", "ESPSESSION=deleted; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
@@ -264,26 +289,8 @@ void handleGetConfig()
     if (!ensureAuthorized())
         return;
 
-    File f = LittleFS.open("/config.json", "r");
-    if (!f)
-    {
-        addCors();
-        gServer.send(404, "application/json", "{}");
-        return;
-    }
-
     DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
-    DeserializationError err = deserializeJson(doc, f);
-    f.close();
-
-    if (err)
-    {
-        addCors();
-        gServer.send(500, "application/json", "{}");
-        return;
-    }
-
-    doc.remove("animations");
+    storagePopulateJson(doc);
     sendJson(doc);
 }
 
@@ -299,7 +306,8 @@ void handleSaveSettings()
         return;
     }
 
-    DynamicJsonDocument requestDoc(CONFIG_JSON_CAPACITY);
+    constexpr size_t SAVE_DOC_CAPACITY = CONFIG_JSON_CAPACITY + 1024;
+    DynamicJsonDocument requestDoc(SAVE_DOC_CAPACITY);
     DeserializationError err = deserializeJson(requestDoc, gServer.arg("plain"));
     if (err)
     {
@@ -310,12 +318,43 @@ void handleSaveSettings()
 
     requestDoc.remove("adminPassword");
     requestDoc.remove("animations");
+    const bool requestHasWifi = requestDoc.containsKey("w");
+    const bool requestHasMqtt = requestDoc.containsKey("m");
 
-    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
-    storagePopulateJson(doc);
-    mergeOverrideRecursive(doc.as<JsonVariant>(), requestDoc.as<JsonVariantConst>());
-    doc.remove("adminPassword");
-    doc.remove("animations");
+    DynamicJsonDocument currentDoc(SAVE_DOC_CAPACITY);
+    storagePopulateJson(currentDoc);
+
+    DynamicJsonDocument effectiveDoc(SAVE_DOC_CAPACITY);
+    effectiveDoc.set(requestDoc.as<JsonVariantConst>());
+    mergeMissingRecursive(effectiveDoc.as<JsonVariant>(), currentDoc.as<JsonVariantConst>());
+
+    JsonObject effectiveWifi = effectiveDoc["w"].to<JsonObject>();
+    JsonObject effectiveMqtt = effectiveDoc["m"].to<JsonObject>();
+    JsonObjectConst currentWifi = currentDoc["w"].as<JsonObjectConst>();
+    JsonObjectConst currentMqtt = currentDoc["m"].as<JsonObjectConst>();
+
+    // Safety net for partial UI payloads: never wipe network credentials by accident.
+    if (!requestHasWifi)
+    {
+        effectiveDoc["w"] = currentWifi;
+    }
+    else
+    {
+        preserveTextIfIncomingEmpty(effectiveWifi, currentWifi, "s");
+        preserveTextIfIncomingEmpty(effectiveWifi, currentWifi, "p");
+    }
+
+    if (!requestHasMqtt)
+    {
+        effectiveDoc["m"] = currentMqtt;
+    }
+    else
+    {
+        preserveTextIfIncomingEmpty(effectiveMqtt, currentMqtt, "h");
+        preserveTextIfIncomingEmpty(effectiveMqtt, currentMqtt, "t");
+        preserveTextIfIncomingEmpty(effectiveMqtt, currentMqtt, "u");
+        preserveTextIfIncomingEmpty(effectiveMqtt, currentMqtt, "s");
+    }
 
     const String prevWifiSsid = String(gConfig.wifiSsid);
     const String prevWifiPass = String(gConfig.wifiPass);
@@ -325,17 +364,15 @@ void handleSaveSettings()
     const String prevMqttUser = String(gConfig.mqttUser);
     const String prevMqttPass = String(gConfig.mqttPass);
 
-    storageApplyJson(doc);
-    File f = LittleFS.open("/config.json", "w");
-    if (!f)
+    char storageError[32] = {0};
+    if (!storageSaveConfigFromJson(effectiveDoc.as<JsonVariantConst>(), false, storageError, sizeof(storageError)))
     {
-        LOG_ERROR(LOG_CAT_CONFIG, "Failed to open config.json for write");
+        LOG_ERROR(LOG_CAT_CONFIG, "Storage save failed: %s", storageError);
         addCors();
         gServer.send(500, "text/plain", "Write failed");
         return;
     }
-    serializeJson(doc, f);
-    f.close();
+
     loggerSetMask(gConfig.logMask);
 
     const bool wifiChanged =
@@ -490,6 +527,59 @@ void handleDisableLogs()
     gServer.send(200, "application/json", "{\"ok\":true,\"disabled\":true}");
 }
 
+void handleConfigApiGet()
+{
+    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
+    storagePopulateJson(doc);
+    sendJson(doc);
+}
+
+void handleConfigApiPost()
+{
+    if (!gServer.hasArg("plain"))
+    {
+        addCors();
+        gServer.send(400, "application/json", "{\"ok\":false,\"reason\":\"missing_body\"}");
+        return;
+    }
+
+    DynamicJsonDocument incoming(CONFIG_JSON_CAPACITY);
+    auto err = deserializeJson(incoming, gServer.arg("plain"));
+    if (err)
+    {
+        addCors();
+        gServer.send(400, "application/json", "{\"ok\":false,\"reason\":\"json_invalid\"}");
+        return;
+    }
+
+    char storageError[32] = {0};
+    if (!storageSaveConfigFromJson(incoming.as<JsonVariantConst>(), false, storageError, sizeof(storageError)))
+    {
+        addCors();
+        gServer.send(422, "application/json", "{\"ok\":false,\"reason\":\"validation_or_storage\"}");
+        return;
+    }
+
+    loggerSetMask(gConfig.logMask);
+    addCors();
+    gServer.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleHealth()
+{
+    StaticJsonDocument<384> doc;
+    doc["uptimeMs"] = millis();
+    doc["heapFree"] = ESP.getFreeHeap();
+    doc["heapMaxBlock"] = ESP.getMaxFreeBlockSize();
+    doc["heapFragPct"] = ESP.getHeapFragmentation();
+    doc["resetReason"] = ESP.getResetReason();
+    doc["wifiStatus"] = WiFi.status();
+    doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
+    doc["mqttConnected"] = gMqttConnected;
+    doc["internetConnected"] = gInternetConnected;
+    sendJson(doc);
+}
+
 void webserverInit()
 {
     gServer.collectHeaders("Cookie");
@@ -518,6 +608,9 @@ void webserverInit()
     gServer.on("/api/calibrate/led", HTTP_GET, handleCalibrateLed);
     gServer.on("/api/calibrate/done", HTTP_GET, handleCalibrateDone);
     gServer.on("/api/restart", HTTP_GET, handleRestart);
+    gServer.on("/config", HTTP_GET, handleConfigApiGet);
+    gServer.on("/config", HTTP_POST, handleConfigApiPost);
+    gServer.on("/health", HTTP_GET, handleHealth);
 
     gServer.serveStatic("/index.html", LittleFS, "/index.html");
     gServer.serveStatic("/style.css", LittleFS, "/style.css");

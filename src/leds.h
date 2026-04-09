@@ -159,16 +159,18 @@ uint32_t scalePackedColor(uint32_t color, float brightness) {
     return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
 }
 
-float internetOfflinePulse(unsigned long nowMs) {
-    constexpr float minBrightness = 0.15f;
+float internetOfflinePulse(unsigned long nowMs, bool night) {
+    const float minBrightness = night ? 0.08f : 0.40f;
+    const float maxBrightness = night ? 0.22f : 0.68f;
     const float t = nowMs / 1000.0f;
-    const float wave = 0.5f + 0.5f * sinf((2.0f * PI * t) / 2.8f);
-    return minBrightness + wave * (1.0f - minBrightness);
+    const float wave = 0.5f + 0.5f * sinf((2.0f * PI * t) / 3.2f);
+    return minBrightness + wave * (maxBrightness - minBrightness);
 }
 
-float mqttOfflinePulse(unsigned long nowMs) {
-    constexpr float minBrightness = 0.15f;
-    const float phase = fmodf(nowMs / 1000.0f, 1.8f);
+float mqttOfflinePulse(unsigned long nowMs, bool night) {
+    const float minBrightness = night ? 0.10f : 0.42f;
+    const float maxBrightness = night ? 0.28f : 0.74f;
+    const float phase = fmodf(nowMs / 1000.0f, 2.4f);
 
     auto pulseAt = [](float x, float center, float halfWidth) -> float {
         float distance = fabsf(x - center);
@@ -178,7 +180,7 @@ float mqttOfflinePulse(unsigned long nowMs) {
 
     float pulse = max(pulseAt(phase, 0.20f, 0.16f), pulseAt(phase, 0.55f, 0.16f));
     pulse = pulse * pulse;
-    return minBrightness + pulse * (1.0f - minBrightness);
+    return minBrightness + pulse * (maxBrightness - minBrightness);
 }
 
 uint32_t retainedStateColorForLed(int ledIndex, bool night, unsigned long now, const AnimationConfig& offlineCfg) {
@@ -215,7 +217,7 @@ void renderRetainedStateWithPulse(bool night, bool mqttLost) {
     const AnimationConfig offlineCfg = animationForState(
         mqttLost ? MAP_STATE_MQTT_LOST : MAP_STATE_INTERNET_LOST
     );
-    const float pulseBrightness = mqttLost ? mqttOfflinePulse(now) : internetOfflinePulse(now);
+    const float pulseBrightness = mqttLost ? mqttOfflinePulse(now, night) : internetOfflinePulse(now, night);
 
     for (int i = 0; i < gConfig.ledCount; i++) {
         uint32_t baseColor = retainedStateColorForLed(i, night, now, offlineCfg);
