@@ -14,7 +14,7 @@
 #define WIFI_PASS_MAXLEN  64
 #define NTP_SERVER_MAXLEN 64
 #define ADMIN_PASS_MAXLEN 32
-#define FIRMWARE_VERSION  "1.0.1-beta"
+#define FIRMWARE_VERSION  "1.0.2"
 
 #define REGIONS_COUNT 25
 
