@@ -39,6 +39,24 @@ static const char *logLevelLabel(uint8_t level)
     }
 }
 
+static void sanitizeAsciiPrintable(const char *src, char *dst, size_t dstSize)
+{
+    if (!dst || dstSize == 0)
+        return;
+
+    size_t out = 0;
+    const char *input = src ? src : "";
+    while (*input && out + 1 < dstSize)
+    {
+        const unsigned char ch = static_cast<unsigned char>(*input++);
+        if ((ch >= 32 && ch <= 126) || ch == '\t')
+        {
+            dst[out++] = static_cast<char>(ch);
+        }
+    }
+    dst[out] = '\0';
+}
+
 void loggerInit()
 {
     gLogHead = 0;
@@ -107,8 +125,11 @@ void loggerWrite(uint8_t level, uint16_t category, const char *message)
     if (!loggerIsEnabled(category))
         return;
 
+    char cleanMessage[LOG_MESSAGE_LEN];
+    sanitizeAsciiPrintable(message, cleanMessage, sizeof(cleanMessage));
+
     char line[LOG_MESSAGE_LEN + 32];
-    snprintf(line, sizeof(line), "[LOG][%s][%s] %s", loggerCategoryKey(category), logLevelLabel(level), message ? message : "");
+    snprintf(line, sizeof(line), "[LOG][%s][%s] %s", loggerCategoryKey(category), logLevelLabel(level), cleanMessage);
     Serial.println(line);
 
     LogEntry &entry = gLogEntries[gLogHead];
@@ -116,7 +137,7 @@ void loggerWrite(uint8_t level, uint16_t category, const char *message)
     entry.ms = millis();
     entry.level = level;
     entry.category = category;
-    strncpy(entry.message, message ? message : "", LOG_MESSAGE_LEN - 1);
+    strncpy(entry.message, cleanMessage, LOG_MESSAGE_LEN - 1);
     entry.message[LOG_MESSAGE_LEN - 1] = '\0';
 
     gLogHead = (gLogHead + 1) % LOG_BUFFER_SIZE;

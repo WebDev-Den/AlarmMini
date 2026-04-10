@@ -207,6 +207,23 @@ function decodeHex(encoded: string) {
   return new TextDecoder().decode(bytes);
 }
 
+const SERIAL_WARMUP_MS = 1200;
+
+function sanitizeSerialLine(raw: string): string {
+  if (!raw) return "";
+  const printable = raw.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
+  const trimmed = printable.trim();
+  if (!trimmed) return "";
+
+  const jsonStart = trimmed.indexOf("{");
+  if (jsonStart >= 0) return trimmed.slice(jsonStart).trim();
+
+  const amcfgStart = trimmed.indexOf("AMCFG ");
+  if (amcfgStart >= 0) return trimmed.slice(amcfgStart).trim();
+
+  return trimmed;
+}
+
 function formatDate(iso: string) {
   try {
     return new Intl.DateTimeFormat("uk-UA", {
@@ -379,6 +396,7 @@ export default function Page() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const backupStartedAtRef = useRef<number>(0);
   const boardConfigPayloadRef = useRef<any>(sanitizeConfigPayload(DEFAULT_DEVICE_CONFIG));
+  const serialWarmupUntilRef = useRef<number>(0);
 
   useEffect(() => {
     if (backupProgress === null) return;
@@ -1214,9 +1232,21 @@ export default function Page() {
         buffer = lines.pop() ?? "";
 
         lines
-          .map((line) => line.trim())
+          .map((line) => sanitizeSerialLine(line))
           .filter(Boolean)
           .forEach((line) => {
+            if (Date.now() < serialWarmupUntilRef.current) {
+              const protocolLike =
+                isJsonProtocolLine(line) || line.startsWith("AMCFG ");
+              const logLike =
+                line.startsWith("[LOG]") ||
+                line.startsWith("[WiFi]") ||
+                line.startsWith("[MQTT]") ||
+                line.startsWith("[Internet]") ||
+                line.startsWith("[mDNS]") ||
+                line.startsWith("[Admin]");
+              if (!protocolLike && !logLike) return;
+            }
             if (handleConfigProtocolLine(line)) return;
             setSerialLog((prev) => [line, ...prev].slice(0, 60));
             setBoard((prev) =>
@@ -1275,6 +1305,7 @@ export default function Page() {
     if (!isPortOpen(port)) {
       await port.open({ baudRate: 115200 });
     }
+    serialWarmupUntilRef.current = Date.now() + SERIAL_WARMUP_MS;
     portRef.current = port;
     rememberedPortRef.current = port;
     setPortState("connected");
