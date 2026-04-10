@@ -690,6 +690,38 @@ export default function Page() {
     await applyConfigToConnectedBoard(overrides);
   }
 
+  async function readConfigFromConnectedBoard() {
+    if (
+      portState !== "connected" ||
+      !isPortOpen(rememberedPortRef.current ?? portRef.current) ||
+      flashBusy
+    ) {
+      setFlashStatus(t.config.connectToRead);
+      return;
+    }
+
+    setFlashBusy(true);
+    try {
+      setFlashStatus(t.config.reading);
+      const backup = await backupConfigWithRetry(2);
+      if (!backup) {
+        setFlashStatus(t.config.readFailed);
+        return;
+      }
+      const merged = getMergedConfigPayload(backup);
+      configBackupRef.current = merged;
+      syncBoardConfig(merged);
+      setConfigBackupReady(true);
+      setDefaultConfigMode(false);
+      setFlashStatus(t.config.readOk);
+    } catch (readError) {
+      console.error("[config-read]", readError);
+      setFlashStatus(t.config.readFailed);
+    } finally {
+      setFlashBusy(false);
+    }
+  }
+
   function exportConfigDraft() {
     const payload = getMergedConfigPayload(boardConfigPayloadRef.current);
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -1793,6 +1825,23 @@ export default function Page() {
                     <h3 className="panel-title">{t.config.subtitle}</h3>
                   </div>
                   <div className="button-stack">
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => void readConfigFromConnectedBoard()}
+                      disabled={
+                        flashBusy ||
+                        portState !== "connected" ||
+                        !isPortOpen(rememberedPortRef.current ?? portRef.current)
+                      }
+                      title={
+                        portState === "connected"
+                          ? ""
+                          : t.config.connectToRead
+                      }
+                    >
+                      {t.config.readNow}
+                    </button>
                     {hasConfigOverrides() ? (
                       <button
                         type="button"
