@@ -1,4 +1,5 @@
 #include "storage.h"
+#include "reset_trace.h"
 
 #include <LittleFS.h>
 #include <ESP8266WiFi.h>
@@ -350,6 +351,7 @@ uint32_t computeConfigCrc(JsonVariantConst cfg)
 
 bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
 {
+    resetTraceSetStage("cfg_write_begin");
     File tmp = LittleFS.open(CONFIG_TMP_PATH, "w");
     if (!tmp)
     {
@@ -393,6 +395,7 @@ bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
         return false;
     }
 
+    resetTraceSetStage("cfg_write_done");
     return true;
 }
 

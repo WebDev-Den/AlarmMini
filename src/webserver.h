@@ -9,6 +9,7 @@
 #include "alerts.h"
 #include "leds.h"
 #include "logger.h"
+#include "reset_trace.h"
 
 extern char gHostname[];
 
@@ -395,6 +396,7 @@ void handleSaveSettings()
         gServer.send(422, "application/json", "{\"ok\":false,\"reason\":\"invalid_full_config\"}");
         return;
     }
+    resetTraceSetStage("web_save");
 
     if (flags.wifiChanged)
     {
@@ -570,16 +572,16 @@ void handleConfigApiPost()
 
 void handleHealth()
 {
-    StaticJsonDocument<384> doc;
+    StaticJsonDocument<768> doc;
     doc["uptimeMs"] = millis();
     doc["heapFree"] = ESP.getFreeHeap();
     doc["heapMaxBlock"] = ESP.getMaxFreeBlockSize();
     doc["heapFragPct"] = ESP.getHeapFragmentation();
-    doc["resetReason"] = ESP.getResetReason();
     doc["wifiStatus"] = WiFi.status();
     doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
     doc["mqttConnected"] = gMqttConnected;
     doc["internetConnected"] = gInternetConnected;
+    resetTraceFillHealth(doc);
     sendJson(doc);
 }
 

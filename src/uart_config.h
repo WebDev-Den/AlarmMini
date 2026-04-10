@@ -7,6 +7,7 @@
 #include "storage.h"
 #include "logger.h"
 #include "alerts.h"
+#include "reset_trace.h"
 
 void scheduleRestart(unsigned long delayMs);
 extern char gHostname[];
@@ -98,6 +99,9 @@ inline void sendDeviceInfo()
     doc["ip"] = ip.toString();
     doc["adminPassword"] = gConfig.adminPassword;
     doc["hostname"] = gHostname[0] ? gHostname : "unset";
+    doc["resetReason"] = resetTraceReason();
+    doc["lastStage"] = resetTraceStage();
+    doc["bootCount"] = resetTraceBootCount();
 
     char mdns[48];
     snprintf(mdns, sizeof(mdns), "http://%s.local", gHostname[0] ? gHostname : "unset");

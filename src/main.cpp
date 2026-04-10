@@ -11,6 +11,7 @@
 #include "startup.h"
 #include "webserver.h"
 #include "uart_config.h"
+#include "reset_trace.h"
 
 char gHostname[32];
 
@@ -70,6 +71,7 @@ void setup()
 
     LOG_INFO(LOG_CAT_SYSTEM, "AlarmMini firmware %s", FIRMWARE_VERSION);
     LOG_INFO(LOG_CAT_SYSTEM, "Reset reason: %s", ESP.getResetReason().c_str());
+    LOG_INFO(LOG_CAT_SYSTEM, "Reset info: %s", ESP.getResetInfo().c_str());
 
     if (!LittleFS.begin())
     {
@@ -79,6 +81,8 @@ void setup()
     {
         LOG_INFO(LOG_CAT_CONFIG, "LittleFS ready");
     }
+    resetTraceInit();
+    resetTraceSetStage("storage_init");
 
     storageInit();
     loggerSetMask(gConfig.logMask);
@@ -91,9 +95,11 @@ void setup()
 
     ledsInit();
     buzzerInit();
+    resetTraceSetStage("wifi_start");
 
     uint8_t ledCount = max((int)gConfig.ledCount, 1);
     startupWifiWithEffect(ledCount);
+    resetTraceSetStage("wifi_ready");
 
     if (MDNS.begin(gHostname))
     {
@@ -112,6 +118,7 @@ void setup()
 
     alertsFetch();
     webserverInit();
+    resetTraceSetStage("runtime");
     uartcfg::sendDeviceInfo();
 
     LOG_INFO(LOG_CAT_SYSTEM, "Ready at http://%s", WiFi.localIP().toString().c_str());

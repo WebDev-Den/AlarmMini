@@ -30,6 +30,9 @@ type BoardSnapshot = {
   adminPassword: string;
   firmwareVersion: string;
   hostname: string;
+  resetReason: string;
+  lastStage: string;
+  bootCount: string;
   lastLine: string;
 };
 
@@ -148,6 +151,9 @@ function getEmptyBoard(): BoardSnapshot {
     adminPassword: "-",
     firmwareVersion: "-",
     hostname: "-",
+    resetReason: "-",
+    lastStage: "-",
+    bootCount: "-",
     lastLine: "-",
   };
 }
@@ -864,6 +870,9 @@ export default function Page() {
       adminPassword: String(payload?.adminPassword || prev.adminPassword || "-"),
       firmwareVersion: String(payload?.fw || prev.firmwareVersion || "-"),
       hostname: String(payload?.hostname || prev.hostname || "-"),
+      resetReason: String(payload?.resetReason || prev.resetReason || "-"),
+      lastStage: String(payload?.lastStage || prev.lastStage || "-"),
+      bootCount: String(payload?.bootCount ?? prev.bootCount ?? "-"),
     }));
   }
 
@@ -1832,14 +1841,6 @@ export default function Page() {
                 <strong>{board.wifiStatus}</strong>
               </div>
               <div className="info-tile">
-                <span>{t.page.internet}</span>
-                <strong>{board.internetStatus}</strong>
-              </div>
-              <div className="info-tile">
-                <span>{t.page.mqtt}</span>
-                <strong>{board.mqttStatus}</strong>
-              </div>
-              <div className="info-tile">
                 <span>{t.page.ip}</span>
                 <strong>{board.ip}</strong>
               </div>
@@ -1856,8 +1857,16 @@ export default function Page() {
                 <strong>{board.firmwareVersion}</strong>
               </div>
               <div className="info-tile">
-                <span>{t.page.lastLine}</span>
-                <strong>{board.lastLine}</strong>
+                <span>{t.page.resetReason}</span>
+                <strong>{board.resetReason}</strong>
+              </div>
+              <div className="info-tile">
+                <span>{t.page.lastStage}</span>
+                <strong>{board.lastStage}</strong>
+              </div>
+              <div className="info-tile">
+                <span>{t.page.bootCount}</span>
+                <strong>{board.bootCount}</strong>
               </div>
             </div>
 
