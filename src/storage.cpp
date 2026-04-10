@@ -14,6 +14,168 @@ constexpr uint32_t CONFIG_MAGIC = 0x414D4346UL; // AMCF
 uint32_t gLastSavedCrc = 0;
 bool loadEnvelopeFromPath(const char *path, DynamicJsonDocument &root);
 
+bool isNumber(JsonVariantConst v)
+{
+    return v.is<int>() || v.is<long>() || v.is<unsigned int>() || v.is<unsigned long>() ||
+           v.is<float>() || v.is<double>();
+}
+
+bool readObject(JsonVariantConst root, const char *key, JsonObjectConst &out)
+{
+    out = root[key].as<JsonObjectConst>();
+    return !out.isNull();
+}
+
+bool isStringWithin(JsonVariantConst value, size_t maxLen)
+{
+    if (value.isNull())
+        return false;
+    const char *text = value.as<const char *>();
+    return text && strlen(text) < maxLen;
+}
+
+bool validateColorArray(JsonVariantConst value)
+{
+    JsonArrayConst arr = value.as<JsonArrayConst>();
+    if (arr.isNull() || arr.size() != 4)
+        return false;
+    for (uint8_t i = 0; i < 4; i++)
+    {
+        if (!isNumber(arr[i]))
+            return false;
+    }
+    return true;
+}
+
+bool validateFullConfigJson(JsonVariantConst cfg, char *error, size_t errorSize)
+{
+    auto setErr = [&](const char *code)
+    {
+        if (error && errorSize)
+            snprintf(error, errorSize, "%s", code);
+    };
+
+    if (cfg.isNull() || !cfg.is<JsonObjectConst>())
+    {
+        setErr("cfg_invalid");
+        return false;
+    }
+
+    JsonObjectConst c;
+    if (!readObject(cfg, "c", c))
+    {
+        setErr("miss_c");
+        return false;
+    }
+    JsonObjectConst cDay;
+    JsonObjectConst cNight;
+    if (!readObject(c, "d", cDay) || !readObject(c, "n", cNight) ||
+        !validateColorArray(cDay["a"]) || !validateColorArray(cDay["c"]) ||
+        !validateColorArray(cNight["a"]) || !validateColorArray(cNight["c"]))
+    {
+        setErr("bad_c");
+        return false;
+    }
+
+    JsonObjectConst n;
+    if (!readObject(cfg, "n", n))
+    {
+        setErr("miss_n");
+        return false;
+    }
+    JsonArrayConst nStart = n["s"].as<JsonArrayConst>();
+    JsonArrayConst nEnd = n["x"].as<JsonArrayConst>();
+    JsonArrayConst nPulse = n["p"].as<JsonArrayConst>();
+    if (n["e"].isNull() || nStart.isNull() || nEnd.isNull() || nPulse.isNull() ||
+        nStart.size() != 2 || nEnd.size() != 2 || nPulse.size() != 2 ||
+        !isNumber(n["b"]))
+    {
+        setErr("bad_n");
+        return false;
+    }
+
+    JsonObjectConst z;
+    if (!readObject(cfg, "z", z))
+    {
+        setErr("miss_z");
+        return false;
+    }
+    JsonArrayConst zVol = z["v"].as<JsonArrayConst>();
+    JsonArrayConst zReg = z["r"].as<JsonArrayConst>();
+    if (z["e"].isNull() || zVol.isNull() || zVol.size() != 2 || zReg.isNull())
+    {
+        setErr("bad_z");
+        return false;
+    }
+
+    JsonObjectConst k;
+    if (!readObject(cfg, "k", k))
+    {
+        setErr("miss_k");
+        return false;
+    }
+    JsonArrayConst kInt = k["i"].as<JsonArrayConst>();
+    if (k["e"].isNull() || kInt.isNull() || kInt.size() != 2)
+    {
+        setErr("bad_k");
+        return false;
+    }
+
+    JsonArrayConst leds = cfg["l"].as<JsonArrayConst>();
+    if (leds.isNull() || leds.size() != MAX_LEDS)
+    {
+        setErr("bad_l");
+        return false;
+    }
+
+    JsonObjectConst m;
+    if (!readObject(cfg, "m", m) ||
+        !isStringWithin(m["h"], MQTT_HOST_MAXLEN) ||
+        !isNumber(m["p"]) ||
+        !isStringWithin(m["t"], MQTT_TOPIC_MAXLEN) ||
+        !isStringWithin(m["u"], MQTT_USER_MAXLEN) ||
+        !isStringWithin(m["s"], MQTT_PASS_MAXLEN))
+    {
+        setErr("bad_m");
+        return false;
+    }
+    const long mqttPort = m["p"].as<long>();
+    if (mqttPort <= 0 || mqttPort > 65535)
+    {
+        setErr("bad_m_port");
+        return false;
+    }
+
+    JsonObjectConst w;
+    if (!readObject(cfg, "w", w) ||
+        !isStringWithin(w["s"], WIFI_SSID_MAXLEN) ||
+        !isStringWithin(w["p"], WIFI_PASS_MAXLEN))
+    {
+        setErr("bad_w");
+        return false;
+    }
+
+    JsonArrayConst t = cfg["t"].as<JsonArrayConst>();
+    if (t.isNull() || t.size() != 3 ||
+        !isStringWithin(t[0], NTP_SERVER_MAXLEN) ||
+        !isStringWithin(t[1], NTP_SERVER_MAXLEN) ||
+        !isStringWithin(t[2], NTP_SERVER_MAXLEN))
+    {
+        setErr("bad_t");
+        return false;
+    }
+
+    if (!isNumber(cfg["g"]))
+    {
+        setErr("bad_g");
+        return false;
+    }
+
+    if (error && errorSize)
+        error[0] = '\0';
+    return true;
+}
+
 uint8_t clampU8(int value, int minValue, int maxValue)
 {
     if (value < minValue)
@@ -452,12 +614,8 @@ void storagePopulateJson(JsonDocument &doc)
 
 bool storageLoadConfigFromJson(JsonVariantConst configJson, char *error, size_t errorSize)
 {
-    if (configJson.isNull() || !configJson.is<JsonObjectConst>())
-    {
-        if (error && errorSize)
-            snprintf(error, errorSize, "cfg_invalid");
+    if (!validateFullConfigJson(configJson, error, errorSize))
         return false;
-    }
 
     storageApplyJson(configJson);
 

@@ -183,6 +183,86 @@ void preserveTextIfIncomingEmpty(JsonObject dstObj, JsonObjectConst srcObj, cons
         dstObj[key] = previous;
 }
 
+void fillBoundedCopy(char *dst, size_t size, const char *src)
+{
+    if (!dst || size == 0)
+        return;
+    strncpy(dst, src ? src : "", size - 1);
+    dst[size - 1] = '\0';
+}
+
+struct SaveChangeFlags
+{
+    bool wifiChanged;
+    bool mqttChanged;
+};
+
+bool persistConfigFromRequestJson(const String &body,
+                                  bool /*unusedStrictFullMode*/,
+                                  SaveChangeFlags *outFlags,
+                                  char *error,
+                                  size_t errorSize)
+{
+    if (outFlags)
+    {
+        outFlags->wifiChanged = false;
+        outFlags->mqttChanged = false;
+    }
+
+    constexpr size_t SAVE_DOC_CAPACITY = CONFIG_JSON_CAPACITY + 512;
+
+    DynamicJsonDocument requestDoc(SAVE_DOC_CAPACITY);
+    const DeserializationError parseErr = deserializeJson(requestDoc, body);
+    if (parseErr || !requestDoc.is<JsonObject>())
+    {
+        if (error && errorSize)
+            snprintf(error, errorSize, "json_invalid");
+        return false;
+    }
+
+    char prevWifiSsid[WIFI_SSID_MAXLEN];
+    char prevWifiPass[WIFI_PASS_MAXLEN];
+    char prevMqttHost[MQTT_HOST_MAXLEN];
+    char prevMqttTopic[MQTT_TOPIC_MAXLEN];
+    char prevMqttUser[MQTT_USER_MAXLEN];
+    char prevMqttPass[MQTT_PASS_MAXLEN];
+    const uint16_t prevMqttPort = gConfig.mqttPort;
+    fillBoundedCopy(prevWifiSsid, sizeof(prevWifiSsid), gConfig.wifiSsid);
+    fillBoundedCopy(prevWifiPass, sizeof(prevWifiPass), gConfig.wifiPass);
+    fillBoundedCopy(prevMqttHost, sizeof(prevMqttHost), gConfig.mqttHost);
+    fillBoundedCopy(prevMqttTopic, sizeof(prevMqttTopic), gConfig.mqttTopic);
+    fillBoundedCopy(prevMqttUser, sizeof(prevMqttUser), gConfig.mqttUser);
+    fillBoundedCopy(prevMqttPass, sizeof(prevMqttPass), gConfig.mqttPass);
+
+    char storageError[32] = {0};
+    if (!storageSaveConfigFromJson(requestDoc.as<JsonVariantConst>(), false, storageError, sizeof(storageError)))
+    {
+        if (error && errorSize)
+            snprintf(error, errorSize, "%s", storageError[0] ? storageError : "save_failed");
+        return false;
+    }
+
+    loggerSetMask(gConfig.logMask);
+
+    if (outFlags)
+    {
+        outFlags->wifiChanged =
+            strncmp(prevWifiSsid, gConfig.wifiSsid, sizeof(prevWifiSsid)) != 0 ||
+            strncmp(prevWifiPass, gConfig.wifiPass, sizeof(prevWifiPass)) != 0;
+
+        outFlags->mqttChanged =
+            strncmp(prevMqttHost, gConfig.mqttHost, sizeof(prevMqttHost)) != 0 ||
+            prevMqttPort != gConfig.mqttPort ||
+            strncmp(prevMqttTopic, gConfig.mqttTopic, sizeof(prevMqttTopic)) != 0 ||
+            strncmp(prevMqttUser, gConfig.mqttUser, sizeof(prevMqttUser)) != 0 ||
+            strncmp(prevMqttPass, gConfig.mqttPass, sizeof(prevMqttPass)) != 0;
+    }
+
+    if (error && errorSize)
+        error[0] = '\0';
+    return true;
+}
+
 void handleSession()
 {
     DynamicJsonDocument doc(128);
@@ -306,94 +386,23 @@ void handleSaveSettings()
         return;
     }
 
-    constexpr size_t SAVE_DOC_CAPACITY = CONFIG_JSON_CAPACITY + 1024;
-    DynamicJsonDocument requestDoc(SAVE_DOC_CAPACITY);
-    DeserializationError err = deserializeJson(requestDoc, gServer.arg("plain"));
-    if (err)
+    SaveChangeFlags flags{};
+    char saveError[32] = {0};
+    if (!persistConfigFromRequestJson(gServer.arg("plain"), true, &flags, saveError, sizeof(saveError)))
     {
+        LOG_ERROR(LOG_CAT_CONFIG, "Save settings failed: %s", saveError);
         addCors();
-        gServer.send(400, "text/plain", "Invalid JSON");
+        gServer.send(422, "application/json", "{\"ok\":false,\"reason\":\"invalid_full_config\"}");
         return;
     }
 
-    requestDoc.remove("adminPassword");
-    requestDoc.remove("animations");
-    const bool requestHasWifi = requestDoc.containsKey("w");
-    const bool requestHasMqtt = requestDoc.containsKey("m");
-
-    DynamicJsonDocument currentDoc(SAVE_DOC_CAPACITY);
-    storagePopulateJson(currentDoc);
-
-    DynamicJsonDocument effectiveDoc(SAVE_DOC_CAPACITY);
-    effectiveDoc.set(requestDoc.as<JsonVariantConst>());
-    mergeMissingRecursive(effectiveDoc.as<JsonVariant>(), currentDoc.as<JsonVariantConst>());
-
-    JsonObject effectiveWifi = effectiveDoc["w"].to<JsonObject>();
-    JsonObject effectiveMqtt = effectiveDoc["m"].to<JsonObject>();
-    JsonObjectConst currentWifi = currentDoc["w"].as<JsonObjectConst>();
-    JsonObjectConst currentMqtt = currentDoc["m"].as<JsonObjectConst>();
-
-    // Safety net for partial UI payloads: never wipe network credentials by accident.
-    if (!requestHasWifi)
+    if (flags.wifiChanged)
     {
-        effectiveDoc["w"] = currentWifi;
-    }
-    else
-    {
-        preserveTextIfIncomingEmpty(effectiveWifi, currentWifi, "s");
-        preserveTextIfIncomingEmpty(effectiveWifi, currentWifi, "p");
-    }
-
-    if (!requestHasMqtt)
-    {
-        effectiveDoc["m"] = currentMqtt;
-    }
-    else
-    {
-        preserveTextIfIncomingEmpty(effectiveMqtt, currentMqtt, "h");
-        preserveTextIfIncomingEmpty(effectiveMqtt, currentMqtt, "t");
-        preserveTextIfIncomingEmpty(effectiveMqtt, currentMqtt, "u");
-        preserveTextIfIncomingEmpty(effectiveMqtt, currentMqtt, "s");
-    }
-
-    const String prevWifiSsid = String(gConfig.wifiSsid);
-    const String prevWifiPass = String(gConfig.wifiPass);
-    const String prevMqttHost = String(gConfig.mqttHost);
-    const uint16_t prevMqttPort = gConfig.mqttPort;
-    const String prevMqttTopic = String(gConfig.mqttTopic);
-    const String prevMqttUser = String(gConfig.mqttUser);
-    const String prevMqttPass = String(gConfig.mqttPass);
-
-    char storageError[32] = {0};
-    if (!storageSaveConfigFromJson(effectiveDoc.as<JsonVariantConst>(), false, storageError, sizeof(storageError)))
-    {
-        LOG_ERROR(LOG_CAT_CONFIG, "Storage save failed: %s", storageError);
-        addCors();
-        gServer.send(500, "text/plain", "Write failed");
-        return;
-    }
-
-    loggerSetMask(gConfig.logMask);
-
-    const bool wifiChanged =
-        prevWifiSsid != String(gConfig.wifiSsid) ||
-        prevWifiPass != String(gConfig.wifiPass);
-    const bool mqttChanged =
-        prevMqttHost != String(gConfig.mqttHost) ||
-        prevMqttPort != gConfig.mqttPort ||
-        prevMqttTopic != String(gConfig.mqttTopic) ||
-        prevMqttUser != String(gConfig.mqttUser) ||
-        prevMqttPass != String(gConfig.mqttPass);
-
-    if (wifiChanged)
-    {
-        // Do not reconnect immediately from generic Save action.
-        // This prevents accidental WiFi drop when user edits unrelated settings.
         LOG_INFO(LOG_CAT_CONFIG, "WiFi settings changed, apply deferred until restart/manual connect");
-        if (mqttChanged)
+        if (flags.mqttChanged)
             alertsReloadClientConfig();
     }
-    else if (mqttChanged)
+    else if (flags.mqttChanged)
     {
         LOG_INFO(LOG_CAT_CONFIG, "Settings saved, MQTT settings updated");
         alertsReloadClientConfig();
@@ -543,24 +552,18 @@ void handleConfigApiPost()
         return;
     }
 
-    DynamicJsonDocument incoming(CONFIG_JSON_CAPACITY);
-    auto err = deserializeJson(incoming, gServer.arg("plain"));
-    if (err)
-    {
-        addCors();
-        gServer.send(400, "application/json", "{\"ok\":false,\"reason\":\"json_invalid\"}");
-        return;
-    }
-
-    char storageError[32] = {0};
-    if (!storageSaveConfigFromJson(incoming.as<JsonVariantConst>(), false, storageError, sizeof(storageError)))
+    SaveChangeFlags flags{};
+    char saveError[32] = {0};
+    if (!persistConfigFromRequestJson(gServer.arg("plain"), false, &flags, saveError, sizeof(saveError)))
     {
         addCors();
         gServer.send(422, "application/json", "{\"ok\":false,\"reason\":\"validation_or_storage\"}");
         return;
     }
 
-    loggerSetMask(gConfig.logMask);
+    if (flags.mqttChanged)
+        alertsReloadClientConfig();
+
     addCors();
     gServer.send(200, "application/json", "{\"ok\":true}");
 }
