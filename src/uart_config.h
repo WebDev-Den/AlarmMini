@@ -156,7 +156,17 @@ inline bool decodeHexAppend(const char *hex, size_t hexLen)
 inline void sendCurrentConfig()
 {
     DynamicJsonDocument cfg(CONFIG_JSON_CAPACITY);
+    if (cfg.capacity() == 0)
+    {
+        sendNack("get_config", "cfg_alloc_failed");
+        return;
+    }
     storagePopulateJson(cfg);
+    if (cfg.overflowed())
+    {
+        sendNack("get_config", "cfg_overflow");
+        return;
+    }
 
     static char jsonBuf[CONFIG_JSON_CAPACITY + 1];
     const size_t jsonLen = serializeJson(cfg, jsonBuf, sizeof(jsonBuf));
@@ -206,7 +216,17 @@ inline void sendCurrentConfig()
 inline void sendExportConfig()
 {
     DynamicJsonDocument cfg(CONFIG_JSON_CAPACITY);
+    if (cfg.capacity() == 0)
+    {
+        sendNack("export_config", "cfg_alloc_failed");
+        return;
+    }
     storagePopulateJson(cfg);
+    if (cfg.overflowed())
+    {
+        sendNack("export_config", "cfg_overflow");
+        return;
+    }
     Serial.print(F("{\"event\":\"export_config\",\"config\":"));
     serializeJson(cfg, Serial);
     Serial.println(F("}"));

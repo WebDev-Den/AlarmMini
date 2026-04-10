@@ -12,6 +12,7 @@ constexpr int DEFAULT_BUZZER_REGION_INDEX = 20;
 constexpr uint32_t CONFIG_MAGIC = 0x414D4346UL; // AMCF
 
 uint32_t gLastSavedCrc = 0;
+bool loadEnvelopeFromPath(const char *path, DynamicJsonDocument &root);
 
 uint8_t clampU8(int value, int minValue, int maxValue)
 {
@@ -187,12 +188,6 @@ uint32_t computeConfigCrc(JsonVariantConst cfg)
 
 bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
 {
-    DynamicJsonDocument root(CONFIG_JSON_CAPACITY + 768);
-    root["magic"] = CONFIG_MAGIC;
-    root["v"] = CONFIG_SCHEMA_VERSION;
-    root["crc"] = crc;
-    root["cfg"] = config;
-
     File tmp = LittleFS.open(CONFIG_TMP_PATH, "w");
     if (!tmp)
     {
@@ -200,7 +195,19 @@ bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
         return false;
     }
 
-    if (serializeJson(root, tmp) == 0)
+    char header[96];
+    const int headerLen = snprintf(header, sizeof(header),
+                                   "{\"magic\":%lu,\"v\":%u,\"crc\":%lu,\"cfg\":",
+                                   (unsigned long)CONFIG_MAGIC,
+                                   (unsigned int)CONFIG_SCHEMA_VERSION,
+                                   (unsigned long)crc);
+    const size_t b0 = (headerLen > 0 && (size_t)headerLen < sizeof(header))
+                          ? tmp.write((const uint8_t *)header, (size_t)headerLen)
+                          : 0;
+    const size_t cfgBytes = serializeJson(config, tmp);
+    const size_t b1 = tmp.write((const uint8_t *)"}", 1);
+
+    if (b0 == 0 || cfgBytes == 0 || b1 == 0 || tmp.getWriteError())
     {
         tmp.close();
         LittleFS.remove(CONFIG_TMP_PATH);
@@ -235,6 +242,8 @@ bool loadEnvelopeFromPath(const char *path, DynamicJsonDocument &root)
 
     const auto err = deserializeJson(root, f);
     f.close();
+    if (err != DeserializationError::Ok)
+        LOG_WARN(LOG_CAT_CONFIG, "JSON parse error in %s: %s", path, err.c_str());
     return err == DeserializationError::Ok;
 }
 
@@ -268,7 +277,7 @@ void sanitizeConfig()
 
 AppConfig gConfig;
 
-void storageApplyJson(DynamicJsonDocument &doc)
+void storageApplyJson(JsonVariantConst doc)
 {
     JsonObjectConst compactColors = doc["c"];
     JsonObjectConst compactDay = compactColors["d"];
@@ -443,17 +452,14 @@ void storagePopulateJson(JsonDocument &doc)
 
 bool storageLoadConfigFromJson(JsonVariantConst configJson, char *error, size_t errorSize)
 {
-    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
-    doc.set(configJson);
-
-    if (doc.overflowed())
+    if (configJson.isNull() || !configJson.is<JsonObjectConst>())
     {
         if (error && errorSize)
-            snprintf(error, errorSize, "cfg_overflow");
+            snprintf(error, errorSize, "cfg_invalid");
         return false;
     }
 
-    storageApplyJson(doc);
+    storageApplyJson(configJson);
 
     if (error && errorSize)
         error[0] = '\0';
@@ -471,7 +477,17 @@ bool storageSaveConfigFromJson(JsonVariantConst configJson, bool forceWrite, cha
 bool storageSaveCurrentConfig(bool forceWrite)
 {
     DynamicJsonDocument cfgDoc(CONFIG_JSON_CAPACITY);
+    if (cfgDoc.capacity() == 0)
+    {
+        LOG_ERROR(LOG_CAT_CONFIG, "Config JSON alloc failed while saving");
+        return false;
+    }
     storagePopulateJson(cfgDoc);
+    if (cfgDoc.overflowed())
+    {
+        LOG_ERROR(LOG_CAT_CONFIG, "Config JSON overflow while saving");
+        return false;
+    }
 
     const uint32_t crc = computeConfigCrc(cfgDoc.as<JsonVariantConst>());
     if (!forceWrite && crc == gLastSavedCrc)
@@ -517,7 +533,7 @@ bool storageInit()
 
     auto tryLoadFromPath = [&](const char *path, bool allowPlainPayload) -> bool
     {
-        DynamicJsonDocument root(CONFIG_JSON_CAPACITY + 768);
+        DynamicJsonDocument root(CONFIG_JSON_CAPACITY + 2048);
         if (!loadEnvelopeFromPath(path, root))
             return false;
 
