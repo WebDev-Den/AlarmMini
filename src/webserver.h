@@ -387,11 +387,11 @@ void handleSaveSettings()
 
     if (wifiChanged)
     {
-        LOG_INFO(LOG_CAT_CONFIG, "Settings saved, WiFi reconnect scheduled");
-        if (strlen(gConfig.wifiSsid))
-            WiFi.begin(gConfig.wifiSsid, gConfig.wifiPass);
-        else
-            WiFi.begin();
+        // Do not reconnect immediately from generic Save action.
+        // This prevents accidental WiFi drop when user edits unrelated settings.
+        LOG_INFO(LOG_CAT_CONFIG, "WiFi settings changed, apply deferred until restart/manual connect");
+        if (mqttChanged)
+            alertsReloadClientConfig();
     }
     else if (mqttChanged)
     {
