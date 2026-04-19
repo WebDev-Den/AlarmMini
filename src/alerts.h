@@ -25,6 +25,7 @@ static int           _mqttReconnectDelay = 2000;
 static unsigned long _internetLastCheck = 0;
 static constexpr unsigned long INTERNET_CHECK_INTERVAL_MS = 60000UL;
 static constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 1;
+static constexpr unsigned long MQTT_LOOP_GUARD_MS = 10UL;
 
 static void _formatLogClock(char* buffer, size_t size)
 {
@@ -201,6 +202,7 @@ void alertsHandle() {
         }
     } else if (WiFi.status() != WL_CONNECTED) {
         gInternetConnected = false;
+        _internetLastCheck = 0;
     }
 
     // Never keep stale MQTT sockets when transport is down.
@@ -212,12 +214,18 @@ void alertsHandle() {
             gMqttConnected = false;
             LOG_WARN(LOG_CAT_MQTT, "Paused: waiting for WiFi/Internet recovery");
         }
+        yield();
         return;
     }
 
     if (_mqtt.connected()) {
         gMqttConnected = true;
+        const unsigned long loopStartedAt = millis();
         _mqtt.loop();
+        if (millis() - loopStartedAt > MQTT_LOOP_GUARD_MS)
+        {
+            LOG_WARN(LOG_CAT_MQTT, "MQTT loop took %lums", millis() - loopStartedAt);
+        }
         yield();
         return;
     }
@@ -227,8 +235,16 @@ void alertsHandle() {
         LOG_WARN(LOG_CAT_MQTT, "Connection lost, keeping last alert state");
     }
 
-    if (!strlen(gConfig.mqttHost)) return;
-    if (now - _mqttLastReconnect < (unsigned long)_mqttReconnectDelay) return;
+    if (!strlen(gConfig.mqttHost))
+    {
+        yield();
+        return;
+    }
+    if (now - _mqttLastReconnect < (unsigned long)_mqttReconnectDelay)
+    {
+        yield();
+        return;
+    }
 
     _mqttLastReconnect = now;
     LOG_INFO(LOG_CAT_MQTT, "Reconnecting...");

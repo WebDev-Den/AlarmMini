@@ -14,6 +14,9 @@
 #include "reset_trace.h"
 
 char gHostname[32];
+static WiFiEventHandler gWifiConnectedHandler;
+static WiFiEventHandler gWifiDisconnectedHandler;
+static WiFiEventHandler gWifiGotIpHandler;
 
 static const char *ntpServerOrDefault(const char *configured, const char *fallback)
 {
@@ -92,6 +95,12 @@ void setup()
     snprintf(gHostname, sizeof(gHostname), "alarm-%04X", ESP.getChipId() & 0xFFFF);
     WiFi.hostname(gHostname);
     generateHardwareAdminPassword();
+    gWifiConnectedHandler = WiFi.onStationModeConnected([](const WiFiEventStationModeConnected &event)
+                                                        { LOG_INFO(LOG_CAT_WIFI, "STA connected to '%s' (channel %d)", event.ssid.c_str(), event.channel); });
+    gWifiDisconnectedHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &event)
+                                                              { LOG_WARN(LOG_CAT_WIFI, "STA disconnected, reason=%d", event.reason); });
+    gWifiGotIpHandler = WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP &event)
+                                                { LOG_INFO(LOG_CAT_WIFI, "STA got IP %s mask %s gw %s", event.ip.toString().c_str(), event.mask.toString().c_str(), event.gw.toString().c_str()); });
 
     ledsInit();
     buzzerInit();
@@ -128,7 +137,10 @@ void setup()
 void loop()
 {
     uartcfg::handle();
-    MDNS.update();
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        MDNS.update();
+    }
     webserverHandle();
     alertsHandle();
     buzzerHandle();

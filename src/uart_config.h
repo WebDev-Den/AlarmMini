@@ -20,6 +20,7 @@ constexpr size_t UART_PAYLOAD_MAX = CONFIG_JSON_CAPACITY;
 constexpr size_t UART_CHUNK_BYTES = 64;
 constexpr uint32_t UART_LINE_TIMEOUT_MS = 1200;
 constexpr uint32_t UART_SESSION_TIMEOUT_MS = 15000;
+constexpr size_t UART_READ_BUDGET_PER_TICK = 384;
 
 struct RxState
 {
@@ -573,9 +574,11 @@ inline void handle()
         sendNack("set", "session_timeout");
     }
 
+    size_t consumedBytes = 0;
     while (Serial.available() > 0)
     {
         const char ch = (char)Serial.read();
+        consumedBytes++;
         const uint32_t ts = millis();
         if (gState.lineLen == 0)
             gState.lineStartAt = ts;
@@ -600,6 +603,12 @@ inline void handle()
         }
 
         gState.line[gState.lineLen++] = ch;
+
+        if (consumedBytes >= UART_READ_BUDGET_PER_TICK)
+        {
+            // Avoid starving the main loop under noisy serial input.
+            break;
+        }
     }
 }
 

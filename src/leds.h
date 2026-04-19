@@ -8,6 +8,8 @@
 #include "animations.h"
 
 Adafruit_NeoPixel strip(MAX_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+static constexpr unsigned long LED_FRAME_INTERVAL_MS = 33UL;
+static unsigned long gLastLedFrameAt = 0;
 
 bool gCalibrationActive = false;
 int  gCalibrationIndex = -1;
@@ -17,6 +19,7 @@ bool isNightMode() {
 
     time_t now = time(nullptr);
     struct tm* tinfo = localtime(&now);
+    if (!tinfo) return true;
     if (tinfo->tm_year < 120) return true;
 
     int currentMins = tinfo->tm_hour * 60 + tinfo->tm_min;
@@ -279,9 +282,15 @@ void ledsHandle() {
         return;
     }
 
+    const unsigned long now = millis();
+    if (now - gLastLedFrameAt < LED_FRAME_INTERVAL_MS) {
+        return;
+    }
+    gLastLedFrameAt = now;
+
     bool night = isNightMode();
     bool activeAlerts = hasActiveAlerts();
-    bool recentClear = hasRecentClearAnimation(millis());
+    bool recentClear = hasRecentClearAnimation(now);
 
     if (activeAlerts || recentClear) {
         renderAlertClearState(night);

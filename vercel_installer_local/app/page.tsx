@@ -33,6 +33,7 @@ type BoardSnapshot = {
   resetReason: string;
   lastStage: string;
   bootCount: string;
+  configUploadedAt: string;
   lastLine: string;
 };
 
@@ -154,6 +155,7 @@ function getEmptyBoard(): BoardSnapshot {
     resetReason: "-",
     lastStage: "-",
     bootCount: "-",
+    configUploadedAt: "-",
     lastLine: "-",
   };
 }
@@ -208,6 +210,16 @@ function decodeHex(encoded: string) {
 }
 
 const SERIAL_WARMUP_MS = 1200;
+const READY_TIMEOUT_BASE_MS = 8000;
+const READY_TIMEOUT_MAX_MS = 18000;
+const BACKUP_TIMEOUT_BASE_MS = 12000;
+const BACKUP_TIMEOUT_MAX_MS = 26000;
+const RESTORE_TIMEOUT_BASE_MS = 30000;
+const RESTORE_TIMEOUT_MAX_MS = 45000;
+
+function timeoutWithBackoff(baseMs: number, attempt: number, maxMs: number) {
+  return Math.min(maxMs, baseMs + attempt * 4000);
+}
 
 function sanitizeSerialLine(raw: string): string {
   if (!raw) return "";
@@ -241,6 +253,22 @@ function formatBytes(size: number) {
   if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(2)} MB`;
   if (size >= 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${size} B`;
+}
+
+function formatLocalDateTime(iso: string) {
+  if (!iso) return "-";
+  try {
+    return new Intl.DateTimeFormat("uk-UA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }
 
 function applySerialLine(line: string, current: BoardSnapshot): BoardSnapshot {
@@ -656,6 +684,7 @@ export default function Page() {
         return false;
       }
       setFlashStatus(t.config.applied);
+      markConfigUploadedNow();
       return true;
     } catch (configApplyError) {
       console.error("[config-apply]", configApplyError);
@@ -923,6 +952,15 @@ export default function Page() {
       resetReason: String(payload?.resetReason || prev.resetReason || "-"),
       lastStage: String(payload?.lastStage || prev.lastStage || "-"),
       bootCount: String(payload?.bootCount ?? prev.bootCount ?? "-"),
+      configUploadedAt: String(payload?.configUploadedAt || prev.configUploadedAt || "-"),
+    }));
+  }
+
+  function markConfigUploadedNow() {
+    const nowIso = new Date().toISOString();
+    setBoard((prev) => ({
+      ...prev,
+      configUploadedAt: formatLocalDateTime(nowIso),
     }));
   }
 
@@ -1100,7 +1138,7 @@ export default function Page() {
     return true;
   }
 
-  async function backupConfigViaSerial() {
+  async function backupConfigViaSerial(timeoutMs = BACKUP_TIMEOUT_BASE_MS) {
     const activePort = rememberedPortRef.current ?? portRef.current;
     if (!activePort?.readable || !activePort?.writable) return null;
 
@@ -1114,7 +1152,7 @@ export default function Page() {
         resolve,
         reject,
         buffer: "",
-        timeoutId: setTimeout(() => rejectConfigTransfer("backup_timeout"), 12000),
+        timeoutId: setTimeout(() => rejectConfigTransfer("backup_timeout"), timeoutMs),
         readyResolve: null,
       };
 
@@ -1126,11 +1164,15 @@ export default function Page() {
     });
   }
 
-  async function restoreConfigViaSerial(configPayload: any) {
+  async function restoreConfigViaSerial(
+    configPayload: any,
+    readyTimeoutMs = 12000,
+    restoreTimeoutMs = RESTORE_TIMEOUT_BASE_MS,
+  ) {
     setFlashStatus(t.flash.restoringConfig);
     resetConfigTransferState();
 
-    const boardReady = await waitForBoardReady(12000);
+    const boardReady = await waitForBoardReady(readyTimeoutMs);
     if (!boardReady) {
       throw new Error("restore_ready_timeout");
     }
@@ -1141,7 +1183,10 @@ export default function Page() {
         resolve,
         reject,
         buffer: "",
-        timeoutId: setTimeout(() => rejectConfigTransfer("restore_timeout"), 30000),
+        timeoutId: setTimeout(
+          () => rejectConfigTransfer("restore_timeout"),
+          restoreTimeoutMs,
+        ),
         readyResolve: null,
       };
 
@@ -1158,7 +1203,7 @@ export default function Page() {
     });
   }
 
-  async function waitForBoardReady(timeoutMs = 8000) {
+  async function waitForBoardReady(timeoutMs = READY_TIMEOUT_BASE_MS, pollIntervalMs = 1200) {
     const activePort = rememberedPortRef.current ?? portRef.current;
     if (!activePort?.readable || !activePort?.writable) return false;
 
@@ -1180,7 +1225,7 @@ export default function Page() {
         try {
           await writeSerialLine('{"cmd":"hello"}');
         } catch {}
-        window.setTimeout(poll, 1200);
+        window.setTimeout(poll, pollIntervalMs);
       };
 
       void poll();
@@ -1189,7 +1234,7 @@ export default function Page() {
       .catch(() => false);
   }
 
-  async function restoreConfigWithRetry(configPayload: any, attempts = 2) {
+  async function restoreConfigWithRetry(configPayload: any, attempts = 3) {
     let lastError: unknown = null;
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -1201,7 +1246,21 @@ export default function Page() {
           await new Promise((resolve) => setTimeout(resolve, 1800));
         }
 
-        await restoreConfigViaSerial(configPayload);
+        const readyTimeoutMs = timeoutWithBackoff(
+          READY_TIMEOUT_BASE_MS,
+          attempt,
+          READY_TIMEOUT_MAX_MS,
+        );
+        const restoreTimeoutMs = timeoutWithBackoff(
+          RESTORE_TIMEOUT_BASE_MS,
+          attempt,
+          RESTORE_TIMEOUT_MAX_MS,
+        );
+        await restoreConfigViaSerial(
+          configPayload,
+          readyTimeoutMs,
+          restoreTimeoutMs,
+        );
         return;
       } catch (restoreError) {
         lastError = restoreError;
@@ -1269,7 +1328,7 @@ export default function Page() {
       });
   }
 
-  async function backupConfigWithRetry(attempts = 1) {
+  async function backupConfigWithRetry(attempts = 2) {
     let lastError: unknown = null;
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -1277,12 +1336,22 @@ export default function Page() {
         if (attempt > 0) {
           await new Promise((resolve) => setTimeout(resolve, 1200));
         }
-        const ready = await waitForBoardReady(8000);
+        const readyTimeoutMs = timeoutWithBackoff(
+          READY_TIMEOUT_BASE_MS,
+          attempt,
+          READY_TIMEOUT_MAX_MS,
+        );
+        const backupTimeoutMs = timeoutWithBackoff(
+          BACKUP_TIMEOUT_BASE_MS,
+          attempt,
+          BACKUP_TIMEOUT_MAX_MS,
+        );
+        const ready = await waitForBoardReady(readyTimeoutMs);
         if (!ready) {
           resetBackupProgress();
           return null;
         }
-        const backup = await backupConfigViaSerial();
+        const backup = await backupConfigViaSerial(backupTimeoutMs);
         if (backup) {
           resetBackupProgress();
           return backup;
@@ -1565,6 +1634,7 @@ export default function Page() {
               syncBoardConfig(configBackupRef.current);
               setConfigBackupReady(Boolean(configBackupRef.current));
               setDefaultConfigMode(false);
+              markConfigUploadedNow();
             } else {
               throw new Error("config_verify_failed");
             }
@@ -1947,6 +2017,10 @@ export default function Page() {
               <div className="info-tile">
                 <span>{t.page.bootCount}</span>
                 <strong>{board.bootCount}</strong>
+              </div>
+              <div className="info-tile">
+                <span>{t.page.configUploadedAt}</span>
+                <strong>{board.configUploadedAt}</strong>
               </div>
             </div>
 

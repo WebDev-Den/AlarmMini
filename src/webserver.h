@@ -12,6 +12,9 @@
 #include "reset_trace.h"
 
 extern char gHostname[];
+static constexpr size_t INFO_DOC_CAPACITY = 3072;
+static constexpr size_t LOGS_DOC_CAPACITY = 4096;
+static constexpr size_t LOGS_EXPORT_LIMIT = 16;
 
 ESP8266WebServer gServer(80);
 char gSessionToken[33] = {0};
@@ -321,7 +324,7 @@ void handleGetInfo()
     if (!ensureAuthorized())
         return;
 
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(INFO_DOC_CAPACITY);
     doc["maxLeds"] = MAX_LEDS;
     doc["mqttHost"] = gConfig.mqttHost;
     doc["mqttPort"] = gConfig.mqttPort ? gConfig.mqttPort : 1883;
@@ -493,7 +496,7 @@ void handleGetLogs()
     if (!ensureAuthorized())
         return;
 
-    DynamicJsonDocument doc(8192);
+    DynamicJsonDocument doc(LOGS_DOC_CAPACITY);
     doc["mask"] = loggerGetMask();
 
     JsonArray categories = doc.createNestedArray("categories");
@@ -510,7 +513,7 @@ void handleGetLogs()
     }
 
     JsonArray entries = doc.createNestedArray("entries");
-    loggerExportJson(entries, 24);
+    loggerExportJson(entries, LOGS_EXPORT_LIMIT);
     sendJson(doc);
 }
 

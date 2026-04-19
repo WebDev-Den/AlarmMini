@@ -16,11 +16,14 @@ let calTemp = {};
 let calMapSvg = null;
 let calibrationActive = false;
 let calibrationMobileView = "map";
-let alertsTimer = null;
+let alertPollTimer = null;
 let logsTimer = null;
 let latestLogMask = 0;
 const ADMIN_PASSWORD_STORAGE_KEY = "alarmmini.adminPassword";
 const UI_LANG = window.LANG;
+const ALERT_POLL_MIN_MS = 8000;
+const ALERT_POLL_MAX_MS = 30000;
+let alertPollIntervalMs = 10000;
 
 const TAB_META = {
   overview: { eyebrow: UI_LANG.tabs.overview.eyebrow, title: UI_LANG.tabs.overview.title },
@@ -343,6 +346,10 @@ async function logout() {
   } catch (_) {
   }
   currentSessionReady = false;
+  if (alertPollTimer) {
+    clearTimeout(alertPollTimer);
+    alertPollTimer = null;
+  }
   clearPersistedAdminPassword();
   setAuthLocked(true, "");
 }
@@ -1111,24 +1118,33 @@ function refreshMapPreview() {
   $("mapPreviewWrap").replaceChildren(svg);
 }
 
-function updateAlertsOnWeb() {
+function scheduleAlertsPolling(delayMs = alertPollIntervalMs) {
+  if (alertPollTimer) clearTimeout(alertPollTimer);
+  if (!currentSessionReady) return;
+  alertPollTimer = setTimeout(() => {
+    void updateAlertsOnWeb();
+  }, delayMs);
+}
+
+async function updateAlertsOnWeb() {
   if (!REGIONS.length || !currentSessionReady) return;
-  fetch("/api/alerts", { cache: "no-store", credentials: "same-origin" })
-    .then((response) => {
-      if (response.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
-      return response.json();
-    })
-    .then((alerts) => {
-      currentAlerts = Array.isArray(alerts) ? alerts : [];
-      currentAlerts.forEach((isAlert, index) => {
-        const chip = $(`chip_${REGIONS[index]}`);
-        if (chip) chip.classList.toggle("is-alert", Boolean(isAlert));
-      });
-      refreshMapPreview();
-    })
-    .catch((error) => {
-      if (error.status === 401) setAuthLocked(true, "Сесію завершено. Увійди ще раз.");
+  try {
+    const response = await fetch("/api/alerts", { cache: "no-store", credentials: "same-origin" });
+    if (response.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+    const alerts = await response.json();
+    currentAlerts = Array.isArray(alerts) ? alerts : [];
+    currentAlerts.forEach((isAlert, index) => {
+      const chip = $(`chip_${REGIONS[index]}`);
+      if (chip) chip.classList.toggle("is-alert", Boolean(isAlert));
     });
+    refreshMapPreview();
+    alertPollIntervalMs = ALERT_POLL_MIN_MS;
+  } catch (error) {
+    alertPollIntervalMs = Math.min(ALERT_POLL_MAX_MS, alertPollIntervalMs + 4000);
+    if (error.status === 401) setAuthLocked(true, "Сесію завершено. Увійди ще раз.");
+  } finally {
+    scheduleAlertsPolling();
+  }
 }
 
 function updateCalibrationLedButtons(ensureVisible = false) {
@@ -1454,10 +1470,15 @@ async function bootAuthenticated() {
   applyDeviceInfo(info);
   await ensureMapLoaded();
   storeDirtySnapshot();
-  updateAlertsOnWeb();
-  setTimeout(updateAlertsOnWeb, 1200);
-  clearInterval(alertsTimer);
-  alertsTimer = setInterval(updateAlertsOnWeb, 10000);
+  alertPollIntervalMs = 10000;
+  if (alertPollTimer) {
+    clearTimeout(alertPollTimer);
+    alertPollTimer = null;
+  }
+  void updateAlertsOnWeb();
+  setTimeout(() => {
+    if (currentSessionReady) void updateAlertsOnWeb();
+  }, 1200);
   clearInterval(logsTimer);
   logsTimer = null;
 }

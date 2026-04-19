@@ -4,6 +4,7 @@ const ALLOWED_HOSTS = [
   "github.com",
   "objects.githubusercontent.com",
   "release-assets.githubusercontent.com",
+  "github-releases.githubusercontent.com",
 ];
 
 function isAllowedHost(hostname: string) {
@@ -34,6 +35,10 @@ export async function GET(request: NextRequest) {
   const upstream = await fetch(sourceUrl.toString(), {
     cache: "no-store",
     redirect: "follow",
+    headers: {
+      "user-agent": "AlarmMini-Installer/1.0 (+https://github.com/WebDev-Den/AlarmMini)",
+      accept: "application/octet-stream,*/*",
+    },
   });
 
   if (!upstream.ok || !upstream.body) {

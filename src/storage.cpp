@@ -11,6 +11,9 @@ constexpr char CONFIG_TMP_PATH[] = "/amcfg.tmp";
 constexpr char CONFIG_BAK_PATH[] = "/amcfg.bak";
 constexpr int DEFAULT_BUZZER_REGION_INDEX = 20;
 constexpr uint32_t CONFIG_MAGIC = 0x414D4346UL; // AMCF
+constexpr uint16_t LOG_MASK_DEFAULT_RUNTIME =
+    LOG_CAT_SYSTEM | LOG_CAT_WIFI | LOG_CAT_INTERNET |
+    LOG_CAT_MQTT | LOG_CAT_WEB | LOG_CAT_CONFIG;
 
 uint32_t gLastSavedCrc = 0;
 bool loadEnvelopeFromPath(const char *path, DynamicJsonDocument &root);
@@ -312,7 +315,7 @@ void applyDefaults()
 
     gConfig.mqttPort = 1883;
     copyBounded(gConfig.mqttTopic, MQTT_TOPIC_MAXLEN, "alerts/status");
-    gConfig.logMask = LOG_MASK_ALL;
+    gConfig.logMask = LOG_MASK_DEFAULT_RUNTIME;
 }
 
 uint32_t crc32Step(uint32_t crc, uint8_t byte)
