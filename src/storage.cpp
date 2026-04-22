@@ -1,8 +1,8 @@
 #include "storage.h"
 #include "reset_trace.h"
+#include "platform_compat.h"
 
 #include <LittleFS.h>
-#include <ESP8266WiFi.h>
 
 namespace
 {
@@ -308,6 +308,7 @@ void applyDefaults()
         gConfig.buzzer.regions[i] = false;
     if (DEFAULT_BUZZER_REGION_INDEX >= 0 && DEFAULT_BUZZER_REGION_INDEX < REGIONS_COUNT)
         gConfig.buzzer.regions[DEFAULT_BUZZER_REGION_INDEX] = true;
+    gConfig.offline.autonomousSeconds = 60;
 
     gConfig.blink.enabled = true;
     gConfig.blink.dayIntensity = 75;
@@ -438,6 +439,7 @@ void sanitizeConfig()
     gConfig.blink.nightIntensity = clampU8(gConfig.blink.nightIntensity, 0, 100);
 
     gConfig.mqttPort = clampU16(gConfig.mqttPort == 0 ? 1883 : gConfig.mqttPort, 1, 65535);
+    gConfig.offline.autonomousSeconds = clampU16(gConfig.offline.autonomousSeconds == 0 ? 60 : gConfig.offline.autonomousSeconds, 5, 600);
     gConfig.logMask &= LOG_MASK_ALL;
 }
 
@@ -453,6 +455,7 @@ void storageApplyJson(JsonVariantConst doc)
     JsonObjectConst compactNight = doc["n"];
     JsonObjectConst compactBuzzer = doc["z"];
     JsonObjectConst compactBlink = doc["k"];
+    JsonObjectConst compactOffline = doc["o"];
     JsonObjectConst compactWifi = doc["w"];
     JsonObjectConst compactMqtt = doc["m"];
 
@@ -483,6 +486,9 @@ void storageApplyJson(JsonVariantConst doc)
     gConfig.blink.enabled = compactBlink.containsKey("e") ? readBool(compactBlink["e"], true) : readBool(doc["blinkEnabled"], true);
     gConfig.blink.dayIntensity = !blinkIntensity.isNull() && blinkIntensity.size() > 0 ? readU8(blinkIntensity[0], 75) : readU8(doc["blinkDayInt"], 75);
     gConfig.blink.nightIntensity = !blinkIntensity.isNull() && blinkIntensity.size() > 1 ? readU8(blinkIntensity[1], 30) : readU8(doc["blinkNightInt"], 30);
+    gConfig.offline.autonomousSeconds = compactOffline.containsKey("a")
+                                            ? readU16(compactOffline["a"], 60)
+                                            : readU16(doc["offlineAutonomousSeconds"], 60);
 
     copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, compactWifi.containsKey("s") ? readStr(compactWifi["s"]) : readStr(doc["wifiSsid"]));
     copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, compactWifi.containsKey("p") ? readStr(compactWifi["p"]) : readStr(doc["wifiPass"]));
@@ -591,6 +597,8 @@ void storagePopulateJson(JsonDocument &doc)
     JsonArray blinkIntensity = blink["i"].to<JsonArray>();
     blinkIntensity.add(gConfig.blink.dayIntensity);
     blinkIntensity.add(gConfig.blink.nightIntensity);
+    JsonObject offline = doc["o"].to<JsonObject>();
+    offline["a"] = gConfig.offline.autonomousSeconds;
 
     JsonArray leds = doc["l"].to<JsonArray>();
     for (int i = 0; i < MAX_LEDS; i++)

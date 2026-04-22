@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "storage.h"
 #include "alerts.h"
+#include "platform_audio.h"
 
 #define NOTE_C4 262
 #define NOTE_D4 294
@@ -24,20 +25,29 @@ const int CLEAR_MELODY[]    = {NOTE_C5, NOTE_B4, NOTE_A4, NOTE_G4, NOTE_E4, NOTE
 const int CLEAR_DURATIONS[] = {200,     150,     150,     200,     200,     400};
 #define CLEAR_NOTES 6
 
-bool gBuzzerInitialized = false;
+bool gBuzzerAvailable = true;
 bool gPlaying    = false;
 bool gPlayAlert  = false;
 int  gNoteIndex  = 0;
 unsigned long gNoteStart = 0;
 
 void buzzerInit() {
-    pinMode(BUZZER_PIN, OUTPUT);
-    digitalWrite(BUZZER_PIN, LOW);
+#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32C3
+    // On ESP32-C3, GPIO12-17 are typically used by embedded SPI flash.
+    // Accidentally driving them can destabilize the chip.
+    if (BUZZER_PIN >= 12 && BUZZER_PIN <= 17) {
+        gBuzzerAvailable = false;
+        LOG_WARN(LOG_CAT_SYSTEM, "Buzzer disabled: unsafe pin GPIO%d for ESP32-C3", BUZZER_PIN);
+        return;
+    }
+#endif
+    platform_audio::initBuzzerPin();
     LOG_INFO(LOG_CAT_SYSTEM, "Buzzer initialized");
 }
 
 void buzzerPlay(bool isAlert) {
-    noTone(BUZZER_PIN);
+    if (!gBuzzerAvailable) return;
+    platform_audio::stopTone();
     gPlaying   = true;
     gPlayAlert = isAlert;
     gNoteIndex = 0;
@@ -50,8 +60,9 @@ void buzzerTest(bool isAlert) {
 }
 
 void buzzerHandle() {
+    if (!gBuzzerAvailable) return;
     // перевіряємо зміни тривог у відстежуваних регіонах
-    if (gBuzzerInitialized && gConfig.buzzer.enabled && gAlertsChanged) {
+    if (gConfig.buzzer.enabled && gAlertsChanged) {
         bool wasAlert = false, nowAlert = false;
         for (int i = 0; i < REGIONS_COUNT; i++) {
             if (!gConfig.buzzer.regions[i]) continue;
@@ -62,7 +73,6 @@ void buzzerHandle() {
         if (wasAlert  && !nowAlert) buzzerPlay(false);
         gAlertsChanged = false;
     }
-    gBuzzerInitialized = true;
 
     if (!gPlaying) return;
 
@@ -74,12 +84,12 @@ void buzzerHandle() {
 
     if (gNoteIndex < total) {
         if (gNoteStart == 0 || now - gNoteStart >= (unsigned long)durations[gNoteIndex]) {
-            tone(BUZZER_PIN, melody[gNoteIndex]);
+            platform_audio::playTone((uint16_t)melody[gNoteIndex]);
             gNoteStart = now;
             gNoteIndex++;
         }
     } else {
-        noTone(BUZZER_PIN);
+        platform_audio::stopTone();
         gPlaying = false;
     }
 }

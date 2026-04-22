@@ -1,8 +1,8 @@
 #pragma once
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
 #include <WiFiManager.h>
 #include <DNSServer.h>
+#include "platform_compat.h"
 #include "config.h"
 #include "leds.h"
 #include "animations.h"
@@ -29,38 +29,34 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
     }
 
     const float nowMs = (float)millis();
-    const float cycleMs = STARTUP_ANIMATION_SWEEP_MS * 2.0f;
-    const float cyclePosition = fmodf(nowMs, cycleMs);
-    const float normalized = cyclePosition / cycleMs;
-    const float pingPong = 1.0f - fabsf((normalized * 2.0f) - 1.0f);
-    const float easedProgress = 0.5f - 0.5f * cosf(pingPong * 3.1415926f);
-    const float activeIndex = (ledCount > 1)
-        ? easedProgress * (float)(ledCount - 1)
-        : 0.0f;
-    const bool forward = normalized < 0.5f;
+    const float sweepT = fmodf(nowMs / STARTUP_ANIMATION_SWEEP_MS, 1.0f);
+    const float pingPong = 1.0f - fabsf((sweepT * 2.0f) - 1.0f);
+    const float eased = pingPong * pingPong * (3.0f - 2.0f * pingPong);
+    const float head = (ledCount > 1) ? eased * (float)(ledCount - 1) : 0.0f;
+
+    const float breath = 0.5f + 0.5f * sinf(nowMs * 0.0018f);
+    const float ambient = 0.06f + 0.08f * breath;
+    const float waveTime = nowMs * 0.0012f;
 
     for (uint8_t i = 0; i < ledCount; i++)
     {
-        const float phaseOffset = forward
-            ? (activeIndex - i)
-            : (i - activeIndex);
+        const float distance = fabsf((float)i - head);
+        const float tailProgress = constrain(distance / STARTUP_ANIMATION_TAIL_LENGTH, 0.0f, 1.0f);
+        const float fade = 1.0f - (tailProgress * tailProgress);
+        const float glow = powf(max(0.0f, fade), STARTUP_ANIMATION_BRIGHTNESS_POWER);
 
-        if (phaseOffset < 0.0f || phaseOffset > STARTUP_ANIMATION_TAIL_LENGTH)
-        {
-            strip.setPixelColor(i, 0);
-            continue;
-        }
-
-        const float tailProgress = constrain(phaseOffset / STARTUP_ANIMATION_TAIL_LENGTH, 0.0f, 1.0f);
-        const float fade = 1.0f - tailProgress;
-        const float brightness = powf(fade, STARTUP_ANIMATION_BRIGHTNESS_POWER);
-        const float blend = 0.15f + (0.85f * (1.0f - tailProgress));
+        const float pos = (ledCount > 1) ? ((float)i / (float)(ledCount - 1)) : 0.0f;
+        const float flagWave = 0.5f + 0.5f * sinf((pos * 2.6f - waveTime) * 6.2831853f);
+        const float blend = constrain(0.15f + 0.65f * pos + 0.20f * (flagWave - 0.5f), 0.0f, 1.0f);
         Color mixed = {
             (uint8_t)(primary.r + (secondary.r - primary.r) * blend),
             (uint8_t)(primary.g + (secondary.g - primary.g) * blend),
             (uint8_t)(primary.b + (secondary.b - primary.b) * blend),
             (uint8_t)(primary.a)
         };
+
+        const float sparkle = 0.03f + 0.03f * sinf((nowMs * 0.004f) + ((float)i * 0.75f));
+        const float brightness = constrain(ambient + glow * (0.75f + 0.25f * breath) + sparkle, 0.0f, 1.0f);
         uint32_t color = applyColorBrightness(mixed, brightness);
 
         strip.setPixelColor(i, color);

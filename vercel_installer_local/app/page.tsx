@@ -55,6 +55,17 @@ type ConfigTransferState = {
   buffer: string;
   timeoutId: ReturnType<typeof setTimeout> | null;
   readyResolve: (() => void) | null;
+  expectedAckCmds?: string[];
+};
+
+type TargetBoard = "esp8266" | "esp32c3";
+
+type BoardAssets = {
+  firmware: ReleaseAsset | null;
+  littlefs: ReleaseAsset | null;
+  bootloader?: ReleaseAsset | null;
+  partitions?: ReleaseAsset | null;
+  bootApp0?: ReleaseAsset | null;
 };
 
 const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER || "WebDev-Den";
@@ -63,6 +74,7 @@ const SUPPORT_AUTHOR_URL = "https://send.monobank.ua/jar/2PMhPjRk9j";
 const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
 const PROJECT_REPO_URL = "https://github.com/WebDev-Den/AlarmMini";
 const CONFIG_STORAGE_KEY = "alarmmini.installer.config";
+const CONFIG_FULL_BACKUP_KEY = "alarmmini.installer.full-config-backup";
 const t = getMessages();
 
 const DEFAULT_DEVICE_CONFIG: DeviceConfig = {
@@ -271,6 +283,99 @@ function formatLocalDateTime(iso: string) {
   }
 }
 
+function normalizeAssetName(name: string) {
+  return name.toLowerCase().replace(/[_\s]+/g, "-");
+}
+
+function pickReleaseAsset(
+  assets: ReleaseAsset[],
+  boardTokens: string[],
+  kindTokens: string[],
+) {
+  return (
+    assets.find((asset) => {
+      const normalized = normalizeAssetName(asset.name);
+      return (
+        boardTokens.some((token) => normalized.includes(token)) &&
+        kindTokens.some((token) => normalized.includes(token))
+      );
+    }) ?? null
+  );
+}
+
+function resolveBoardAssets(
+  release: GithubRelease | null,
+  board: TargetBoard,
+): BoardAssets {
+  if (!release) {
+    return {
+      firmware: null,
+      littlefs: null,
+      bootloader: null,
+      partitions: null,
+      bootApp0: null,
+    };
+  }
+
+  const assets = release.assets || [];
+  if (board === "esp8266") {
+    return {
+      firmware: pickReleaseAsset(assets, ["esp8266", "d1-mini", "usb"], ["firmware"]),
+      littlefs: pickReleaseAsset(assets, ["esp8266", "d1-mini", "usb"], ["littlefs", "spiffs"]),
+      bootloader: null,
+      partitions: null,
+      bootApp0: null,
+    };
+  }
+
+  return {
+    firmware: pickReleaseAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["firmware"]),
+    littlefs: pickReleaseAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["littlefs", "spiffs"]),
+    bootloader: pickReleaseAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["bootloader"]),
+    partitions: pickReleaseAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["partitions"]),
+    bootApp0: pickReleaseAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["boot-app0", "boot_app0", "bootapp0"]),
+  };
+}
+
+function releaseAssetsForBoard(assets: ReleaseAsset[], board: TargetBoard): ReleaseAsset[] {
+  const isEsp32Tagged = (name: string) => {
+    const normalized = normalizeAssetName(name);
+    return (
+      normalized.includes("esp32c3") ||
+      normalized.includes("esp32-c3") ||
+      normalized.includes("esp32") ||
+      normalized.includes("bootloader") ||
+      normalized.includes("partitions") ||
+      normalized.includes("boot-app0") ||
+      normalized.includes("boot_app0") ||
+      normalized.includes("bootapp0")
+    );
+  };
+
+  if (board === "esp32c3") {
+    return assets.filter((asset) => isEsp32Tagged(asset.name));
+  }
+
+  return assets.filter((asset) => {
+    const normalized = normalizeAssetName(asset.name);
+    if (
+      normalized.includes("esp8266") ||
+      normalized.includes("d1-mini") ||
+      normalized.includes("usb")
+    ) {
+      return true;
+    }
+    if (isEsp32Tagged(asset.name)) {
+      return false;
+    }
+    return (
+      normalized === "firmware.bin" ||
+      normalized === "littlefs.bin" ||
+      normalized === "spiffs.bin"
+    );
+  });
+}
+
 function applySerialLine(line: string, current: BoardSnapshot): BoardSnapshot {
   const next = { ...current, lastLine: line };
 
@@ -387,6 +492,7 @@ export default function Page() {
   const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(
     null,
   );
+  const [targetBoard, setTargetBoard] = useState<TargetBoard>("esp8266");
   const [serialSupported, setSerialSupported] = useState(false);
   const [portState, setPortState] = useState<
     "idle" | "connecting" | "connected"
@@ -521,19 +627,25 @@ export default function Page() {
     [releases, selectedReleaseId],
   );
 
-  const firmwareAsset =
-    selectedRelease?.assets.find((asset) =>
-      asset.name.toLowerCase().includes("firmware"),
-    ) ?? null;
-  const littlefsAsset =
-    selectedRelease?.assets.find((asset) =>
-      asset.name.toLowerCase().includes("littlefs"),
-    ) ?? null;
+  const boardAssets = useMemo(
+    () => resolveBoardAssets(selectedRelease, targetBoard),
+    [selectedRelease, targetBoard],
+  );
+  const firmwareAsset = boardAssets.firmware;
+  const littlefsAsset = boardAssets.littlefs;
+  const bootloaderAsset = boardAssets.bootloader ?? null;
+  const partitionsAsset = boardAssets.partitions ?? null;
+  const bootApp0Asset = boardAssets.bootApp0 ?? null;
 
   const hasSelectedReleaseAssets =
     Boolean(selectedRelease) &&
     Boolean(firmwareAsset) &&
     Boolean(littlefsAsset) &&
+    (targetBoard === "esp32c3"
+      ? Boolean(bootloaderAsset) &&
+        Boolean(partitionsAsset) &&
+        Boolean(bootApp0Asset)
+      : true) &&
     Boolean(installManifestUrl);
   const canFlashSelectedRelease =
     hasSelectedReleaseAssets && serialSupported && !flashBusy;
@@ -546,7 +658,7 @@ export default function Page() {
         ? t.flash.connecting
         : !selectedRelease
           ? t.flash.chooseRelease
-          : !firmwareAsset || !littlefsAsset
+          : !hasSelectedReleaseAssets
             ? t.flash.requireAssets
             : defaultConfigMode
               ? t.flash.defaultConfig
@@ -574,6 +686,32 @@ export default function Page() {
       window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(compact));
     } catch (storageError) {
       console.error("[config-storage-save]", storageError);
+    }
+  }
+
+  function persistFullBackupToLocal(configPayload: any | null) {
+    if (typeof window === "undefined") return;
+    try {
+      if (!configPayload) {
+        window.localStorage.removeItem(CONFIG_FULL_BACKUP_KEY);
+        return;
+      }
+      const compact = sanitizeConfigPayload(configPayload);
+      window.localStorage.setItem(CONFIG_FULL_BACKUP_KEY, JSON.stringify(compact));
+    } catch (storageError) {
+      console.error("[full-backup-save]", storageError);
+    }
+  }
+
+  function loadFullBackupFromLocal() {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(CONFIG_FULL_BACKUP_KEY);
+      if (!raw) return null;
+      return sanitizeConfigPayload(JSON.parse(raw));
+    } catch (storageError) {
+      console.error("[full-backup-load]", storageError);
+      return null;
     }
   }
 
@@ -706,6 +844,7 @@ export default function Page() {
     persistConfigToLocal(overrides);
 
     configBackupRef.current = merged;
+    persistFullBackupToLocal(merged);
     syncBoardConfig(merged);
     setConfigBackupReady(true);
     setDefaultConfigMode(false);
@@ -731,10 +870,45 @@ export default function Page() {
       overrides,
     );
     configBackupRef.current = merged;
+    persistFullBackupToLocal(merged);
     syncBoardConfig(merged);
     setConfigBackupReady(true);
     setDefaultConfigMode(false);
     await applyConfigToConnectedBoard(overrides);
+  }
+
+  async function applyWifiOnlyToBoard() {
+    if (
+      portState !== "connected" ||
+      !isPortOpen(rememberedPortRef.current ?? portRef.current) ||
+      flashBusy
+    ) {
+      setFlashStatus(t.config.connectToApply);
+      return;
+    }
+
+    const source = getMergedConfigPayload(
+      sanitizeConfigPayload(configDraft || boardConfigPayloadRef.current),
+    );
+    const ssid = String(getCompactValue(source, ["w", "s"], ""));
+    const password = String(getCompactValue(source, ["w", "p"], ""));
+
+    if (!ssid) {
+      setFlashStatus("SSID не задано, set:wifi пропущено.");
+      return;
+    }
+
+    setFlashBusy(true);
+    try {
+      setFlashStatus("Застосовуємо Wi-Fi через set:wifi...");
+      await applyWifiViaSerial(ssid, password);
+      setFlashStatus("Wi-Fi оновлено на платі.");
+    } catch (wifiError) {
+      console.error("[wifi-apply]", wifiError);
+      setFlashStatus("Не вдалося застосувати Wi-Fi через set:wifi.");
+    } finally {
+      setFlashBusy(false);
+    }
   }
 
   async function readConfigFromConnectedBoard() {
@@ -757,6 +931,7 @@ export default function Page() {
       }
       const merged = getMergedConfigPayload(backup);
       configBackupRef.current = merged;
+      persistFullBackupToLocal(merged);
       syncBoardConfig(merged);
       setConfigBackupReady(true);
       setDefaultConfigMode(false);
@@ -813,6 +988,14 @@ export default function Page() {
       return;
     }
 
+    if (
+      targetBoard === "esp32c3" &&
+      (!bootloaderAsset || !partitionsAsset || !bootApp0Asset)
+    ) {
+      setInstallManifestUrl("");
+      return;
+    }
+
     const origin =
       typeof window !== "undefined" ? window.location.origin : "";
     const firmwarePath = `${origin}/api/release-asset?source=${encodeURIComponent(
@@ -821,6 +1004,21 @@ export default function Page() {
     const littlefsPath = `${origin}/api/release-asset?source=${encodeURIComponent(
       littlefsAsset.browser_download_url,
     )}`;
+    const bootloaderPath = bootloaderAsset
+      ? `${origin}/api/release-asset?source=${encodeURIComponent(
+          bootloaderAsset.browser_download_url,
+        )}`
+      : "";
+    const partitionsPath = partitionsAsset
+      ? `${origin}/api/release-asset?source=${encodeURIComponent(
+          partitionsAsset.browser_download_url,
+        )}`
+      : "";
+    const bootApp0Path = bootApp0Asset
+      ? `${origin}/api/release-asset?source=${encodeURIComponent(
+          bootApp0Asset.browser_download_url,
+        )}`
+      : "";
 
     const manifest = {
       name: "AlarmMini",
@@ -829,19 +1027,24 @@ export default function Page() {
       new_install_prompt_erase: false,
       new_install_improv_wait_time: 0,
       builds: [
-        {
-          chipFamily: "ESP8266",
-          parts: [
-            {
-              path: firmwarePath,
-              offset: 0,
+        targetBoard === "esp32c3"
+          ? {
+              chipFamily: "ESP32-C3",
+              parts: [
+                { path: bootloaderPath, offset: 0 },
+                { path: partitionsPath, offset: 32768 },
+                { path: bootApp0Path, offset: 57344 },
+                { path: firmwarePath, offset: 65536 },
+                { path: littlefsPath, offset: 2686976 },
+              ],
+            }
+          : {
+              chipFamily: "ESP8266",
+              parts: [
+                { path: firmwarePath, offset: 0 },
+                { path: littlefsPath, offset: 2097152 },
+              ],
             },
-            {
-              path: littlefsPath,
-              offset: 2097152,
-            },
-          ],
-        },
       ],
     };
 
@@ -851,7 +1054,15 @@ export default function Page() {
     setInstallManifestUrl(nextUrl);
 
     return () => URL.revokeObjectURL(nextUrl);
-  }, [selectedRelease, firmwareAsset, littlefsAsset]);
+  }, [
+    selectedRelease,
+    firmwareAsset,
+    littlefsAsset,
+    bootloaderAsset,
+    partitionsAsset,
+    bootApp0Asset,
+    targetBoard,
+  ]);
 
   async function disconnectPort(options?: { preserveBackupState?: boolean }) {
     const activePort = portRef.current ?? rememberedPortRef.current;
@@ -972,6 +1183,18 @@ export default function Page() {
 
         if (payload?.event === "device_info") {
           applyDeviceInfoPayloadToBoard(payload);
+          if (transfer?.mode === "probe") {
+            clearConfigTransferTimeout();
+            configTransferRef.current = null;
+            transfer.resolve(true);
+          }
+          return true;
+        }
+
+        if (payload?.event === "config" && transfer?.mode === "backup") {
+          clearConfigTransferTimeout();
+          configTransferRef.current = null;
+          transfer.resolve(payload.config || null);
           return true;
         }
 
@@ -985,7 +1208,10 @@ export default function Page() {
         if (
           payload.status === "ACK" &&
           transfer.mode === "probe" &&
-          (payload.cmd === "hello" || payload.cmd === "ping")
+          (payload.cmd === "get:info" ||
+            payload.cmd === "device_info" ||
+            payload.cmd === "hello" ||
+            payload.cmd === "ping")
         ) {
           clearConfigTransferTimeout();
           configTransferRef.current = null;
@@ -996,7 +1222,11 @@ export default function Page() {
         if (
           payload.status === "ACK" &&
           transfer.mode === "restore" &&
-          payload.cmd === "import_config"
+          (
+            transfer.expectedAckCmds?.includes(String(payload.cmd || "")) ||
+            (!transfer.expectedAckCmds &&
+              (payload.cmd === "set:config" || payload.cmd === "config_set"))
+          )
         ) {
           clearConfigTransferTimeout();
           configTransferRef.current = null;
@@ -1070,72 +1300,7 @@ export default function Page() {
         return false;
       }
     }
-
-    if (!line.startsWith("AMCFG ")) return false;
-
-    const transfer = configTransferRef.current;
-    if (!transfer) return true;
-
-    if (line.startsWith("AMCFG ERROR ")) {
-      rejectConfigTransfer(line.replace("AMCFG ERROR ", "").trim());
-      return true;
-    }
-
-    if (line === "AMCFG READY") {
-      if (transfer.mode === "probe") {
-        clearConfigTransferTimeout();
-        configTransferRef.current = null;
-        transfer.resolve(true);
-        return true;
-      }
-      if (transfer.mode === "backup") {
-        armConfigTransferTimeout("backup_timeout", 15000);
-      } else {
-        clearConfigTransferTimeout();
-      }
-      if (transfer.readyResolve) {
-        const readyResolve = transfer.readyResolve;
-        transfer.readyResolve = null;
-        readyResolve();
-      }
-      return true;
-    }
-
-    if (line.startsWith("AMCFG BEGIN ")) {
-      transfer.buffer = "";
-      armConfigTransferTimeout("backup_timeout", 15000);
-      return true;
-    }
-
-    if (line.startsWith("AMCFG DATA ")) {
-      transfer.buffer += line.slice("AMCFG DATA ".length);
-      armConfigTransferTimeout(
-        transfer.mode === "backup" ? "backup_timeout" : "restore_timeout",
-        15000,
-      );
-      return true;
-    }
-
-    if (line === "AMCFG END" && transfer.mode === "backup") {
-      try {
-        const parsed = JSON.parse(transfer.buffer || "{}");
-        clearConfigTransferTimeout();
-        configTransferRef.current = null;
-        transfer.resolve(parsed);
-      } catch {
-        rejectConfigTransfer("invalid_backup_json");
-      }
-      return true;
-    }
-
-    if (line === "AMCFG OK" && transfer.mode === "restore") {
-      clearConfigTransferTimeout();
-      configTransferRef.current = null;
-      transfer.resolve(true);
-      return true;
-    }
-
-    return true;
+    return false;
   }
 
   async function backupConfigViaSerial(timeoutMs = BACKUP_TIMEOUT_BASE_MS) {
@@ -1157,7 +1322,7 @@ export default function Page() {
       };
 
       try {
-        await writeSerialLine('{"cmd":"export_config"}');
+        await writeSerialLine("get:config");
       } catch {
         rejectConfigTransfer("backup_write_failed");
       }
@@ -1176,6 +1341,45 @@ export default function Page() {
     if (!boardReady) {
       throw new Error("restore_ready_timeout");
     }
+    const sendAndWaitAck = async (
+      line: string,
+      expectedCmd: string,
+      timeoutMs: number,
+    ) => {
+      await new Promise<boolean>(async (resolve, reject) => {
+        configTransferRef.current = {
+          mode: "restore",
+          resolve,
+          reject,
+          buffer: "",
+          timeoutId: setTimeout(
+            () => rejectConfigTransfer("restore_timeout"),
+            timeoutMs,
+          ),
+          readyResolve: null,
+          expectedAckCmds: [expectedCmd],
+        };
+        try {
+          await writeSerialLine(line);
+        } catch {
+          rejectConfigTransfer("restore_write_failed");
+        }
+      });
+    };
+
+    const payload = JSON.stringify(sanitizeConfigPayload(configPayload || {}));
+    const bytes = new TextEncoder().encode(payload);
+
+    await sendAndWaitAck("cmd=set_begin", "set_begin", 8000);
+    for (let offset = 0; offset < bytes.length; offset += 64) {
+      const chunk = bytes.slice(offset, offset + 64);
+      await sendAndWaitAck(`data=${encodeHexBytes(chunk)}`, "set_data", 8000);
+    }
+    await sendAndWaitAck("cmd=set_end", "set_end", restoreTimeoutMs);
+  }
+
+  async function applyWifiViaSerial(ssid: string, password: string) {
+    if (!ssid) throw new Error("missing_ssid");
 
     await new Promise<boolean>(async (resolve, reject) => {
       configTransferRef.current = {
@@ -1184,21 +1388,19 @@ export default function Page() {
         reject,
         buffer: "",
         timeoutId: setTimeout(
-          () => rejectConfigTransfer("restore_timeout"),
-          restoreTimeoutMs,
+          () => rejectConfigTransfer("wifi_timeout"),
+          12000,
         ),
         readyResolve: null,
+        expectedAckCmds: ["set:wifi", "wifi_set"],
       };
 
       try {
         await writeSerialLine(
-          JSON.stringify({
-            cmd: "import_config",
-            config: sanitizeConfigPayload(configPayload || {}),
-          }),
+          `set:wifi ${JSON.stringify({ ssid, password })}`,
         );
       } catch {
-        rejectConfigTransfer("restore_write_failed");
+        rejectConfigTransfer("wifi_write_failed");
       }
     });
   }
@@ -1223,7 +1425,7 @@ export default function Page() {
         const transfer = configTransferRef.current;
         if (!transfer || transfer.mode !== "probe") return;
         try {
-          await writeSerialLine('{"cmd":"hello"}');
+          await writeSerialLine("get:info");
         } catch {}
         window.setTimeout(poll, pollIntervalMs);
       };
@@ -1296,7 +1498,7 @@ export default function Page() {
           .forEach((line) => {
             if (Date.now() < serialWarmupUntilRef.current) {
               const protocolLike =
-                isJsonProtocolLine(line) || line.startsWith("AMCFG ");
+                isJsonProtocolLine(line);
               const logLike =
                 line.startsWith("[LOG]") ||
                 line.startsWith("[WiFi]") ||
@@ -1405,8 +1607,34 @@ export default function Page() {
         resetBackupProgress();
         if (backup) {
           configBackupRef.current = getMergedConfigPayload(backup);
+          persistFullBackupToLocal(configBackupRef.current);
           syncBoardConfig(configBackupRef.current);
           setConfigBackupReady(Boolean(configBackupRef.current));
+          setDefaultConfigMode(false);
+          setFlashStatus(t.flash.configReadOk);
+        } else {
+          const localBackup = loadFullBackupFromLocal();
+          if (localBackup) {
+            configBackupRef.current = localBackup;
+            syncBoardConfig(localBackup);
+            setConfigBackupReady(true);
+            setDefaultConfigMode(false);
+            setFlashStatus(t.flash.configReadOk);
+          } else {
+            configBackupRef.current = null;
+            setConfigBackupReady(false);
+            setDefaultConfigMode(true);
+            setFlashStatus(t.flash.configReadFailedCanContinue);
+          }
+        }
+      } catch (backupError) {
+        console.error("[config-backup-init]", backupError);
+        resetBackupProgress();
+        const localBackup = loadFullBackupFromLocal();
+        if (localBackup) {
+          configBackupRef.current = localBackup;
+          syncBoardConfig(localBackup);
+          setConfigBackupReady(true);
           setDefaultConfigMode(false);
           setFlashStatus(t.flash.configReadOk);
         } else {
@@ -1415,13 +1643,6 @@ export default function Page() {
           setDefaultConfigMode(true);
           setFlashStatus(t.flash.configReadFailedCanContinue);
         }
-      } catch (backupError) {
-        console.error("[config-backup-init]", backupError);
-        resetBackupProgress();
-        configBackupRef.current = null;
-        setConfigBackupReady(false);
-        setDefaultConfigMode(true);
-        setFlashStatus(t.flash.configReadFailedCanContinue);
       }
     } catch (connectError) {
       console.error("[serial-connect]", connectError);
@@ -1458,20 +1679,37 @@ export default function Page() {
         if (backup) {
           const mergedBackup = getMergedConfigPayload(backup);
           configBackupRef.current = mergedBackup;
+          persistFullBackupToLocal(mergedBackup);
           syncBoardConfig(mergedBackup);
           setConfigBackupReady(Boolean(mergedBackup));
+          setDefaultConfigMode(false);
+        } else {
+          const localBackup = loadFullBackupFromLocal();
+          if (localBackup) {
+            configBackupRef.current = localBackup;
+            syncBoardConfig(localBackup);
+            setConfigBackupReady(true);
+            setDefaultConfigMode(false);
+          } else {
+            configBackupRef.current = null;
+            setConfigBackupReady(false);
+            setDefaultConfigMode(true);
+          }
+        }
+      } catch (backupError) {
+        console.error("[config-backup-check]", backupError);
+        resetBackupProgress();
+        const localBackup = loadFullBackupFromLocal();
+        if (localBackup) {
+          configBackupRef.current = localBackup;
+          syncBoardConfig(localBackup);
+          setConfigBackupReady(true);
           setDefaultConfigMode(false);
         } else {
           configBackupRef.current = null;
           setConfigBackupReady(false);
           setDefaultConfigMode(true);
         }
-      } catch (backupError) {
-        console.error("[config-backup-check]", backupError);
-        resetBackupProgress();
-        configBackupRef.current = null;
-        setConfigBackupReady(false);
-        setDefaultConfigMode(true);
       }
     }
 
@@ -1546,10 +1784,20 @@ export default function Page() {
       const backup = await ensureConnectedAndBackedUp();
 
       if (!backup) {
-        configBackupRef.current = null;
-        setConfigBackupReady(false);
-        setDefaultConfigMode(true);
-        setFlashStatus(t.flash.continuingWithDefault);
+        const localBackup = loadFullBackupFromLocal();
+        if (localBackup) {
+          configBackupRef.current = localBackup;
+          setConfigBackupReady(true);
+          setDefaultConfigMode(false);
+          setFlashStatus(t.flash.configReadOkStarting);
+        } else {
+          configBackupRef.current = null;
+          setConfigBackupReady(false);
+          setDefaultConfigMode(true);
+          setFlashStatus(t.flash.continuingWithDefault);
+        }
+      } else {
+        persistFullBackupToLocal(backup);
       }
 
       if (rememberedPortRef.current || portRef.current) {
@@ -1613,8 +1861,19 @@ export default function Page() {
             const flashedConfig = await backupConfigWithRetry(3);
             if (flashedConfig) {
               configBackupRef.current = getMergedConfigPayload(flashedConfig);
+              persistFullBackupToLocal(configBackupRef.current);
               syncBoardConfig(configBackupRef.current);
             }
+          }
+          if (!configBackupRef.current) {
+            const localBackup = loadFullBackupFromLocal();
+            if (localBackup) {
+              configBackupRef.current = localBackup;
+              syncBoardConfig(localBackup);
+            }
+          }
+          if (!configBackupRef.current) {
+            throw new Error("no_config_backup_to_restore");
           }
           setFlashStage("restoring");
           setFlashStatus(t.flash.stageRestoring);
@@ -1631,6 +1890,7 @@ export default function Page() {
             const restoredConfig = await backupConfigWithRetry(2);
             if (restoredConfig && isExpectedConfigApplied(expectedConfig, restoredConfig)) {
               configBackupRef.current = getMergedConfigPayload(restoredConfig);
+              persistFullBackupToLocal(configBackupRef.current);
               syncBoardConfig(configBackupRef.current);
               setConfigBackupReady(Boolean(configBackupRef.current));
               setDefaultConfigMode(false);
@@ -1653,7 +1913,6 @@ export default function Page() {
           setFlashStage("");
           setFlashStatus(t.flash.restoreFailed);
         } finally {
-          configBackupRef.current = null;
           setFlashBusy(false);
         }
       })();
@@ -1785,6 +2044,10 @@ export default function Page() {
               <div className="release-list">
                 {releases.map((release) => {
                   const isActive = release.id === selectedReleaseId;
+                  const boardScopedAssets = releaseAssetsForBoard(
+                    release.assets || [],
+                    targetBoard,
+                  );
                   return (
                     <article
                       key={release.id}
@@ -1808,23 +2071,33 @@ export default function Page() {
                       </div>
 
                       <div className="asset-list">
-                        {release.assets.map((asset) => (
-                          <div key={asset.id} className="asset-item">
+                        {boardScopedAssets.length === 0 ? (
+                          <div className="asset-item">
                             <div>
-                              <div className="asset-name">{asset.name}</div>
-                              <div className="asset-size">
-                                {formatBytes(asset.size)}
+                              <div className="asset-name">
+                                Немає assets для {targetBoard === "esp32c3" ? "ESP32-C3" : "ESP8266"}
                               </div>
                             </div>
-                            <a
-                              href={asset.browser_download_url}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {t.common.open}
-                            </a>
                           </div>
-                        ))}
+                        ) : (
+                          boardScopedAssets.map((asset) => (
+                            <div key={asset.id} className="asset-item">
+                              <div>
+                                <div className="asset-name">{asset.name}</div>
+                                <div className="asset-size">
+                                  {formatBytes(asset.size)}
+                                </div>
+                              </div>
+                              <a
+                                href={asset.browser_download_url}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {t.common.open}
+                              </a>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </article>
                   );
@@ -1841,6 +2114,24 @@ export default function Page() {
                   selectedRelease?.tag_name ||
                   t.flash.releaseMissing}
               </div>
+              <div className="board-switch">
+                <button
+                  type="button"
+                  className={targetBoard === "esp8266" ? "inline-btn is-active" : "inline-btn"}
+                  onClick={() => setTargetBoard("esp8266")}
+                  disabled={flashBusy}
+                >
+                  ESP8266
+                </button>
+                <button
+                  type="button"
+                  className={targetBoard === "esp32c3" ? "inline-btn is-active" : "inline-btn"}
+                  onClick={() => setTargetBoard("esp32c3")}
+                  disabled={flashBusy}
+                >
+                  ESP32-C3
+                </button>
+              </div>
               <div className="hero-assets">
                 <span>
                   {firmwareAsset ? firmwareAsset.name : t.flash.firmwareMissing}
@@ -1850,6 +2141,25 @@ export default function Page() {
                     ? littlefsAsset.name
                     : t.flash.littlefsMissing}
                 </span>
+                {targetBoard === "esp32c3" ? (
+                  <>
+                    <span>
+                      {bootloaderAsset
+                        ? bootloaderAsset.name
+                        : "bootloader.bin не знайдено"}
+                    </span>
+                    <span>
+                      {partitionsAsset
+                        ? partitionsAsset.name
+                        : "partitions.bin не знайдено"}
+                    </span>
+                    <span>
+                      {bootApp0Asset
+                        ? bootApp0Asset.name
+                        : "boot_app0.bin не знайдено"}
+                    </span>
+                  </>
+                ) : null}
               </div>
               <div
                 className={`status-pill ${configBackupReady ? "is-ok" : "is-warn"}`}
@@ -1910,6 +2220,20 @@ export default function Page() {
                   {flashStatus}
                 </div>
               ) : null}
+              {flashStage === "done" &&
+              portState === "connected" &&
+              !flashBusy &&
+              hasConfigOverrides() ? (
+                <div className="button-stack hero-action-stack">
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() => void applyStagedConfigToBoard()}
+                  >
+                    Застосувати мої налаштування зараз
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="panel-head">
@@ -1962,6 +2286,23 @@ export default function Page() {
                         {t.config.applyNow}
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => void applyWifiOnlyToBoard()}
+                      disabled={
+                        flashBusy ||
+                        portState !== "connected" ||
+                        !isPortOpen(rememberedPortRef.current ?? portRef.current)
+                      }
+                      title={
+                        portState === "connected"
+                          ? ""
+                          : t.config.connectToApply
+                      }
+                    >
+                      set:wifi
+                    </button>
                     <button
                       type="button"
                       className="inline-btn config-edit-btn"

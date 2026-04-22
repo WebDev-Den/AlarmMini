@@ -1,7 +1,7 @@
 #include "reset_trace.h"
+#include "platform_compat.h"
 
 #include <LittleFS.h>
-#include <ESP8266WiFi.h>
 
 #include "logger.h"
 
@@ -120,8 +120,8 @@ void logBootRecord()
 void resetTraceInit()
 {
     memset(&gTrace, 0, sizeof(gTrace));
-    copyBounded(gTrace.reason, sizeof(gTrace.reason), ESP.getResetReason().c_str());
-    copyBounded(gTrace.info, sizeof(gTrace.info), ESP.getResetInfo().c_str());
+    copyBounded(gTrace.reason, sizeof(gTrace.reason), platformResetReason().c_str());
+    copyBounded(gTrace.info, sizeof(gTrace.info), platformResetInfo().c_str());
     copyBounded(gTrace.stage, sizeof(gTrace.stage), "boot_init");
     gTrace.stageAtMs = millis();
 

@@ -171,6 +171,30 @@ platformio run -t uploadfs -e usb
 platformio run -t upload -e usb
 ```
 
+### Автоматичне збереження конфіга при прошивці
+
+Є кастомні PlatformIO targets, які роблять повний цикл через Serial:
+
+1. зчитують конфіг (`get:config`);
+2. шиють firmware;
+3. шиють `LittleFS` (для `flash_preserve`);
+4. повертають конфіг (`set_begin/set_data/set_end`).
+
+```powershell
+# firmware + LittleFS + restore config
+platformio run -e usb -t flash_preserve
+
+# тільки firmware + restore config
+platformio run -e usb -t flash_preserve_fw
+```
+
+Для `ESP32-C3` / `ESP8266 E12` заміни `-e usb` на `-e esp32c3` або `-e esp8266e12`.
+Якщо порт не визначився автоматично, задай `upload_port` у `platformio.ini` або передай порт у скрипт вручну:
+
+```powershell
+python scripts/config_preserve_flash.py --env esp32c3 --port COM7
+```
+
 ## Процес створення і виготовлення
 
 Типовий процес виглядає так:
@@ -204,3 +228,28 @@ platformio run -t upload -e usb
 ## Ліцензія
 
 Додай окрему ліцензію у репозиторій, коли визначишся з форматом публікації.
+
+## Serial GUI (Python)
+
+Desktop GUI for AlarmMini COM protocol:
+
+- `get:info`
+- `get:config`
+- `set:config {...}`
+- `set:wifi {"ssid":"...","password":"..."}`
+
+File: `scripts/alarmmini_serial_gui.py`
+
+Run:
+
+```powershell
+pip install pyserial
+python scripts/alarmmini_serial_gui.py
+```
+
+Features:
+
+- connect/disconnect COM port
+- live JSON serial log
+- config editor (format/minify/load/save)
+- config profiles CRUD (create/read/update/delete) in `work_data/serial_profiles.json`

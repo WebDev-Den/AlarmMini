@@ -1,5 +1,5 @@
 #pragma once
-#include <ESP8266WiFi.h>
+#include "platform_compat.h"
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include "config.h"
@@ -23,7 +23,9 @@ static PubSubClient  _mqtt(_mqttWifi);
 static unsigned long _mqttLastReconnect = 0;
 static int           _mqttReconnectDelay = 2000;
 static unsigned long _internetLastCheck = 0;
+static unsigned long _transportDownSince = 0;
 static constexpr unsigned long INTERNET_CHECK_INTERVAL_MS = 60000UL;
+static constexpr unsigned long TRANSPORT_DROP_DEBOUNCE_MS = 5000UL;
 static constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 1;
 static constexpr unsigned long MQTT_LOOP_GUARD_MS = 10UL;
 
@@ -143,7 +145,7 @@ bool _mqttConnect() {
     _mqtt.setSocketTimeout(MQTT_SOCKET_TIMEOUT_S);
 
     char clientId[24];
-    snprintf(clientId, sizeof(clientId), "alarm-map-%06X", ESP.getChipId());
+    snprintf(clientId, sizeof(clientId), "alarm-map-%06X", platformChipId());
 
     bool ok = strlen(gConfig.mqttUser)
         ? _mqtt.connect(clientId, gConfig.mqttUser, gConfig.mqttPass)
@@ -154,6 +156,7 @@ bool _mqttConnect() {
         _mqtt.subscribe(t, 1);
         gMqttConnected = true;
         _mqttReconnectDelay = 2000;
+        _transportDownSince = 0;
         LOG_INFO(LOG_CAT_MQTT, "Connected, topic: '%s'", t);
     } else {
         gMqttConnected = false;
@@ -207,6 +210,15 @@ void alertsHandle() {
 
     // Never keep stale MQTT sockets when transport is down.
     if (WiFi.status() != WL_CONNECTED || !gInternetConnected) {
+        if (_transportDownSince == 0) {
+            _transportDownSince = now;
+            yield();
+            return;
+        }
+        if (now - _transportDownSince < TRANSPORT_DROP_DEBOUNCE_MS) {
+            yield();
+            return;
+        }
         if (_mqtt.connected()) {
             _mqtt.disconnect();
         }
@@ -217,6 +229,7 @@ void alertsHandle() {
         yield();
         return;
     }
+    _transportDownSince = 0;
 
     if (_mqtt.connected()) {
         gMqttConnected = true;

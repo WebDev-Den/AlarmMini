@@ -1,6 +1,6 @@
 # AlarmMini Vercel Installer
 
-Local-only starter project for deploying a release picker and future Web Serial flasher to Vercel.
+Local installer/flasher UI for deploying AlarmMini from GitHub Releases on Vercel.
 
 ## What it does
 
@@ -8,9 +8,24 @@ Local-only starter project for deploying a release picker and future Web Serial 
 - shows firmware versions
 - shows attached `.bin` assets
 - checks whether `Web Serial` is available in the browser
-- backs up config from device over UART via `{"cmd":"export_config"}`
-- restores config over UART via `{"cmd":"import_config","config":{...}}`
+- reads device info over UART via `get:info`
+- reads config over UART via `get:config`
+- writes config over UART via `set:config {...}`
+- applies Wi‑Fi over UART via `set:wifi {"ssid":"...","password":"..."}`
 - updates board snapshot from UART `device_info` events
+- preserves config during browser flashing flow (backup -> flash -> restore)
+
+## Release assets expected by UI
+
+For each GitHub Release attach these files:
+
+- `alarmmini-esp8266-firmware.bin`
+- `alarmmini-esp8266-littlefs.bin`
+- `alarmmini-esp32c3-firmware.bin`
+- `alarmmini-esp32c3-littlefs.bin`
+- `alarmmini-esp32c3-bootloader.bin`
+- `alarmmini-esp32c3-partitions.bin`
+- `alarmmini-esp32c3-boot_app0.bin`
 
 ## Environment
 

@@ -7,8 +7,9 @@ from pathlib import Path
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-BUILD_DIR = PROJECT_DIR / ".pio" / "build" / "usb"
 OUTPUT_DIR = PROJECT_DIR / "release_artifacts"
+USB_BUILD_DIR = PROJECT_DIR / ".pio" / "build" / "usb"
+ESP32C3_BUILD_DIR = PROJECT_DIR / ".pio" / "build" / "esp32c3"
 
 
 def run(cmd, env):
@@ -22,12 +23,25 @@ def main():
 
     run(["platformio", "run", "-e", "usb"], env)
     run(["platformio", "run", "-t", "buildfs", "-e", "usb"], env)
+    run(["platformio", "run", "-e", "esp32c3"], env)
+    run(["platformio", "run", "-t", "buildfs", "-e", "esp32c3"], env)
 
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     artifacts = {
-        "firmware.bin": BUILD_DIR / "firmware.bin",
-        "littlefs.bin": BUILD_DIR / "littlefs.bin",
+        "alarmmini-esp8266-firmware.bin": USB_BUILD_DIR / "firmware.bin",
+        "alarmmini-esp8266-littlefs.bin": USB_BUILD_DIR / "littlefs.bin",
+        "alarmmini-esp32c3-firmware.bin": ESP32C3_BUILD_DIR / "firmware.bin",
+        "alarmmini-esp32c3-littlefs.bin": ESP32C3_BUILD_DIR / "littlefs.bin",
+        "alarmmini-esp32c3-bootloader.bin": ESP32C3_BUILD_DIR / "bootloader.bin",
+        "alarmmini-esp32c3-partitions.bin": ESP32C3_BUILD_DIR / "partitions.bin",
+        "alarmmini-esp32c3-boot_app0.bin": Path.home()
+        / ".platformio"
+        / "packages"
+        / "framework-arduinoespressif32"
+        / "tools"
+        / "partitions"
+        / "boot_app0.bin",
     }
 
     for name, src in artifacts.items():

@@ -1,0 +1,49 @@
+name: Build And Attach Firmware Assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build release artifacts
+        run: python scripts/build_release_assets.py
+
+      - name: Upload release assets
+        if: ${{ github.event_name == 'release' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release_artifacts/alarmmini-esp8266-firmware.bin
+            release_artifacts/alarmmini-esp8266-littlefs.bin
+            release_artifacts/alarmmini-esp32c3-firmware.bin
+            release_artifacts/alarmmini-esp32c3-littlefs.bin
+            release_artifacts/alarmmini-esp32c3-bootloader.bin
+            release_artifacts/alarmmini-esp32c3-partitions.bin
+            release_artifacts/alarmmini-esp32c3-boot_app0.bin
+          fail_on_unmatched_files: true
+          overwrite_files: true
+
+      - name: Upload workflow artifacts
+        if: ${{ github.event_name != 'release' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: alarmmini-release-assets
+          path: release_artifacts/*.bin

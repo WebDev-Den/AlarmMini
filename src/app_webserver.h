@@ -1,7 +1,5 @@
 #pragma once
-#include <ESP8266WebServer.h>
-#include <ESP8266WiFi.h>
-#include <LittleFS.h>
+#include "platform_compat.h"
 #include <ArduinoJson.h>
 #include "config.h"
 #include "storage.h"
@@ -10,13 +8,14 @@
 #include "leds.h"
 #include "logger.h"
 #include "reset_trace.h"
+#include "runtime_stats.h"
 
 extern char gHostname[];
 static constexpr size_t INFO_DOC_CAPACITY = 3072;
 static constexpr size_t LOGS_DOC_CAPACITY = 4096;
 static constexpr size_t LOGS_EXPORT_LIMIT = 16;
 
-ESP8266WebServer gServer(80);
+AlarmWebServer gServer(80);
 char gSessionToken[33] = {0};
 bool gRestartScheduled = false;
 unsigned long gRestartAtMs = 0;
@@ -50,6 +49,59 @@ String mimeTypeFor(const String &path)
     if (path.endsWith(".ico"))
         return "image/x-icon";
     return "text/plain; charset=utf-8";
+}
+
+String normalizeStaticPath(String requestUri)
+{
+    int queryPos = requestUri.indexOf('?');
+    if (queryPos >= 0)
+        requestUri = requestUri.substring(0, queryPos);
+
+    int hashPos = requestUri.indexOf('#');
+    if (hashPos >= 0)
+        requestUri = requestUri.substring(0, hashPos);
+
+    // Some installers/proxies may prepend "/littlefs" to asset URLs.
+    // Remap them to the real FS root to avoid noisy failed-open logs.
+    if (requestUri.startsWith("/littlefs/"))
+        requestUri = requestUri.substring(8);
+    else if (requestUri == "/littlefs")
+        requestUri = "/";
+
+    if (requestUri.length() == 0 || requestUri == "/")
+        return "/index.html";
+
+    if (requestUri.endsWith("/"))
+        return requestUri + "index.html";
+
+    return requestUri;
+}
+
+bool streamStaticFile(const String &path, const String &mimeType, bool isGzip)
+{
+    File file = LittleFS.open(path, "r");
+    if (!file)
+        return false;
+
+    gServer.streamFile(file, mimeType);
+    file.close();
+    return true;
+}
+
+bool tryServeStaticWithGzipFallback(const String &requestUri)
+{
+    const String path = normalizeStaticPath(requestUri);
+    if (path.indexOf("..") >= 0)
+        return false;
+
+    if (LittleFS.exists(path))
+        return streamStaticFile(path, mimeTypeFor(path), false);
+
+    const String gzipPath = path + ".gz";
+    if (LittleFS.exists(gzipPath))
+        return streamStaticFile(gzipPath, mimeTypeFor(path), true);
+
+    return false;
 }
 
 String getCookieValue(const String &name)
@@ -92,7 +144,8 @@ void sendJson(JsonDocument &doc, int status = 200)
     addCors();
     gServer.setContentLength(measureJson(doc));
     gServer.send(status, "application/json", "");
-    serializeJson(doc, gServer.client());
+    WiFiClient client = gServer.client();
+    serializeJson(doc, client);
 }
 
 void mergeMissingRecursive(JsonVariant dst, JsonVariantConst src)
@@ -300,7 +353,7 @@ void handleLogin()
         return;
     }
 
-    snprintf(gSessionToken, sizeof(gSessionToken), "%08X%08lX", ESP.getChipId(), micros());
+    snprintf(gSessionToken, sizeof(gSessionToken), "%08X%08lX", platformChipId(), micros());
     LOG_INFO(LOG_CAT_WEB, "Login successful");
     addCors();
     String cookie = "ESPSESSION=";
@@ -578,19 +631,22 @@ void handleHealth()
     StaticJsonDocument<768> doc;
     doc["uptimeMs"] = millis();
     doc["heapFree"] = ESP.getFreeHeap();
-    doc["heapMaxBlock"] = ESP.getMaxFreeBlockSize();
-    doc["heapFragPct"] = ESP.getHeapFragmentation();
+    doc["heapMaxBlock"] = platformMaxFreeBlock();
+    doc["heapFragPct"] = platformHeapFragmentationPct();
     doc["wifiStatus"] = WiFi.status();
     doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
     doc["mqttConnected"] = gMqttConnected;
     doc["internetConnected"] = gInternetConnected;
+    doc["loopMaxMs"] = gLoopMaxDurationMs;
+    doc["loopSlowCount"] = gLoopSlowCount;
+    doc["loopIterations"] = gLoopIterationCount;
     resetTraceFillHealth(doc);
     sendJson(doc);
 }
 
 void webserverInit()
 {
-    gServer.collectHeaders("Cookie");
+    collectCookieHeader(gServer);
 
     gServer.on("/", HTTP_GET, []()
                {
@@ -620,17 +676,12 @@ void webserverInit()
     gServer.on("/config", HTTP_POST, handleConfigApiPost);
     gServer.on("/health", HTTP_GET, handleHealth);
 
-    gServer.serveStatic("/index.html", LittleFS, "/index.html");
-    gServer.serveStatic("/style.css", LittleFS, "/style.css");
-    gServer.serveStatic("/bootstrap.min.css", LittleFS, "/bootstrap.min.css");
-    gServer.serveStatic("/bootstrap.bundle.min.js", LittleFS, "/bootstrap.bundle.min.js");
-    gServer.serveStatic("/main.js", LittleFS, "/main.js");
-    gServer.serveStatic("/qrcode.min.js", LittleFS, "/qrcode.min.js");
-    gServer.serveStatic("/map.svg", LittleFS, "/map.svg");
-    gServer.serveStatic("/favicon.svg", LittleFS, "/favicon.svg");
-
     gServer.onNotFound([]()
-                       { gServer.send(404, "text/plain", "Not found"); });
+                       {
+                           if (tryServeStaticWithGzipFallback(gServer.uri()))
+                               return;
+                           gServer.send(404, "text/plain", "Not found");
+                       });
 
     gServer.begin();
     LOG_INFO(LOG_CAT_WEB, "Server started -> http://%s", WiFi.localIP().toString().c_str());

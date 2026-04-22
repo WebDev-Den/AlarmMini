@@ -2,9 +2,17 @@
 #include <Arduino.h>
 #define AP_NAME     "AlarmMap-Setup"
 #define AP_PASSWORD "12345678"
+#ifndef LED_PIN
 #define LED_PIN    5
+#endif
 #define MAX_LEDS   27
+#ifndef BUZZER_PIN
+#if defined(ESP32)
+#define BUZZER_PIN 4
+#else
 #define BUZZER_PIN 14
+#endif
+#endif
 
 #define MQTT_HOST_MAXLEN  64
 #define MQTT_TOPIC_MAXLEN 64
@@ -89,10 +97,10 @@ struct StateAnimationBinding {
 constexpr uint16_t ALERT_CLEAR_HOLD_MS = 30000;
 constexpr uint8_t SYSTEM_EFFECTS_MAX_BRIGHTNESS = 15;
 
-constexpr float STARTUP_ANIMATION_SWEEP_MS = 2200.0f;
-constexpr float STARTUP_ANIMATION_TAIL_LENGTH = 4.2f;
-constexpr float STARTUP_ANIMATION_BRIGHTNESS_POWER = 1.6f;
-constexpr uint16_t STARTUP_ANIMATION_FRAME_MS = 55;
+constexpr float STARTUP_ANIMATION_SWEEP_MS = 1700.0f;
+constexpr float STARTUP_ANIMATION_TAIL_LENGTH = 5.8f;
+constexpr float STARTUP_ANIMATION_BRIGHTNESS_POWER = 1.35f;
+constexpr uint16_t STARTUP_ANIMATION_FRAME_MS = 30;
 constexpr uint16_t STARTUP_ANIMATION_TAIL_EXTRA_MS = 1200;
 
 constexpr float AP_ANIMATION_PHASE_SPEED = 0.425f;
@@ -136,6 +144,9 @@ struct BuzzerConfig {
     uint8_t dayVolume, nightVolume;
     bool    regions[REGIONS_COUNT];
 };
+struct OfflineConfig {
+    uint16_t autonomousSeconds;
+};
 
 struct AppConfig {
     int8_t       ledRegion[MAX_LEDS];
@@ -144,6 +155,7 @@ struct AppConfig {
     ModeConfig   nightMode;
     NightConfig  night;
     BuzzerConfig buzzer;
+    OfflineConfig offline;
     BlinkConfig  blink;        // Налаштування мигання при втраті MQTT
     // MQTT — всі налаштування через веб-інтерфейс
     char         wifiSsid[WIFI_SSID_MAXLEN];

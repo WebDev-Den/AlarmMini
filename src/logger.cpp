@@ -1,4 +1,5 @@
 #include "logger.h"
+#include "platform_compat.h"
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -128,9 +129,15 @@ void loggerWrite(uint8_t level, uint16_t category, const char *message)
     char cleanMessage[LOG_MESSAGE_LEN];
     sanitizeAsciiPrintable(message, cleanMessage, sizeof(cleanMessage));
 
-    char line[LOG_MESSAGE_LEN + 32];
-    snprintf(line, sizeof(line), "[LOG][%s][%s] %s", loggerCategoryKey(category), logLevelLabel(level), cleanMessage);
-    Serial.println(line);
+    StaticJsonDocument<256> doc;
+    doc["event"] = "log";
+    doc["ms"] = millis();
+    doc["level"] = loggerLevelKey(level);
+    doc["category"] = loggerCategoryKey(category);
+    doc["label"] = logLevelLabel(level);
+    doc["message"] = cleanMessage;
+    serializeJson(doc, CONSOLE_PORT);
+    CONSOLE_PORT.println();
 
     LogEntry &entry = gLogEntries[gLogHead];
     entry.seq = ++gLogSequence;
