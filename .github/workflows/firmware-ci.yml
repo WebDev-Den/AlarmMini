@@ -21,8 +21,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install PlatformIO
-        run: pip install platformio
+      - name: Install PlatformIO and esptool deps
+        run: pip install platformio intelhex
 
       - name: Build firmware
         run: pio run -e ${{ matrix.env }}

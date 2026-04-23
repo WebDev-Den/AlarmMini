@@ -20,8 +20,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install PlatformIO
-        run: pip install platformio
+      - name: Install PlatformIO and esptool deps
+        run: pip install platformio intelhex
 
       - name: Build release artifacts
         run: python scripts/build_release_assets.py
