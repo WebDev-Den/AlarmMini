@@ -160,7 +160,7 @@ def run_flash_flow(env_name: str, port: str, skip_fs: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Flash firmware/filesystem with config preserve.")
-    parser.add_argument("--env", required=True, help="PlatformIO environment, e.g. esp32c3 or esp8266e12")
+    parser.add_argument("--env", required=True, help="PlatformIO environment, e.g. esp32c3 or esp8266")
     parser.add_argument("--port", default=None, help="Serial port, e.g. COM7")
     parser.add_argument("--skip-fs", action="store_true", help="Do not upload LittleFS image")
     args = parser.parse_args()

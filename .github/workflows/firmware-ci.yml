@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [esp32c3, esp8266e12]
+        env: [esp32c3, esp8266]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
