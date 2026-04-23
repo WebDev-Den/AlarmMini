@@ -88,7 +88,8 @@ def _gzip_file(path):
     with open(path, "rb") as src, open(gz_path, "wb") as raw_dst:
         with gzip.GzipFile(filename="", mode="wb", fileobj=raw_dst, compresslevel=9, mtime=0) as dst:
             shutil.copyfileobj(src, dst)
-    os.remove(path)
+    # Keep original uncompressed asset as a safe fallback for devices/browsers
+    # where gzip delivery might fail. The web server serves plain files first.
 
 
 def _clear_directory(path):
