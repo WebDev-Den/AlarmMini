@@ -53,6 +53,8 @@ type BoardAssets = {
   bootApp0?: ReleaseAsset | null;
 };
 
+const BACKUP_STORAGE_KEY = "alarmmini.backup.config";
+
 const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER || "WebDev-Den";
 const repo = process.env.NEXT_PUBLIC_GITHUB_REPO || "AlarmMini";
 const SUPPORT_AUTHOR_URL = "https://send.monobank.ua/jar/2PMhPjRk9j";
@@ -157,6 +159,7 @@ export default function Page() {
   const [mqttPassword, setMqttPassword] = useState("");
   const [configText, setConfigText] = useState("{}");
   const [downloadedConfig, setDownloadedConfig] = useState<any | null>(null);
+  const [backupAvailable, setBackupAvailable] = useState(false);
 
   const [releases, setReleases] = useState<GithubRelease[]>([]);
   const [releasesLoading, setReleasesLoading] = useState(true);
@@ -177,6 +180,7 @@ export default function Page() {
   const pendingRef = useRef<PendingRequest | null>(null);
   const installButtonRef = useRef<HTMLElement | null>(null);
   const manifestUrlRef = useRef<string>("");
+  const backupConfigRef = useRef<any | null>(null);
 
   useEffect(() => {
     setSerialSupported(typeof navigator !== "undefined" && "serial" in navigator);
@@ -222,6 +226,20 @@ export default function Page() {
         URL.revokeObjectURL(manifestUrlRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(BACKUP_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+      backupConfigRef.current = parsed;
+      setBackupAvailable(true);
+    } catch {
+      // ignore invalid backup in localStorage
+    }
   }, []);
 
   const selectedRelease = useMemo(
@@ -323,6 +341,34 @@ export default function Page() {
     setSerialLines((prev) => [line, ...prev].slice(0, 120));
   }
 
+  function applyConfigToUi(cfg: any) {
+    if (!cfg || typeof cfg !== "object") return;
+    setDownloadedConfig(cfg);
+    setConfigText(JSON.stringify(cfg, null, 2));
+    const wifi = extractWifi(cfg);
+    setWifiSsid(wifi.ssid);
+    setWifiPassword(wifi.password);
+    const mqtt = extractMqtt(cfg);
+    setMqttHost(mqtt.host);
+    setMqttPort(mqtt.port);
+    setMqttTopic(mqtt.topic);
+    setMqttUser(mqtt.user);
+    setMqttPassword(mqtt.password);
+  }
+
+  function persistBackupConfig(cfg: any) {
+    if (!cfg || typeof cfg !== "object") return;
+    backupConfigRef.current = cfg;
+    setBackupAvailable(true);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(cfg));
+      } catch {
+        // ignore storage failure
+      }
+    }
+  }
+
   function clearPending(reason: string) {
     const pending = pendingRef.current;
     if (!pending) return;
@@ -351,18 +397,7 @@ export default function Page() {
     }
 
     if (obj?.event === "config" && obj?.config && typeof obj.config === "object") {
-      const formatted = JSON.stringify(obj.config, null, 2);
-      setConfigText(formatted);
-      setDownloadedConfig(obj.config);
-      const wifi = extractWifi(obj.config);
-      setWifiSsid(wifi.ssid);
-      setWifiPassword(wifi.password);
-      const mqtt = extractMqtt(obj.config);
-      setMqttHost(mqtt.host);
-      setMqttPort(mqtt.port);
-      setMqttTopic(mqtt.topic);
-      setMqttUser(mqtt.user);
-      setMqttPassword(mqtt.password);
+      applyConfigToUi(obj.config);
     }
 
     const pending = pendingRef.current;
@@ -525,18 +560,9 @@ export default function Page() {
     setStatus("Зчитуємо get:config...");
     const obj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 9000);
     const cfg = obj.config;
-    setDownloadedConfig(cfg);
-    setConfigText(JSON.stringify(cfg, null, 2));
-    const wifi = extractWifi(cfg);
-    setWifiSsid(wifi.ssid);
-    setWifiPassword(wifi.password);
-    const mqtt = extractMqtt(cfg);
-    setMqttHost(mqtt.host);
-    setMqttPort(mqtt.port);
-    setMqttTopic(mqtt.topic);
-    setMqttUser(mqtt.user);
-    setMqttPassword(mqtt.password);
+    applyConfigToUi(cfg);
     setStatus("Конфіг зчитано");
+    return cfg;
   }
 
   async function cmdSetWifi() {
@@ -598,6 +624,57 @@ export default function Page() {
     await cmdGetConfig();
   }
 
+  async function waitDeviceInfoAfterReconnect(tries = 6) {
+    let lastError: unknown = null;
+    for (let i = 0; i < tries; i++) {
+      try {
+        await ensureConnected(false);
+        await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+        return;
+      } catch (error) {
+        lastError = error;
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Плата не відповідає після перезавантаження");
+  }
+
+  async function restoreBackupConfigWithRetry(backup: any, maxAttempts = 3) {
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await waitDeviceInfoAfterReconnect(4);
+        setFlashStatus(`Відновлення backup JSON: спроба ${attempt}/${maxAttempts}...`);
+        await sendAndWait(
+          `set:config ${JSON.stringify(backup)}`,
+          (j) => j?.status === "ACK" && (j?.cmd === "set:config" || j?.cmd === "config_set"),
+          18000,
+        );
+        const restored = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
+        applyConfigToUi(restored.config);
+        return;
+      } catch (error) {
+        lastError = error;
+        try {
+          await disconnectPort();
+        } catch {}
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Не вдалося відновити backup JSON");
+  }
+
+  async function cmdRestoreBackupJsonManual() {
+    const backup = backupConfigRef.current;
+    if (!backup || typeof backup !== "object") {
+      throw new Error("Backup JSON не знайдено");
+    }
+    await ensureConnected(true);
+    setStatus("Відновлюємо backup JSON на плату...");
+    await restoreBackupConfigWithRetry(backup, 3);
+    setStatus("Backup JSON успішно відновлено");
+  }
+
   async function onConnectClick() {
     try {
       await ensureConnected(true);
@@ -642,11 +719,8 @@ export default function Page() {
         setFlashStatus("Перед прошивкою зчитуємо config з плати...");
         const obj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
         backup = obj.config;
-        setDownloadedConfig(backup);
-        setConfigText(JSON.stringify(backup, null, 2));
-        const wifi = extractWifi(backup);
-        setWifiSsid(wifi.ssid);
-        setWifiPassword(wifi.password);
+        persistBackupConfig(backup);
+        applyConfigToUi(backup);
         setFlashStatus("Backup config збережено. Запускаємо прошивку...");
       } catch {
         setFlashStatus("Backup config недоступний. Продовжуємо прошивку без backup.");
@@ -661,6 +735,7 @@ export default function Page() {
 
     setFlashStatus("Прошивка завершена. Перепідключаємо плату...");
     await reconnectAfterFlash();
+    await waitDeviceInfoAfterReconnect(6);
 
     if (restoreSettings && backup) {
       const wifi = extractWifi(backup);
@@ -673,18 +748,15 @@ export default function Page() {
         );
       }
 
-      setFlashStatus("Відновлюємо config (set:config)...");
-      await sendAndWait(
-        `set:config ${JSON.stringify(backup)}`,
-        (j) => j?.status === "ACK" && (j?.cmd === "set:config" || j?.cmd === "config_set"),
-        15000,
-      );
+      await restoreBackupConfigWithRetry(backup, 3);
 
       setFlashStatus("Backup відновлено на платі");
     }
 
     await cmdGetInfo();
-    await cmdGetConfig();
+    if (!restoreSettings || !backup) {
+      await cmdGetConfig();
+    }
     setFlashStatus(
       restoreSettings
         ? "Готово: прошивка + FS + відновлення налаштувань завершені"
@@ -842,6 +914,16 @@ export default function Page() {
           </button>
           <button
             className="btn"
+            disabled={flashBusy || !backupAvailable}
+            onClick={() => void cmdRestoreBackupJsonManual().catch((error) => {
+              const message = error instanceof Error ? error.message : String(error);
+              setStatus(`Помилка backup restore: ${message}`);
+            })}
+          >
+            Відновити backup JSON
+          </button>
+          <button
+            className="btn"
             disabled={flashBusy}
             onClick={() => {
               try {
@@ -851,6 +933,7 @@ export default function Page() {
           >
             Форматувати JSON
           </button>
+          <div className="status-pill">{backupAvailable ? "Backup: знайдено" : "Backup: відсутній"}</div>
         </div>
         <div className="json-editor">
           <CodeMirror
