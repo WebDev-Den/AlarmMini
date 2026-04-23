@@ -1,8 +1,12 @@
-.pio/
+﻿.pio/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
 
 # Generated web build output
-data/*.gz
-data/config.json
+data/
 data_build/
 work_data/config.json
 
@@ -22,5 +26,8 @@ LOCAL_RELEASE_GUIDE.md
 # Vercel installer build artifacts
 vercel_installer_local/node_modules/
 vercel_installer_local/.next/
+
+# Build/release outputs
 release_artifacts/
+config_backups/
 config_lock.json

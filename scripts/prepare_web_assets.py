@@ -7,6 +7,7 @@ import re
 import shutil
 
 from SCons.Script import COMMAND_LINE_TARGETS
+from env_loader import load_dotenv
 
 
 FS_TARGETS = {"buildfs", "uploadfs", "uploadfsota"}
@@ -16,6 +17,18 @@ CONFIG_PATH = os.path.join(WORK_SOURCE_DIR, "config.json")
 CONFIG_EXAMPLE_PATH = os.path.join(WORK_SOURCE_DIR, "config.example.json")
 TEXT_ASSET_EXTENSIONS = {".html", ".css", ".js", ".svg"}
 CONFIG_MODE = os.environ.get("ALARMMINI_CONFIG_MODE", "").strip().lower()
+PROJECT_DIR = env.subst("$PROJECT_DIR")
+
+load_dotenv(PROJECT_DIR)
+
+ENV_REPLACEMENTS = {
+    "__ALARMMINI_SUPPORT_URL__": os.environ.get("ALARMMINI_SUPPORT_URL", "https://send.monobank.ua/jar/2PMhPjRk9j"),
+    "__ALARMMINI_TELEGRAM_URL__": os.environ.get("ALARMMINI_TELEGRAM_URL", "https://t.me/+j3zFZHE5gGoyNGYy"),
+    "__ALARMMINI_MQTT_HOST__": os.environ.get("ALARMMINI_MQTT_HOST", "mqtt.example.com"),
+    "__ALARMMINI_MQTT_TOPIC__": os.environ.get("ALARMMINI_MQTT_TOPIC", "ukraine/alarm/map/full"),
+    "__ALARMMINI_MQTT_USER__": os.environ.get("ALARMMINI_MQTT_USER", "mqtt_user"),
+    "__ALARMMINI_MQTT_PASS__": os.environ.get("ALARMMINI_MQTT_PASS", "change_me"),
+}
 
 
 def _read_text(path):
@@ -83,6 +96,16 @@ def _minify_file(path):
     _write_text(path, content)
 
 
+def _apply_env_replacements(path):
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in {".html", ".css", ".js", ".json", ".svg"}:
+        return
+    content = _read_text(path)
+    for placeholder, value in ENV_REPLACEMENTS.items():
+        content = content.replace(placeholder, value)
+    _write_text(path, content)
+
+
 def _gzip_file(path):
     gz_path = path + ".gz"
     with open(path, "rb") as src, open(gz_path, "wb") as raw_dst:
@@ -133,6 +156,8 @@ def _prepare_assets():
         for name in files:
             path = os.path.join(root, name)
             ext = os.path.splitext(name)[1].lower()
+
+            _apply_env_replacements(path)
 
             if ext in {".html", ".css", ".js", ".svg", ".json"}:
                 _minify_file(path)

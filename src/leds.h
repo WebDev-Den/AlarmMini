@@ -411,5 +411,11 @@ void ledsHandle() {
         return;
     }
 
+    // Avoid short startup blue flash before first real alert payload arrives.
+    if (!gFetchOk) {
+        renderRetainedState(night, false);
+        return;
+    }
+
     renderGlobalState(animationForState(MAP_STATE_IDLE), ukraineBlueColor(), ukraineYellowColor());
 }

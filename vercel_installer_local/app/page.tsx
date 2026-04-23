@@ -67,8 +67,14 @@ const PIPELINE_STEPS: Array<{ id: PipelineStepId; label: string }> = [
 
 const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER || "WebDev-Den";
 const repo = process.env.NEXT_PUBLIC_GITHUB_REPO || "AlarmMini";
-const SUPPORT_AUTHOR_URL = "https://send.monobank.ua/jar/2PMhPjRk9j";
-const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
+const SUPPORT_AUTHOR_URL =
+  process.env.NEXT_PUBLIC_SUPPORT_URL ||
+  process.env.NEXT_PUBLIC_ALARMMINI_SUPPORT_URL ||
+  "https://send.monobank.ua/jar/2PMhPjRk9j";
+const TELEGRAM_GROUP_URL =
+  process.env.NEXT_PUBLIC_TELEGRAM_URL ||
+  process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
+  "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
 
 function buildStandardNewDeviceConfig() {

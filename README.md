@@ -1,269 +1,152 @@
-# AlarmMini
+﻿# AlarmMini
 
-<p align="center">
-  <img src="work_data/favicon.svg" alt="AlarmMini icon" width="96" height="96">
-</p>
+AlarmMini is firmware + web tooling for a physical WS2812 Ukraine alarm map.
 
-<p align="center">
-  Прошивка та локальний web UI для фізичної LED-мапи України на базі <code>ESP8266 / Wemos D1 mini clone</code>.
-</p>
+Current firmware version: **1.0.5**
 
-<p align="center">
-<a href="https://send.monobank.ua/jar/2PMhPjRk9j">
-<img src="https://img.shields.io/badge/Підтримати%20автора-Mono-0B2A4F?style=for-the-badge&logo=monobank&logoColor=white" alt="Підтримати автора">
-</a>
-<a href="https://t.me/+j3zFZHE5gGoyNGYy">
-<img src="https://img.shields.io/badge/Зворотний%20зв'язок-Telegram-0B2A4F?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram група">
-</a>
+Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
-## Онлайн installer
+## Supported boards
 
-- Vercel URL: [https://alarmmini.vercel.app](https://alarmmini.vercel.app)
+- ESP8266 (`env:esp8266`, board `d1_mini`)
+- ESP32-C3 SuperMini (`env:esp32c3`, board `esp32-c3-devkitm-1`)
 
-## Підтримка та зворотний зв'язок
+## Main features
 
-- Підтримати автора: [Monobank](https://send.monobank.ua/jar/2PMhPjRk9j)
-- Telegram група проєкту: [приєднатися](https://t.me/+j3zFZHE5gGoyNGYy)
-</p>
+- Real-time alarm map rendering by regions (MQTT input)
+- Day/night modes with brightness limits
+- Web UI from LittleFS
+- Serial JSON protocol for installer and service tasks
+- Config backup/restore during flashing
+- mDNS, Wi-Fi manager, MQTT reconnect logic
+- Release assets for both boards
 
-## Що це за проєкт
+## Repository layout
 
-`AlarmMini` керує світлодіодною мапою України, приймає стани тривоги через `MQTT`, відображає їх на `WS2812 / NeoPixel`, керує бузером і дає повноцінний web-інтерфейс для налаштування пристрою без окремого застосунку.
+- `src/` - firmware sources
+- `work_data/` - editable web assets
+- `data/` - generated/minified LittleFS assets (generated)
+- `scripts/` - build/flash/release helper scripts
+- `vercel_installer_local/` - Next.js web installer
+- `.github/workflows/` - CI/release pipelines
 
-Проєкт орієнтований на:
-- локальне налаштування через браузер
-- роботу в денному та нічному режимах
-- калібрування відповідності `LED -> область`
-- генерацію QR-наклейок для швидкого доступу
-- безпечне зберігання логів у RAM без зношення flash
+## Environment variables
 
-## Основний функціонал
+Use only one env file in project root: **`.env`**.
 
-- відображення тривоги та відбою по регіонах України
-- денний і нічний режими з окремими кольорами та обмеженням яскравості
-- стартові та службові ефекти для різних станів пристрою
-- підтримка `MQTT`, `Wi‑Fi`, `mDNS`, `LittleFS`
-- керування бузером для вибраних регіонів
-- локальний web UI з авторизацією
-- QR-наклейки:
-  - для входу в web-панель
-  - для підключення до AP
-- калібрування мапи прямо з браузера
-- імпорт / експорт налаштувань
-- RAM-логи з фільтрами категорій
+- Template: `.env.example`
+- `.env` is ignored by git
 
-## Апаратна частина
+Used by:
 
-Базова конфігурація цього проєкту:
+- web asset placeholders during `buildfs`
+- installer public links
+- release default MQTT template values
 
-- плата: `Wemos D1 mini / ESP8266`
-- стрічка / data pin: `GPIO5 / D1`
-- бузер: `GPIO14 / D5`
-- кількість LED: `27`
+## Serial protocol (device)
 
-AP за замовчуванням:
+Device accepts text commands and responds with JSON.
 
-- `SSID`: `AlarmMap-Setup`
-- `password`: `12345678`
+- `get:info`
+- `get:config`
+- `set:config { ... }`
+- `set:wifi {"ssid":"...","password":"..."}`
 
-Для живлення LED-стрічки використовуй окреме стабільне джерело `5V`, розраховане під кількість світлодіодів.
+## Local development
 
-## Структура проєкту
-
-- [`src/`](src/) — код прошивки
-- [`work_data/`](work_data/) — редаговані файли web UI
-- [`data/`](data/) — згенеровані web-ресурси для `LittleFS`
-- [`scripts/`](scripts/) — підготовка і стиснення web-ресурсів
-- [`vercel_installer_local/`](vercel_installer_local/) — локальна основа для майбутньої installer-сторінки
-- [`platformio.ini`](platformio.ini) — конфігурація збірки `PlatformIO`
-
-Робоча схема така:
-
-1. Ти редагуєш web UI у [`work_data/`](work_data/).
-2. Перед `buildfs` Python-скрипт готує оптимізовані файли в [`data/`](data/).
-3. `LittleFS` віддає ці файли з ESP8266.
-4. Прошивка з [`src/`](src/) керує LED, мережею, MQTT, логами та API.
-
-## Web UI
-
-У поточному web-інтерфейсі є вкладки:
-
-- огляд
-- QR / друк
-- кольори
-- нічний режим
-- бузер
-- регіони
-- MQTT
-- система
-- логи
-- калібрування
-
-У вкладці `Система` також швидко видно:
-
-- `mDNS`
-- `IP`
-- пароль web-панелі
-- пін стрічки
-- пін бузера
-- NTP сервери
-
-## Калібрування
-
-Калібрування дозволяє прив’язати кожен фізичний LED до конкретної області.
-
-Підтримуються два сценарії:
-
-- покроковий режим `LED 1 -> LED 2 -> ...`
-- швидкий перехід по будь-якому LED
-
-Для мобільного режиму інтерфейс калібрування спрощений:
-
-- окремий перегляд мапи
-- окремий список областей
-- окремий список LED
-
-## Логи
-
-Прошивка використовує кільцевий буфер логів у RAM.
-
-Переваги:
-
-- старі записи автоматично витісняються
-- немає постійного запису у `LittleFS`
-- не зношується flash-пам’ять
-
-Логи доступні:
-
-- у `Serial`
-- у web UI
-- у майбутньому installer-інтерфейсі через `Web Serial`
-
-Категорії логів можна вмикати і вимикати прямо з web UI.
-
-## Збірка
-
-Проєкт використовує `PlatformIO`.
-
-### Збірка прошивки
+### 1) Build firmware
 
 ```powershell
 platformio run -e esp8266
+platformio run -e esp32c3
 ```
 
-### Збірка файлової системи
+### 2) Build filesystem
 
 ```powershell
 platformio run -t buildfs -e esp8266
+platformio run -t buildfs -e esp32c3
 ```
 
-## Прошивка
-
-### Залити web UI в LittleFS
-
-```powershell
-platformio run -t uploadfs -e esp8266
-```
-
-### Залити firmware
+### 3) Upload to board
 
 ```powershell
 platformio run -t upload -e esp8266
+platformio run -t uploadfs -e esp8266
+
+platformio run -t upload -e esp32c3
+platformio run -t uploadfs -e esp32c3
 ```
 
-### Автоматичне збереження конфіга при прошивці
+## Safe flashing with config restore
 
-Є кастомні PlatformIO targets, які роблять повний цикл через Serial:
-
-1. зчитують конфіг (`get:config`);
-2. шиють firmware;
-3. шиють `LittleFS` (для `flash_preserve`);
-4. повертають конфіг (`set_begin/set_data/set_end`).
+Custom targets back up config from serial, flash firmware/filesystem, then restore config.
 
 ```powershell
-# firmware + LittleFS + restore config
+# firmware + fs + restore config
 platformio run -e esp8266 -t flash_preserve
+platformio run -e esp32c3 -t flash_preserve
 
-# тільки firmware + restore config
+# firmware only + restore config
 platformio run -e esp8266 -t flash_preserve_fw
+platformio run -e esp32c3 -t flash_preserve_fw
 ```
 
-Для `ESP32-C3` заміни `-e esp8266` на `-e esp32c3`.
-Якщо порт не визначився автоматично, задай `upload_port` у `platformio.ini` або передай порт у скрипт вручну:
+Manual mode:
 
 ```powershell
 python scripts/config_preserve_flash.py --env esp32c3 --port COM7
 ```
 
-## Процес створення і виготовлення
+## Release artifacts
 
-Типовий процес виглядає так:
-
-1. Проєктується фізична мапа України.
-2. Визначається кількість LED і їх розташування.
-3. Стрічка або окремі світлодіоди монтуються в основу мапи.
-4. Підключаються `ESP8266`, бузер і живлення.
-5. Заливається прошивка і `LittleFS`.
-6. Через web UI виконується калібрування `LED -> область`.
-7. Налаштовуються `Wi‑Fi`, `MQTT`, кольори, нічний режим і бузер.
-8. Генеруються QR-наклейки для користувача.
-
-## Конфіг і секрети
-
-- реальні `MQTT` доступи не варто зберігати в git
-- шаблон конфігу: [`work_data/config.example.json`](work_data/config.example.json)
-- локальний робочий конфіг: `work_data/config.json`
-- `work_data/config.json` має залишатися поза git
-- адмін-пароль генерується з даних плати й прив’язаний до конкретного пристрою
-
-## Майбутній розвиток
-
-У проєкті вже є база для окремої installer-сторінки:
-
-- вибір релізу
-- робота через `Web Serial`
-- зчитування службової інформації з плати
-- майбутня браузерна прошивка
-
-## Ліцензія
-
-Додай окрему ліцензію у репозиторій, коли визначишся з форматом публікації.
-
-## Serial GUI (Python)
-
-Desktop GUI for AlarmMini COM protocol:
-
-- `get:info`
-- `get:config`
-- `set:config {...}`
-- `set:wifi {"ssid":"...","password":"..."}`
-
-File: `scripts/alarmmini_serial_gui.py`
-
-Run:
+Create all binaries locally:
 
 ```powershell
-pip install pyserial
-python scripts/alarmmini_serial_gui.py
+python scripts/build_release_assets.py
 ```
 
-Features:
+Output folder:
 
-- connect/disconnect COM port
-- live JSON serial log
-- config editor (format/minify/load/save)
-- config profiles CRUD (create/read/update/delete) in `work_data/serial_profiles.json`
+- `release_artifacts/alarmmini-esp8266-firmware.bin`
+- `release_artifacts/alarmmini-esp8266-littlefs.bin`
+- `release_artifacts/alarmmini-esp32c3-firmware.bin`
+- `release_artifacts/alarmmini-esp32c3-littlefs.bin`
+- `release_artifacts/alarmmini-esp32c3-bootloader.bin`
+- `release_artifacts/alarmmini-esp32c3-partitions.bin`
+- `release_artifacts/alarmmini-esp32c3-boot_app0.bin`
 
-## 2026-04-23 stability updates
+GitHub workflow `release-assets.yml` attaches these files to published releases.
 
-- Fixed static web asset delivery for ESP8266/ESP32 when files are served from `LittleFS` as `.gz`:
-  - server now sends `Content-Encoding: gzip` and `Vary: Accept-Encoding`.
-  - this resolves blank page / `ERR_CONTENT_DECODING_FAILED` cases.
-- Updated release build script to the current environments:
-  - `esp8266`
-  - `esp32c3`
-- Improved alert/clear LED transitions:
-  - smoother multi-phase easing
-  - softer wave + breathing blend
-  - still capped by day/night brightness limits
-  - night pulse toggles (`night.pulseOnAlert`, `night.pulseOnClear`) are respected.
+## Vercel installer
+
+Project root for installer: `vercel_installer_local/`
+
+Build:
+
+```powershell
+cd vercel_installer_local
+npm install
+npm run build
+```
+
+Deploy production:
+
+```powershell
+vercel --prod
+vercel alias set <deployment-url> alarmmini.vercel.app
+```
+
+## CI
+
+`firmware-ci.yml` builds both environments:
+
+- `esp8266`
+- `esp32c3`
+
+The workflow installs `platformio` and `intelhex` before build.
+
+## Notes
+
+- `server.json` is intentionally not part of this firmware/release flow.
+- Keep private tokens and MQTT credentials only in root `.env` or GitHub secrets.

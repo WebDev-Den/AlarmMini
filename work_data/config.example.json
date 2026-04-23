@@ -27,11 +27,11 @@
   },
   "l": [24, 19, 6, 3, 10, 18, 2, 2, 14, 16, 23, 8, 4, 15, 1, 11, 5, 7, 22, 17, 20, 0, 21, 9, 12, 13, 13],
   "m": {
-    "h": "mqtt.example.com",
+    "h": "__ALARMMINI_MQTT_HOST__",
     "p": 1883,
-    "t": "ukraine/alarm/map/full",
-    "u": "mqtt_user",
-    "s": "change_me"
+    "t": "__ALARMMINI_MQTT_TOPIC__",
+    "u": "__ALARMMINI_MQTT_USER__",
+    "s": "__ALARMMINI_MQTT_PASS__"
   },
   "w": {
     "s": "",
