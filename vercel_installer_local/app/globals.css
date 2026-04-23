@@ -340,6 +340,10 @@ input, .select, .config-area {
   padding: 10px;
   font-family: Consolas, "Courier New", monospace;
   font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.45;
 }
 
 .log-empty {

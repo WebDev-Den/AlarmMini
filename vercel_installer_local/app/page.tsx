@@ -158,6 +158,32 @@ function configLooksEmpty(cfg: any) {
   return !hasLedMapping && !hasNetworkData;
 }
 
+function sanitizeLogLine(raw: string) {
+  const normalized = raw
+    .replace(/\t/g, "    ")
+    .replace(/[^\u000A\u000D\u0020-\u007E\u00A0-\u024F\u0400-\u04FF]/g, "�");
+  const maxLen = 420;
+  return normalized.length > maxLen ? `${normalized.slice(0, maxLen)}…` : normalized;
+}
+
+function compactJsonLog(obj: any) {
+  if (!obj || typeof obj !== "object") return "";
+  if (obj?.event === "config") {
+    const cfg = obj?.config;
+    const wifi = extractWifi(cfg);
+    const mqtt = extractMqtt(cfg);
+    const ledCount = Array.isArray(cfg?.l) ? cfg.l.length : 0;
+    return `[config] wifi="${wifi.ssid || "-"}" mqtt="${mqtt.host || "-"}" leds=${ledCount}`;
+  }
+  if (obj?.event === "device_info") {
+    return `[device_info] fw=${obj?.fw ?? "-"} ip=${obj?.ip ?? "-"} host=${obj?.hostname ?? "-"}`;
+  }
+  if (obj?.status === "ACK" || obj?.status === "NACK") {
+    return `[${obj.status}] ${obj?.cmd ?? "-"}${obj?.reason ? ` (${obj.reason})` : ""}`;
+  }
+  return sanitizeLogLine(JSON.stringify(obj));
+}
+
 export default function Page() {
   const [serialSupported, setSerialSupported] = useState(false);
   const [portState, setPortState] = useState<PortState>("idle");
@@ -354,7 +380,7 @@ export default function Page() {
   }, [canFlash, selectedRelease, boardAssets, targetBoard]);
 
   function appendLog(line: string) {
-    setSerialLines((prev) => [line, ...prev].slice(0, 120));
+    setSerialLines((prev) => [sanitizeLogLine(line), ...prev].slice(0, 120));
   }
 
   function applyConfigToUi(cfg: any) {
@@ -451,14 +477,17 @@ export default function Page() {
         for (const rawLine of lines) {
           const line = rawLine.trim();
           if (!line) continue;
-          appendLog(line);
           if (line.startsWith("{") && line.endsWith("}")) {
             try {
-              processJsonLine(JSON.parse(line));
+              const parsed = JSON.parse(line);
+              processJsonLine(parsed);
+              appendLog(compactJsonLog(parsed));
+              continue;
             } catch {
               // ignore invalid json lines
             }
           }
+          appendLog(line);
         }
       }
     })()
