@@ -212,6 +212,9 @@ export default function Page() {
   const [flashStatus, setFlashStatus] = useState("");
   const [supportQrSrc, setSupportQrSrc] = useState("");
   const [isFlashingFlow, setIsFlashingFlow] = useState(false);
+  const [waitActive, setWaitActive] = useState(false);
+  const [waitLabel, setWaitLabel] = useState("");
+  const [waitProgress, setWaitProgress] = useState(0);
 
   const [serialLines, setSerialLines] = useState<string[]>([]);
 
@@ -381,6 +384,41 @@ export default function Page() {
 
   function appendLog(line: string) {
     setSerialLines((prev) => [sanitizeLogLine(line), ...prev].slice(0, 120));
+  }
+
+  async function withBoardWait<T>(
+    label: string,
+    action: () => Promise<T>,
+    timeoutMs = 60000,
+    retryDelayMs = 1200,
+  ): Promise<T> {
+    const startedAt = Date.now();
+    let lastError: unknown = null;
+    setWaitLabel(label);
+    setWaitProgress(0);
+    setWaitActive(true);
+
+    try {
+      while (Date.now() - startedAt < timeoutMs) {
+        const elapsed = Date.now() - startedAt;
+        setWaitProgress(Math.min(98, Math.round((elapsed / timeoutMs) * 100)));
+        try {
+          const result = await action();
+          setWaitProgress(100);
+          return result;
+        } catch (error) {
+          lastError = error;
+          await new Promise((r) => setTimeout(r, retryDelayMs));
+        }
+      }
+      throw lastError instanceof Error ? lastError : new Error("timeout");
+    } finally {
+      setTimeout(() => {
+        setWaitActive(false);
+        setWaitLabel("");
+        setWaitProgress(0);
+      }, 250);
+    }
   }
 
   function applyConfigToUi(cfg: any) {
@@ -673,18 +711,15 @@ export default function Page() {
   }
 
   async function waitDeviceInfoAfterReconnect(tries = 6) {
-    let lastError: unknown = null;
-    for (let i = 0; i < tries; i++) {
-      try {
+    await withBoardWait(
+      "Очікуємо ініціалізацію плати після перезавантаження (до 1 хв)...",
+      async () => {
         await ensureConnected(false);
         await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
-        return;
-      } catch (error) {
-        lastError = error;
-        await new Promise((r) => setTimeout(r, 1200));
-      }
-    }
-    throw lastError instanceof Error ? lastError : new Error("Плата не відповідає після перезавантаження");
+      },
+      60000,
+      Math.max(700, Math.floor(1200 * (6 / Math.max(1, tries)))),
+    );
   }
 
   async function restoreBackupConfigWithRetry(backup: any, maxAttempts = 3) {
@@ -726,8 +761,18 @@ export default function Page() {
   async function onConnectClick() {
     try {
       await ensureConnected(true);
-      setStatus("Порт підключено. Автозчитування конфігу...");
-      await cmdGetConfig();
+      setStatus("Порт підключено. Очікуємо ініціалізацію плати...");
+      await withBoardWait("Очікуємо відповідь плати (до 1 хв)...", async () => {
+        const infoObj = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+        updateInfoFromPayload(infoObj);
+        const cfgObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 9000);
+        const cfg = cfgObj?.config;
+        applyConfigToUi(cfg);
+        if (cfg && !configLooksEmpty(cfg)) {
+          persistBackupConfig(cfg);
+        }
+      });
+      setStatus("Плата готова. Конфіг зчитано");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`Помилка підключення: ${message}`);
@@ -735,17 +780,10 @@ export default function Page() {
   }
 
   async function reconnectAfterFlash() {
-    let lastError: unknown = null;
-    for (let i = 0; i < 8; i++) {
-      try {
-        await new Promise((r) => setTimeout(r, 1500));
-        await ensureConnected(false);
-        return;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw lastError instanceof Error ? lastError : new Error("Не вдалося перепідключитись після прошивки");
+    await withBoardWait("Очікуємо перепідключення плати (до 1 хв)...", async () => {
+      await ensureConnected(false);
+      return true;
+    });
   }
 
   async function runFlashFlow(restoreSettings: boolean) {
@@ -872,6 +910,17 @@ export default function Page() {
           <div className="status-pill">{serialSupported ? "Сумісний браузер" : "Потрібен Chrome/Edge"}</div>
           <div className="status-pill">Стан: {status}</div>
         </div>
+        {waitActive ? (
+          <div className="wait-mini">
+            <div className="wait-mini-head">
+              <span>{waitLabel || "Очікуємо плату..."}</span>
+              <strong>{waitProgress}%</strong>
+            </div>
+            <div className="wait-mini-bar">
+              <div className="wait-mini-fill" style={{ width: `${waitProgress}%` }} />
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="grid two">
