@@ -17,6 +17,9 @@ bool gAlertTestActive               = false;
 bool gAlertTestRegions[REGIONS_COUNT] = {false};
 unsigned long gAlertTestStartedAt   = 0;
 unsigned long gRegionStateChangedAt[REGIONS_COUNT] = {0};
+bool gManualRegionOverrideActive[REGIONS_COUNT] = {false};
+bool gManualRegionOverrideState[REGIONS_COUNT] = {false};
+unsigned long gManualRegionOverrideUntil[REGIONS_COUNT] = {0};
 
 static WiFiClient    _mqttWifi;
 static PubSubClient  _mqtt(_mqttWifi);
@@ -67,12 +70,22 @@ static void _applyEffectiveAlerts(const bool* nextStates) {
 
 static void _rebuildEffectiveAlerts() {
     bool effective[REGIONS_COUNT];
+    unsigned long now = millis();
     for (int i = 0; i < REGIONS_COUNT; i++) {
         effective[i] = gMqttAlerts[i];
     }
 
+    for (int i = 0; i < REGIONS_COUNT; i++) {
+        if (!gManualRegionOverrideActive[i]) continue;
+        if (gManualRegionOverrideUntil[i] > 0 && now >= gManualRegionOverrideUntil[i]) {
+            gManualRegionOverrideActive[i] = false;
+            continue;
+        }
+        effective[i] = gManualRegionOverrideState[i];
+    }
+
     if (gAlertTestActive) {
-        unsigned long elapsed = millis() - gAlertTestStartedAt;
+        unsigned long elapsed = now - gAlertTestStartedAt;
         bool alertPhase = elapsed < 30000UL;
         bool clearPhase = elapsed >= 30000UL && elapsed < 60000UL;
 
@@ -88,6 +101,37 @@ static void _rebuildEffectiveAlerts() {
     }
 
     _applyEffectiveAlerts(effective);
+}
+
+bool alertsSetManualRegionState(int regionIndex, bool isAlert, unsigned long ttlMs) {
+    if (regionIndex < 0 || regionIndex >= REGIONS_COUNT) return false;
+    if (ttlMs < 500UL) ttlMs = 500UL;
+    if (ttlMs > 300000UL) ttlMs = 300000UL;
+    gManualRegionOverrideActive[regionIndex] = true;
+    gManualRegionOverrideState[regionIndex] = isAlert;
+    gManualRegionOverrideUntil[regionIndex] = millis() + ttlMs;
+    _rebuildEffectiveAlerts();
+    LOG_INFO(LOG_CAT_TEST, "Manual region override: %s -> %s for %lus",
+             REGIONS[regionIndex], isAlert ? "ALERT" : "CLEAR", ttlMs / 1000UL);
+    return true;
+}
+
+bool alertsClearManualRegionState(int regionIndex) {
+    if (regionIndex < 0 || regionIndex >= REGIONS_COUNT) return false;
+    gManualRegionOverrideActive[regionIndex] = false;
+    gManualRegionOverrideUntil[regionIndex] = 0;
+    _rebuildEffectiveAlerts();
+    LOG_INFO(LOG_CAT_TEST, "Manual region override cleared: %s", REGIONS[regionIndex]);
+    return true;
+}
+
+void alertsClearAllManualRegionStates() {
+    for (int i = 0; i < REGIONS_COUNT; i++) {
+        gManualRegionOverrideActive[i] = false;
+        gManualRegionOverrideUntil[i] = 0;
+    }
+    _rebuildEffectiveAlerts();
+    LOG_INFO(LOG_CAT_TEST, "Manual region overrides cleared");
 }
 
 bool alertsStartSubscribedRegionTest() {

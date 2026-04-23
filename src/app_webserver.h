@@ -506,6 +506,43 @@ void handleTestRegionAlert()
     gServer.send(200, "text/plain", "OK");
 }
 
+void handleSimRegion()
+{
+    if (!ensureAuthorized())
+        return;
+
+    int idx = gServer.arg("region").toInt();
+    if (idx < 0 || idx >= REGIONS_COUNT)
+    {
+        addCors();
+        gServer.send(400, "text/plain", "Bad region");
+        return;
+    }
+
+    if (gServer.hasArg("clear") && gServer.arg("clear") == "1")
+    {
+        alertsClearManualRegionState(idx);
+        addCors();
+        gServer.send(200, "text/plain", "OK");
+        return;
+    }
+
+    bool isAlert = gServer.arg("alert") == "1";
+    unsigned long ttlMs = gServer.hasArg("ms") ? (unsigned long)gServer.arg("ms").toInt() : 45000UL;
+    alertsSetManualRegionState(idx, isAlert, ttlMs);
+    addCors();
+    gServer.send(200, "text/plain", "OK");
+}
+
+void handleSimRegionClearAll()
+{
+    if (!ensureAuthorized())
+        return;
+    alertsClearAllManualRegionStates();
+    addCors();
+    gServer.send(200, "text/plain", "OK");
+}
+
 void handleCalibrateLed()
 {
     if (!ensureAuthorized())
@@ -675,6 +712,8 @@ void webserverInit()
     gServer.on("/api/logs/disable", HTTP_POST, handleDisableLogs);
     gServer.on("/api/testBuzzer", HTTP_GET, handleTestBuzzer);
     gServer.on("/api/testRegionAlert", HTTP_GET, handleTestRegionAlert);
+    gServer.on("/api/simRegion", HTTP_GET, handleSimRegion);
+    gServer.on("/api/simRegion/clearAll", HTTP_GET, handleSimRegionClearAll);
     gServer.on("/api/calibrate/led", HTTP_GET, handleCalibrateLed);
     gServer.on("/api/calibrate/done", HTTP_GET, handleCalibrateDone);
     gServer.on("/api/restart", HTTP_GET, handleRestart);

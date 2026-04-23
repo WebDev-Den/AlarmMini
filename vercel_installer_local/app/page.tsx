@@ -71,6 +71,24 @@ const SUPPORT_AUTHOR_URL = "https://send.monobank.ua/jar/2PMhPjRk9j";
 const TELEGRAM_GROUP_URL = "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
 
+function buildStandardNewDeviceConfig() {
+  return {
+    c: {
+      d: { a: [255, 0, 0, 255], c: [0, 80, 0, 80] },
+      n: { a: [25, 0, 0, 24], c: [0, 0, 0, 0] },
+    },
+    n: { e: true, s: [22, 0], x: [8, 0], b: 150, p: [false, false] },
+    z: { e: false, v: [80, 30], r: [20] },
+    k: { e: true, i: [75, 30] },
+    o: { a: 60, p: 60, d: 2400, s: 100, c: 60 },
+    l: [24, 19, 6, 3, 10, 18, 2, 2, 14, 16, 23, 8, 4, 15, 1, 11, 5, 7, 22, 17, 20, 0, 21, 9, 12, 13, 13],
+    m: { h: "", p: 1883, t: "", u: "", s: "" },
+    w: { s: "", p: "" },
+    t: ["", "", ""],
+    g: 0,
+  };
+}
+
 const EMPTY_INFO: DeviceInfo = {
   fw: "-",
   ip: "-",
@@ -308,6 +326,7 @@ export default function Page() {
   const [waitProgress, setWaitProgress] = useState(0);
   const [dangerousWriteArmed, setDangerousWriteArmed] = useState(false);
   const [configValidationErrors, setConfigValidationErrors] = useState<string[]>([]);
+  const [newDeviceMode, setNewDeviceMode] = useState(false);
   const [pipelineState, setPipelineState] = useState<Record<PipelineStepId, PipelineState>>(
     createPipelineInitialState(false),
   );
@@ -788,6 +807,7 @@ export default function Page() {
     const obj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 9000);
     const cfg = obj.config;
     applyConfigToUi(cfg);
+    setNewDeviceMode(false);
     if (!isFlashingFlow && !configLooksEmpty(cfg)) {
       persistBackupConfig(cfg);
     }
@@ -805,6 +825,7 @@ export default function Page() {
       9000,
     );
     setStatus("Wi‑Fi налаштовано");
+    setNewDeviceMode(false);
     await cmdGetInfo();
   }
 
@@ -838,6 +859,7 @@ export default function Page() {
       14000,
     );
     setStatus("MQTT налаштовано");
+    setNewDeviceMode(false);
     await cmdGetConfig();
   }
 
@@ -863,6 +885,7 @@ export default function Page() {
     );
     setDangerousWriteArmed(false);
     setStatus("Конфіг записано");
+    setNewDeviceMode(false);
     await cmdGetConfig();
   }
 
@@ -953,10 +976,21 @@ export default function Page() {
           persistBackupConfig(cfg);
         }
       });
+      setNewDeviceMode(false);
       setStatus("Плата готова. Конфіг зчитано");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setStatus(`Помилка підключення: ${message}`);
+      const isTimeoutLike =
+        message.toLowerCase().includes("timeout") ||
+        message.toLowerCase().includes("timed out");
+      if (isTimeoutLike) {
+        const fallbackCfg = buildStandardNewDeviceConfig();
+        applyConfigToUi(fallbackCfg);
+        setNewDeviceMode(true);
+        setStatus("Плата не відповіла за 1 хв. Увімкнено режим нової плати (стандартний конфіг без Wi‑Fi/MQTT).");
+      } else {
+        setStatus(`Помилка підключення: ${message}`);
+      }
     }
   }
 
@@ -1099,6 +1133,11 @@ export default function Page() {
 
   async function onFlashClick(restoreSettings: boolean) {
     try {
+      if (restoreSettings && newDeviceMode) {
+        setFlashStatus("Режим нової плати активний: запускаємо прошивку як нового пристрою (без відновлення backup).");
+        await runFlashFlow(false);
+        return;
+      }
       await runFlashFlow(restoreSettings);
     } catch (error) {
       setFlashBusy(false);
@@ -1146,6 +1185,7 @@ export default function Page() {
             Зчитати конфігурацію
           </button>
           <div className="status-pill">{serialSupported ? "Сумісний браузер" : "Потрібен Chrome/Edge"}</div>
+          <div className="status-pill">{newDeviceMode ? "Режим: нова плата" : "Режим: стандартний"}</div>
           <div className="status-pill">Стан: {status}</div>
         </div>
         {waitActive ? (
@@ -1392,6 +1432,9 @@ export default function Page() {
         </div>
 
         <div className="flash-status">{flashStatus || "Очікування"}</div>
+        {newDeviceMode ? (
+          <p className="hint">Плата не відповіла під час підключення. Підготовлено стандартний конфіг без Wi‑Fi/MQTT, прошивка піде як для нового пристрою.</p>
+        ) : null}
       </section>
 
       <section className="card">

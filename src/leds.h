@@ -145,49 +145,49 @@ bool pulseAllowedForState(bool alertState, bool night) {
 }
 
 float fixedTransitionBrightness(unsigned long elapsedMs, bool alertState, bool night, int logicalIndex, int logicalCount) {
-    const unsigned long durationMs = 60000UL;
-    float progress = min(1.0f, elapsedMs / (float)durationMs);
-    float rampIn = smoothstep01(min(1.0f, elapsedMs / (alertState ? 1600.0f : 2200.0f)));
-    float longRamp = smoothstep01(progress);
-
-    const float speedMul = constrain(gConfig.offline.pulseSpeedPct / 100.0f, 0.2f, 2.2f);
-    const float contrastMul = constrain(gConfig.offline.pulseContrastPct / 100.0f, 0.0f, 1.0f);
-    float idxNorm = (logicalCount > 1) ? (logicalIndex / (float)(logicalCount - 1)) : 0.0f;
-    float t = elapsedMs / 1000.0f;
-    float phaseMain = t * speedMul * (alertState ? 1.15f : 0.72f) * 6.2831853f;
-    float phaseSecondary = t * speedMul * (alertState ? 0.43f : 0.32f) * 6.2831853f + idxNorm * 2.6f;
-
-    float breath = 0.5f + 0.5f * sinf(phaseMain);
-    float wave = 0.5f + 0.5f * sinf(phaseSecondary);
-    float shimmer = 0.5f + 0.5f * sinf(phaseMain * 0.33f + idxNorm * 4.1f);
-
-    float baseMin = night ? 0.14f : 0.32f;
-    float baseMax = night ? (alertState ? 0.66f : 0.54f) : (alertState ? 0.95f : 0.78f);
-    float amplitude = alertState ? 0.22f : 0.15f;
-    const bool pulseAllowed = pulseAllowedForState(alertState, night);
-    if (!pulseAllowed) {
-        // Night mode can disable continuous pulse, but transition should still be visible.
-        amplitude = alertState ? 0.12f : 0.09f;
+    const unsigned long durationMs = ALERT_CLEAR_HOLD_MS; // 30 seconds
+    if (elapsedMs >= durationMs) {
+        return 1.0f; // transition finished -> steady state
     }
 
-    float dynamic = constrain(0.60f * breath + 0.28f * wave + 0.12f * shimmer, 0.0f, 1.0f);
-    // Contrast control: 0 -> softer, 100 -> sharper pulse profile.
-    dynamic = powf(dynamic, 1.4f - 0.9f * contrastMul);
-    float live = baseMin + (baseMax - baseMin) * (1.0f - amplitude + amplitude * dynamic);
+    const float t = elapsedMs / 1000.0f;
+    const float totalT = durationMs / 1000.0f;
+    const float progress = min(1.0f, elapsedMs / (float)durationMs);
+    const float startup = smoothstep01(min(1.0f, elapsedMs / 420.0f));
+    const float finishMix = smoothstep01(progress); // towards steady by 30s
+    const float pulseEnvelope = 1.0f - smoothstep01(progress); // pulse fades out
 
-    float envelope = (0.34f + 0.66f * rampIn) * (0.78f + 0.22f * longRamp);
+    const bool pulseAllowed = pulseAllowedForState(alertState, night);
+    if (!pulseAllowed) {
+        // Night pulse disabled in config -> smooth settle only (no oscillation)
+        float base = night ? 0.34f : 0.42f;
+        float settled = base * (1.0f - finishMix) + 1.0f * finishMix;
+        float visible = 0.20f + (settled - 0.20f) * startup;
+        return constrain(visible, 0.20f, 1.0f);
+    }
 
-    // User-tunable accent on state change (both ALERT and CLEAR), within brightness caps.
-    const float accentAmpUser = constrain(gConfig.offline.pulseAmplitudePct / 100.0f, 0.0f, 1.0f);
-    const float accentWindowSecCfg = max(0.4f, gConfig.offline.pulseDurationMs / 1000.0f);
-    const float accentWindowSec = accentWindowSecCfg * (alertState ? 0.95f : 1.05f);
-    float accentT = min(1.0f, elapsedMs / (accentWindowSec * 1000.0f));
-    float accentFade = 1.0f - smoothstep01(accentT);
-    float accentWave = 0.5f + 0.5f * sinf((t * speedMul * (alertState ? 2.6f : 1.9f) * 6.2831853f) + idxNorm * 3.4f);
-    float accentBase = (alertState ? 0.12f : 0.10f) * accentAmpUser;
-    float accent = accentBase * accentFade * accentWave;
+    // Frequency goes from fast -> slow across the full 30s.
+    const float freqStartHz = alertState ? 3.2f : 2.6f;
+    const float freqEndHz = alertState ? 0.55f : 0.45f;
+    const float k = (freqEndHz - freqStartHz) / totalT;
+    float idxNorm = (logicalCount > 1) ? (logicalIndex / (float)(logicalCount - 1)) : 0.0f;
 
-    return constrain(envelope * live + accent, 0.0f, 1.0f);
+    // Integrated phase for linearly-changing frequency.
+    const float phase = 6.2831853f * (freqStartHz * t + 0.5f * k * t * t) + idxNorm * 0.9f;
+    float wave01 = 0.5f + 0.5f * sinf(phase);
+    wave01 = alertState ? powf(wave01, 1.15f) : powf(wave01, 1.35f);
+
+    const float levelMin = night ? (alertState ? 0.24f : 0.22f) : (alertState ? 0.30f : 0.28f);
+    const float levelMax = night ? (alertState ? 0.92f : 0.84f) : (alertState ? 1.00f : 0.94f);
+    const float pulseLevel = levelMin + (levelMax - levelMin) * wave01;
+
+    // Fade oscillation out and settle to steady target by 30s.
+    float mixed = pulseLevel * pulseEnvelope + 1.0f * (1.0f - pulseEnvelope);
+    mixed = mixed * (1.0f - finishMix) + 1.0f * finishMix;
+
+    // Keep visibility floor and avoid hard jump on transition start.
+    float visible = 0.20f + (mixed - 0.20f) * startup;
+    return constrain(visible, 0.20f, 1.0f);
 }
 
 uint32_t fixedAlertClearColor(
@@ -198,9 +198,17 @@ uint32_t fixedAlertClearColor(
     int logicalIndex,
     int logicalCount,
     uint8_t extraMaxBrightness = 255) {
-    Color active = capColorForMode(target, night);
-    active.a = min<uint8_t>(active.a, extraMaxBrightness);
-    active.a = (uint8_t)(active.a * fixedTransitionBrightness(elapsedMs, alertState, night, logicalIndex, logicalCount));
+    Color active = target;
+    const uint8_t modeCap = modeBrightnessLimit(night);
+    const uint8_t allowedMax = min<uint8_t>(modeCap, extraMaxBrightness);
+    const uint8_t floorAlpha = max<uint8_t>(1, (uint8_t)(allowedMax * 0.20f));
+    const float effectBrightness = fixedTransitionBrightness(elapsedMs, alertState, night, logicalIndex, logicalCount);
+
+    // For alert/clear transition effects keep visibility stable:
+    //  - never exceed allowed max brightness
+    //  - never drop below 20% of allowed max during pulse envelope.
+    active.a = (uint8_t)(allowedMax * effectBrightness);
+    if (active.a < floorAlpha) active.a = floorAlpha;
     return applyColorBrightness(active, 1.0f);
 }
 
@@ -331,10 +339,10 @@ void renderAlertClearState(bool night) {
         uint32_t color = 0;
         if (alertState) {
             unsigned long elapsed = gRegionStateChangedAt[region] > 0 ? now - gRegionStateChangedAt[region] : 0;
-            color = fixedAlertClearColor(alertColor, night, elapsed, true, assignedIndexForLed(i), logicalCount);
+            color = fixedAlertClearColor(alertColor, night, elapsed, true, assignedIndexForLed(i), logicalCount, 255);
         } else if (recentClear) {
             unsigned long elapsed = gRegionStateChangedAt[region] > 0 ? now - gRegionStateChangedAt[region] : 0;
-            color = fixedAlertClearColor(clearColor, night, elapsed, false, assignedIndexForLed(i), logicalCount);
+            color = fixedAlertClearColor(clearColor, night, elapsed, false, assignedIndexForLed(i), logicalCount, 255);
         } else {
             int logicalIndex = assignedIndexForLed(i);
             color = animationColor(
