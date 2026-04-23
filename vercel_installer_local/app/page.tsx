@@ -143,6 +143,21 @@ function safeParseJsonObject(text: string) {
   return parsed;
 }
 
+function configLooksEmpty(cfg: any) {
+  if (!cfg || typeof cfg !== "object") return true;
+  const wifi = extractWifi(cfg);
+  const mqtt = extractMqtt(cfg);
+  const leds = Array.isArray(cfg?.l) ? cfg.l : [];
+  const hasLedMapping = leds.some((v: unknown) => typeof v === "number" && Number(v) >= 0);
+  const hasNetworkData = Boolean(
+    wifi.ssid?.trim() ||
+    mqtt.host?.trim() ||
+    mqtt.topic?.trim() ||
+    mqtt.user?.trim(),
+  );
+  return !hasLedMapping && !hasNetworkData;
+}
+
 export default function Page() {
   const [serialSupported, setSerialSupported] = useState(false);
   const [portState, setPortState] = useState<PortState>("idle");
@@ -170,6 +185,7 @@ export default function Page() {
   const [flashBusy, setFlashBusy] = useState(false);
   const [flashStatus, setFlashStatus] = useState("");
   const [supportQrSrc, setSupportQrSrc] = useState("");
+  const [isFlashingFlow, setIsFlashingFlow] = useState(false);
 
   const [serialLines, setSerialLines] = useState<string[]>([]);
 
@@ -561,6 +577,9 @@ export default function Page() {
     const obj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 9000);
     const cfg = obj.config;
     applyConfigToUi(cfg);
+    if (!isFlashingFlow && !configLooksEmpty(cfg)) {
+      persistBackupConfig(cfg);
+    }
     setStatus("Конфіг зчитано");
     return cfg;
   }
@@ -706,6 +725,7 @@ export default function Page() {
     }
 
     setFlashBusy(true);
+    setIsFlashingFlow(true);
     setFlashStatus(
       restoreSettings
         ? "Починаємо підготовку до прошивки..."
@@ -723,7 +743,13 @@ export default function Page() {
         applyConfigToUi(backup);
         setFlashStatus("Backup config збережено. Запускаємо прошивку...");
       } catch {
-        setFlashStatus("Backup config недоступний. Продовжуємо прошивку без backup.");
+        const fallbackBackup = backupConfigRef.current;
+        if (fallbackBackup && typeof fallbackBackup === "object") {
+          backup = fallbackBackup;
+          setFlashStatus("Поточний config недоступний. Використовуємо останній збережений backup.");
+        } else {
+          setFlashStatus("Backup config недоступний. Продовжуємо прошивку без backup.");
+        }
       }
     }
 
@@ -763,6 +789,7 @@ export default function Page() {
         : "Готово: прошивка + FS для нового пристрою завершені",
     );
     setFlashBusy(false);
+    setIsFlashingFlow(false);
   }
 
   async function onFlashClick(restoreSettings: boolean) {
@@ -770,6 +797,7 @@ export default function Page() {
       await runFlashFlow(restoreSettings);
     } catch (error) {
       setFlashBusy(false);
+      setIsFlashingFlow(false);
       const message = error instanceof Error ? error.message : String(error);
       setFlashStatus(`Помилка прошивки: ${message}`);
     }
