@@ -257,9 +257,11 @@ function collectDiffPaths(expected: any, actual: any, path = ""): string[] {
   }
 
   if (typeof expected === "object") {
-    const keys = Array.from(new Set([...Object.keys(expected), ...Object.keys(actual)])).sort();
+    // Compare only keys that existed in backup config.
+    // Device firmware may append runtime/service fields after restore.
+    const keys = Object.keys(expected).sort();
     for (const key of keys) {
-      if (!(key in expected) || !(key in actual)) {
+      if (!(key in actual)) {
         diffs.push(`${p}.${key}`);
       } else {
         diffs.push(...collectDiffPaths(expected[key], actual[key], `${p}.${key}`));
