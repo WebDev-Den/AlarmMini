@@ -52,8 +52,18 @@ type BoardAssets = {
   partitions?: ReleaseAsset | null;
   bootApp0?: ReleaseAsset | null;
 };
+type PipelineState = "pending" | "active" | "done" | "error" | "skipped";
+type PipelineStepId = "backup" | "flash" | "reconnect" | "restoreWifi" | "restoreConfig" | "verify";
 
 const BACKUP_STORAGE_KEY = "alarmmini.backup.config";
+const PIPELINE_STEPS: Array<{ id: PipelineStepId; label: string }> = [
+  { id: "backup", label: "Backup конфігу" },
+  { id: "flash", label: "Прошивка" },
+  { id: "reconnect", label: "Перепідключення" },
+  { id: "restoreWifi", label: "Відновлення Wi‑Fi" },
+  { id: "restoreConfig", label: "Відновлення JSON" },
+  { id: "verify", label: "Перевірка" },
+];
 
 const owner = process.env.NEXT_PUBLIC_GITHUB_OWNER || "WebDev-Den";
 const repo = process.env.NEXT_PUBLIC_GITHUB_REPO || "AlarmMini";
@@ -184,6 +194,85 @@ function compactJsonLog(obj: any) {
   return sanitizeLogLine(JSON.stringify(obj));
 }
 
+function createPipelineInitialState(restoreSettings: boolean): Record<PipelineStepId, PipelineState> {
+  return {
+    backup: restoreSettings ? "pending" : "skipped",
+    flash: "pending",
+    reconnect: "pending",
+    restoreWifi: restoreSettings ? "pending" : "skipped",
+    restoreConfig: restoreSettings ? "pending" : "skipped",
+    verify: restoreSettings ? "pending" : "skipped",
+  };
+}
+
+function buildConfigValidationErrors(cfg: any) {
+  const errors: string[] = [];
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) {
+    return ["Корінь JSON має бути об'єктом"];
+  }
+
+  if (!Array.isArray(cfg.l)) errors.push("Поле l (LED map) має бути масивом");
+  if (!cfg.w || typeof cfg.w !== "object") errors.push("Поле w (Wi‑Fi) відсутнє");
+  if (!cfg.m || typeof cfg.m !== "object") errors.push("Поле m (MQTT) відсутнє");
+  if (!Array.isArray(cfg.t)) errors.push("Поле t (NTP) має бути масивом із 3 значень");
+  if (cfg.g == null) errors.push("Поле g (log mask) відсутнє");
+
+  if (cfg.w && typeof cfg.w === "object") {
+    if (typeof cfg.w.s !== "string") errors.push("w.s (SSID) має бути рядком");
+    if (cfg.w.p != null && typeof cfg.w.p !== "string") errors.push("w.p (password) має бути рядком");
+  }
+
+  if (cfg.m && typeof cfg.m === "object") {
+    if (cfg.m.h != null && typeof cfg.m.h !== "string") errors.push("m.h (host) має бути рядком");
+    if (cfg.m.t != null && typeof cfg.m.t !== "string") errors.push("m.t (topic) має бути рядком");
+    if (cfg.m.p != null && !Number.isFinite(Number(cfg.m.p))) errors.push("m.p (port) має бути числом");
+  }
+
+  return errors;
+}
+
+function collectDiffPaths(expected: any, actual: any, path = ""): string[] {
+  const diffs: string[] = [];
+  const p = path || "$";
+  if (typeof expected !== typeof actual) {
+    diffs.push(p);
+    return diffs;
+  }
+
+  if (expected == null || actual == null) {
+    if (expected !== actual) diffs.push(p);
+    return diffs;
+  }
+
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual) || expected.length !== actual.length) {
+      diffs.push(`${p}.length`);
+      return diffs;
+    }
+    for (let i = 0; i < expected.length; i++) {
+      diffs.push(...collectDiffPaths(expected[i], actual[i], `${p}[${i}]`));
+      if (diffs.length > 40) break;
+    }
+    return diffs;
+  }
+
+  if (typeof expected === "object") {
+    const keys = Array.from(new Set([...Object.keys(expected), ...Object.keys(actual)])).sort();
+    for (const key of keys) {
+      if (!(key in expected) || !(key in actual)) {
+        diffs.push(`${p}.${key}`);
+      } else {
+        diffs.push(...collectDiffPaths(expected[key], actual[key], `${p}.${key}`));
+      }
+      if (diffs.length > 40) break;
+    }
+    return diffs;
+  }
+
+  if (expected !== actual) diffs.push(p);
+  return diffs;
+}
+
 export default function Page() {
   const [serialSupported, setSerialSupported] = useState(false);
   const [portState, setPortState] = useState<PortState>("idle");
@@ -215,6 +304,11 @@ export default function Page() {
   const [waitActive, setWaitActive] = useState(false);
   const [waitLabel, setWaitLabel] = useState("");
   const [waitProgress, setWaitProgress] = useState(0);
+  const [dangerousWriteArmed, setDangerousWriteArmed] = useState(false);
+  const [configValidationErrors, setConfigValidationErrors] = useState<string[]>([]);
+  const [pipelineState, setPipelineState] = useState<Record<PipelineStepId, PipelineState>>(
+    createPipelineInitialState(false),
+  );
 
   const [serialLines, setSerialLines] = useState<string[]>([]);
 
@@ -386,6 +480,14 @@ export default function Page() {
     setSerialLines((prev) => [sanitizeLogLine(line), ...prev].slice(0, 120));
   }
 
+  function setPipelineStep(step: PipelineStepId, state: PipelineState) {
+    setPipelineState((prev) => ({ ...prev, [step]: state }));
+  }
+
+  function resetPipeline(restoreSettings: boolean) {
+    setPipelineState(createPipelineInitialState(restoreSettings));
+  }
+
   async function withBoardWait<T>(
     label: string,
     action: () => Promise<T>,
@@ -447,6 +549,21 @@ export default function Page() {
         // ignore storage failure
       }
     }
+  }
+
+  function downloadBackupConfigFile() {
+    const backup = backupConfigRef.current;
+    if (!backup || typeof backup !== "object") {
+      throw new Error("Backup JSON не знайдено");
+    }
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `alarmmini-backup-${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(href);
   }
 
   function clearPending(reason: string) {
@@ -611,6 +728,15 @@ export default function Page() {
   }
 
   async function sendAndWait(line: string, matcher: (obj: any) => boolean, timeoutMs = 9000) {
+    return sendAndWaitInternal(line, matcher, timeoutMs, true);
+  }
+
+  async function sendAndWaitInternal(
+    line: string,
+    matcher: (obj: any) => boolean,
+    timeoutMs: number,
+    allowWatchdogRetry: boolean,
+  ) {
     if (pendingRef.current) {
       clearPending("new_request");
     }
@@ -626,8 +752,24 @@ export default function Page() {
       pendingRef.current = { matcher, resolve, reject, timeoutId };
     });
 
-    await writeSerialLine(line);
-    return responsePromise;
+    try {
+      await writeSerialLine(line);
+      return await responsePromise;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (allowWatchdogRetry && msg.includes("timeout")) {
+        appendLog("[watchdog] timeout -> reconnect port and retry command");
+        try {
+          await disconnectPort();
+        } catch {}
+        await withBoardWait("Watchdog: перепідключення COM (до 1 хв)...", async () => {
+          await ensureConnected(false);
+          return true;
+        });
+        return sendAndWaitInternal(line, matcher, timeoutMs, false);
+      }
+      throw error;
+    }
   }
 
   async function cmdGetInfo() {
@@ -700,12 +842,24 @@ export default function Page() {
   async function cmdSetConfig() {
     await ensureConnected(true);
     const configObj = safeParseJsonObject(configText);
+    const validation = buildConfigValidationErrors(configObj);
+    setConfigValidationErrors(validation);
+    if (validation.length) {
+      throw new Error("JSON має помилки валідації");
+    }
+
+    if (configLooksEmpty(configObj) && !dangerousWriteArmed) {
+      setDangerousWriteArmed(true);
+      throw new Error("JSON виглядає порожнім. Натисни повторно після підтвердження");
+    }
+
     setStatus("Записуємо set:config...");
     await sendAndWait(
       `set:config ${JSON.stringify(configObj)}`,
       (j) => j?.status === "ACK" && (j?.cmd === "set:config" || j?.cmd === "config_set"),
       14000,
     );
+    setDangerousWriteArmed(false);
     setStatus("Конфіг записано");
     await cmdGetConfig();
   }
@@ -758,6 +912,31 @@ export default function Page() {
     setStatus("Backup JSON успішно відновлено");
   }
 
+  async function cmdSafeRestoreNetworkFromBackup() {
+    const backup = backupConfigRef.current;
+    if (!backup || typeof backup !== "object") {
+      throw new Error("Backup JSON не знайдено");
+    }
+
+    await ensureConnected(true);
+    setStatus("Safe restore: зчитуємо поточний config...");
+    const currentObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
+    const current = currentObj?.config && typeof currentObj.config === "object" ? currentObj.config : {};
+    const merged = {
+      ...current,
+      w: backup.w ?? current.w,
+      m: backup.m ?? current.m,
+    };
+    setStatus("Safe restore: записуємо Wi‑Fi + MQTT...");
+    await sendAndWait(
+      `set:config ${JSON.stringify(merged)}`,
+      (j) => j?.status === "ACK" && (j?.cmd === "set:config" || j?.cmd === "config_set"),
+      18000,
+    );
+    await cmdGetConfig();
+    setStatus("Safe restore завершено");
+  }
+
   async function onConnectClick() {
     try {
       await ensureConnected(true);
@@ -793,6 +972,7 @@ export default function Page() {
 
     setFlashBusy(true);
     setIsFlashingFlow(true);
+    resetPipeline(restoreSettings);
     setFlashStatus(
       restoreSettings
         ? "Починаємо підготовку до прошивки..."
@@ -801,6 +981,7 @@ export default function Page() {
 
     let backup: any | null = null;
     if (restoreSettings) {
+      setPipelineStep("backup", "active");
       try {
         await ensureConnected(true);
         setFlashStatus("Перед прошивкою зчитуємо config з плати...");
@@ -809,13 +990,16 @@ export default function Page() {
         persistBackupConfig(backup);
         applyConfigToUi(backup);
         setFlashStatus("Backup config збережено. Запускаємо прошивку...");
+        setPipelineStep("backup", "done");
       } catch {
         const fallbackBackup = backupConfigRef.current;
         if (fallbackBackup && typeof fallbackBackup === "object") {
           backup = fallbackBackup;
           setFlashStatus("Поточний config недоступний. Використовуємо останній збережений backup.");
+          setPipelineStep("backup", "done");
         } else {
           setFlashStatus("Backup config недоступний. Продовжуємо прошивку без backup.");
+          setPipelineStep("backup", "error");
         }
       }
     }
@@ -824,26 +1008,45 @@ export default function Page() {
       await disconnectPort();
     } catch {}
 
+    setPipelineStep("flash", "active");
     await startEspInstall(installButtonRef.current);
+    setPipelineStep("flash", "done");
 
     setFlashStatus("Прошивка завершена. Перепідключаємо плату...");
+    setPipelineStep("reconnect", "active");
     await reconnectAfterFlash();
     await waitDeviceInfoAfterReconnect(6);
+    setPipelineStep("reconnect", "done");
 
     if (restoreSettings && backup) {
       const wifi = extractWifi(backup);
       if (wifi.ssid) {
+        setPipelineStep("restoreWifi", "active");
         setFlashStatus("Відновлюємо Wi‑Fi (set:wifi)...");
         await sendAndWait(
           `set:wifi ${JSON.stringify({ ssid: wifi.ssid, password: wifi.password })}`,
           (j) => j?.status === "ACK" && (j?.cmd === "set:wifi" || j?.cmd === "wifi_set"),
           10000,
         );
+        setPipelineStep("restoreWifi", "done");
       }
 
+      setPipelineStep("restoreConfig", "active");
       await restoreBackupConfigWithRetry(backup, 3);
+      setPipelineStep("restoreConfig", "done");
 
       setFlashStatus("Backup відновлено на платі");
+      setPipelineStep("verify", "active");
+      const verifiedObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
+      const diffs = collectDiffPaths(backup, verifiedObj?.config ?? {});
+      if (diffs.length === 0) {
+        setPipelineStep("verify", "done");
+        setFlashStatus("Верифікація успішна: backup повністю відновлено");
+      } else {
+        setPipelineStep("verify", "error");
+        const preview = diffs.slice(0, 5).join(", ");
+        setFlashStatus(`Верифікація: ${diffs.length} відмінностей (${preview}${diffs.length > 5 ? ", ..." : ""})`);
+      }
     }
 
     await cmdGetInfo();
@@ -857,6 +1060,39 @@ export default function Page() {
     );
     setFlashBusy(false);
     setIsFlashingFlow(false);
+  }
+
+  async function runRecoveryWizard() {
+    setFlashBusy(true);
+    try {
+      setStatus("Recovery Wizard: підключення до плати...");
+      await withBoardWait("Recovery Wizard: очікуємо плату (до 1 хв)...", async () => {
+        await ensureConnected(true);
+        await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+      });
+
+      if (!backupConfigRef.current) {
+        const cfgObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
+        const cfg = cfgObj?.config;
+        if (cfg && !configLooksEmpty(cfg)) {
+          persistBackupConfig(cfg);
+          applyConfigToUi(cfg);
+        }
+      }
+
+      if (!backupConfigRef.current) {
+        setStatus("Recovery Wizard: backup відсутній, збережи конфіг вручну");
+        return;
+      }
+
+      setStatus("Recovery Wizard: safe restore Wi‑Fi + MQTT...");
+      await cmdSafeRestoreNetworkFromBackup();
+      setStatus("Recovery Wizard: повне відновлення backup JSON...");
+      await restoreBackupConfigWithRetry(backupConfigRef.current, 3);
+      setStatus("Recovery Wizard: завершено");
+    } finally {
+      setFlashBusy(false);
+    }
   }
 
   async function onFlashClick(restoreSettings: boolean) {
@@ -1018,6 +1254,15 @@ export default function Page() {
           <button className="btn" disabled={flashBusy} onClick={() => void cmdSetConfig()}>
             Зберегти конфігурацію
           </button>
+          <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void downloadBackupConfigFile()}>
+            Завантажити backup JSON
+          </button>
+          <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void cmdSafeRestoreNetworkFromBackup().catch((e) => {
+            const message = e instanceof Error ? e.message : String(e);
+            setStatus(`Safe restore помилка: ${message}`);
+          })}>
+            Safe restore Wi‑Fi+MQTT
+          </button>
           <button
             className="btn"
             disabled={flashBusy || !backupAvailable}
@@ -1039,8 +1284,21 @@ export default function Page() {
           >
             Форматувати JSON
           </button>
+          {dangerousWriteArmed ? (
+            <button className="btn" disabled={flashBusy} onClick={() => setDangerousWriteArmed(false)}>
+              Скасувати небезпечний запис
+            </button>
+          ) : null}
           <div className="status-pill">{backupAvailable ? "Backup: знайдено" : "Backup: відсутній"}</div>
+          {dangerousWriteArmed ? <div className="status-pill">Підтвердження порожнього JSON: увімкнено</div> : null}
         </div>
+        {configValidationErrors.length > 0 ? (
+          <div className="validation-box">
+            {configValidationErrors.map((err, idx) => (
+              <div key={`${idx}-${err}`}>• {err}</div>
+            ))}
+          </div>
+        ) : null}
         <div className="json-editor">
           <CodeMirror
             value={configText}
@@ -1081,11 +1339,24 @@ export default function Page() {
           <button className="btn" disabled={!canFlash || flashBusy} onClick={() => void onFlashClick(false)}>
             {flashBusy ? "Йде прошивка..." : "Прошити як новий пристрій"}
           </button>
+          <button className="btn" disabled={flashBusy} onClick={() => void runRecoveryWizard().catch((e) => {
+            const message = e instanceof Error ? e.message : String(e);
+            setFlashStatus(`Recovery Wizard помилка: ${message}`);
+          })}>
+            Recovery Wizard
+          </button>
           {createElement("esp-web-install-button" as any, {
             manifest: manifestUrl,
             class: "hidden-install",
             ref: installButtonRef,
           })}
+        </div>
+        <div className="pipeline-grid">
+          {PIPELINE_STEPS.map((step) => (
+            <div key={step.id} className={`pipeline-step ${pipelineState[step.id]}`}>
+              <span>{step.label}</span>
+            </div>
+          ))}
         </div>
         {selectedReleaseUpdatedAt ? (
           <p className="hint">Оновлено: {selectedReleaseUpdatedAt}</p>

@@ -364,6 +364,73 @@ input, .select, .config-area {
   padding: 10px 12px;
 }
 
+.validation-box {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 166, 96, 0.45);
+  border-radius: 12px;
+  background: rgba(70, 40, 16, 0.35);
+  color: #ffd7a9;
+  padding: 10px 12px;
+}
+
+.validation-box strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.validation-box ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.validation-box li + li {
+  margin-top: 4px;
+}
+
+.pipeline-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.pipeline-step {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: rgba(7, 18, 34, 0.6);
+  color: var(--muted);
+}
+
+.pipeline-step.pending {
+  border-color: rgba(117, 158, 220, 0.26);
+  color: #b5c8e4;
+}
+
+.pipeline-step.active {
+  border-color: rgba(255, 212, 71, 0.7);
+  color: #ffe58d;
+  background: rgba(80, 62, 18, 0.32);
+}
+
+.pipeline-step.done {
+  border-color: rgba(135, 232, 156, 0.56);
+  color: #adf6bc;
+  background: rgba(20, 66, 36, 0.35);
+}
+
+.pipeline-step.error {
+  border-color: rgba(255, 113, 113, 0.6);
+  color: #ffc0c0;
+  background: rgba(87, 24, 24, 0.35);
+}
+
+.pipeline-step.skipped {
+  border-style: dashed;
+  opacity: 0.72;
+}
+
 .hidden-install {
   display: none;
 }
@@ -398,6 +465,10 @@ input, .select, .config-area {
   }
 
   .asset-block li {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-grid {
     grid-template-columns: 1fr;
   }
 
