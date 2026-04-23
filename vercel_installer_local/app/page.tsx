@@ -247,6 +247,19 @@ export default function Page() {
     return list;
   }, [boardAssets, targetBoard]);
 
+  const selectedReleaseUpdatedAt = useMemo(() => {
+    if (!selectedRelease?.published_at) return "";
+    const dt = new Date(selectedRelease.published_at);
+    if (Number.isNaN(dt.getTime())) return "";
+    return new Intl.DateTimeFormat("uk-UA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(dt);
+  }, [selectedRelease]);
+
   const canFlash = useMemo(() => {
     if (!selectedRelease) return false;
     if (!boardAssets.firmware || !boardAssets.littlefs) return false;
@@ -885,6 +898,9 @@ export default function Page() {
             ref: installButtonRef,
           })}
         </div>
+        {selectedReleaseUpdatedAt ? (
+          <p className="hint">Оновлено: {selectedReleaseUpdatedAt}</p>
+        ) : null}
 
         <p className="hint">
           {releasesError
