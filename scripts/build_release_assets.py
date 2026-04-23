@@ -8,7 +8,7 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = PROJECT_DIR / "release_artifacts"
-USB_BUILD_DIR = PROJECT_DIR / ".pio" / "build" / "usb"
+ESP8266_BUILD_DIR = PROJECT_DIR / ".pio" / "build" / "esp8266"
 ESP32C3_BUILD_DIR = PROJECT_DIR / ".pio" / "build" / "esp32c3"
 
 
@@ -21,16 +21,16 @@ def main():
     env = os.environ.copy()
     env["ALARMMINI_CONFIG_MODE"] = "release"
 
-    run(["platformio", "run", "-e", "usb"], env)
-    run(["platformio", "run", "-t", "buildfs", "-e", "usb"], env)
+    run(["platformio", "run", "-e", "esp8266"], env)
+    run(["platformio", "run", "-t", "buildfs", "-e", "esp8266"], env)
     run(["platformio", "run", "-e", "esp32c3"], env)
     run(["platformio", "run", "-t", "buildfs", "-e", "esp32c3"], env)
 
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     artifacts = {
-        "alarmmini-esp8266-firmware.bin": USB_BUILD_DIR / "firmware.bin",
-        "alarmmini-esp8266-littlefs.bin": USB_BUILD_DIR / "littlefs.bin",
+        "alarmmini-esp8266-firmware.bin": ESP8266_BUILD_DIR / "firmware.bin",
+        "alarmmini-esp8266-littlefs.bin": ESP8266_BUILD_DIR / "littlefs.bin",
         "alarmmini-esp32c3-firmware.bin": ESP32C3_BUILD_DIR / "firmware.bin",
         "alarmmini-esp32c3-littlefs.bin": ESP32C3_BUILD_DIR / "littlefs.bin",
         "alarmmini-esp32c3-bootloader.bin": ESP32C3_BUILD_DIR / "bootloader.bin",

@@ -24,10 +24,14 @@ static unsigned long _mqttLastReconnect = 0;
 static int           _mqttReconnectDelay = 2000;
 static unsigned long _internetLastCheck = 0;
 static unsigned long _transportDownSince = 0;
+static unsigned long _transportStableSince = 0;
 static constexpr unsigned long INTERNET_CHECK_INTERVAL_MS = 60000UL;
 static constexpr unsigned long TRANSPORT_DROP_DEBOUNCE_MS = 5000UL;
+static constexpr unsigned long TRANSPORT_STABLE_BEFORE_MQTT_MS = 8000UL;
 static constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 1;
 static constexpr unsigned long MQTT_LOOP_GUARD_MS = 10UL;
+static constexpr unsigned long MQTT_LOOP_HARD_LIMIT_MS = 2000UL;
+static constexpr unsigned int MQTT_MAX_PAYLOAD_BYTES = 1024U;
 
 static void _formatLogClock(char* buffer, size_t size)
 {
@@ -105,6 +109,12 @@ bool alertsStartSubscribedRegionTest() {
 }
 
 void _mqttCallback(char* topic, byte* payload, unsigned int length) {
+    if (length == 0 || length > MQTT_MAX_PAYLOAD_BYTES) {
+        LOG_WARN(LOG_CAT_MQTT, "Payload size %u is out of safe bounds", length);
+        gFetchOk = false;
+        return;
+    }
+
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, payload, length) || !doc.is<JsonArray>()) {
         LOG_WARN(LOG_CAT_MQTT, "Invalid payload, expected [0,1,0,...]");
@@ -143,6 +153,7 @@ bool _mqttConnect() {
     _mqtt.setCallback(_mqttCallback);
     _mqtt.setKeepAlive(256);
     _mqtt.setSocketTimeout(MQTT_SOCKET_TIMEOUT_S);
+    _mqttWifi.setTimeout(1000);
 
     char clientId[24];
     snprintf(clientId, sizeof(clientId), "alarm-map-%06X", platformChipId());
@@ -187,6 +198,7 @@ void alertsReloadClientConfig() {
     gMqttConnected = false;
     _mqttLastReconnect = 0;
     _mqttReconnectDelay = 2000;
+    _transportStableSince = 0;
 }
 
 void alertsHandle() {
@@ -212,10 +224,12 @@ void alertsHandle() {
     if (WiFi.status() != WL_CONNECTED || !gInternetConnected) {
         if (_transportDownSince == 0) {
             _transportDownSince = now;
+            _transportStableSince = 0;
             yield();
             return;
         }
         if (now - _transportDownSince < TRANSPORT_DROP_DEBOUNCE_MS) {
+            _transportStableSince = 0;
             yield();
             return;
         }
@@ -230,14 +244,23 @@ void alertsHandle() {
         return;
     }
     _transportDownSince = 0;
+    if (_transportStableSince == 0) {
+        _transportStableSince = now;
+    }
 
     if (_mqtt.connected()) {
         gMqttConnected = true;
         const unsigned long loopStartedAt = millis();
         _mqtt.loop();
-        if (millis() - loopStartedAt > MQTT_LOOP_GUARD_MS)
-        {
-            LOG_WARN(LOG_CAT_MQTT, "MQTT loop took %lums", millis() - loopStartedAt);
+        const unsigned long loopElapsed = millis() - loopStartedAt;
+        if (loopElapsed > MQTT_LOOP_GUARD_MS) {
+            LOG_WARN(LOG_CAT_MQTT, "MQTT loop took %lums", loopElapsed);
+        }
+        if (loopElapsed > MQTT_LOOP_HARD_LIMIT_MS) {
+            LOG_WARN(LOG_CAT_MQTT, "MQTT loop hard limit exceeded, forcing reconnect");
+            _mqtt.disconnect();
+            gMqttConnected = false;
+            _mqttLastReconnect = now;
         }
         yield();
         return;
@@ -249,6 +272,11 @@ void alertsHandle() {
     }
 
     if (!strlen(gConfig.mqttHost))
+    {
+        yield();
+        return;
+    }
+    if (now - _transportStableSince < TRANSPORT_STABLE_BEFORE_MQTT_MS)
     {
         yield();
         return;

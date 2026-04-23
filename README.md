@@ -148,13 +148,13 @@ AP за замовчуванням:
 ### Збірка прошивки
 
 ```powershell
-platformio run -e usb
+platformio run -e esp8266
 ```
 
 ### Збірка файлової системи
 
 ```powershell
-platformio run -t buildfs -e usb
+platformio run -t buildfs -e esp8266
 ```
 
 ## Прошивка
@@ -162,13 +162,13 @@ platformio run -t buildfs -e usb
 ### Залити web UI в LittleFS
 
 ```powershell
-platformio run -t uploadfs -e usb
+platformio run -t uploadfs -e esp8266
 ```
 
 ### Залити firmware
 
 ```powershell
-platformio run -t upload -e usb
+platformio run -t upload -e esp8266
 ```
 
 ### Автоматичне збереження конфіга при прошивці
@@ -182,13 +182,13 @@ platformio run -t upload -e usb
 
 ```powershell
 # firmware + LittleFS + restore config
-platformio run -e usb -t flash_preserve
+platformio run -e esp8266 -t flash_preserve
 
 # тільки firmware + restore config
-platformio run -e usb -t flash_preserve_fw
+platformio run -e esp8266 -t flash_preserve_fw
 ```
 
-Для `ESP32-C3` / `ESP8266 E12` заміни `-e usb` на `-e esp32c3` або `-e esp8266e12`.
+Для `ESP32-C3` заміни `-e esp8266` на `-e esp32c3`.
 Якщо порт не визначився автоматично, задай `upload_port` у `platformio.ini` або передай порт у скрипт вручну:
 
 ```powershell
@@ -253,3 +253,17 @@ Features:
 - live JSON serial log
 - config editor (format/minify/load/save)
 - config profiles CRUD (create/read/update/delete) in `work_data/serial_profiles.json`
+
+## 2026-04-23 stability updates
+
+- Fixed static web asset delivery for ESP8266/ESP32 when files are served from `LittleFS` as `.gz`:
+  - server now sends `Content-Encoding: gzip` and `Vary: Accept-Encoding`.
+  - this resolves blank page / `ERR_CONTENT_DECODING_FAILED` cases.
+- Updated release build script to the current environments:
+  - `esp8266`
+  - `esp32c3`
+- Improved alert/clear LED transitions:
+  - smoother multi-phase easing
+  - softer wave + breathing blend
+  - still capped by day/night brightness limits
+  - night pulse toggles (`night.pulseOnAlert`, `night.pulseOnClear`) are respected.

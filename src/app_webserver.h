@@ -83,6 +83,12 @@ bool streamStaticFile(const String &path, const String &mimeType, bool isGzip)
     if (!file)
         return false;
 
+    if (isGzip)
+    {
+        gServer.sendHeader("Content-Encoding", "gzip");
+        gServer.sendHeader("Vary", "Accept-Encoding");
+    }
+
     gServer.streamFile(file, mimeType);
     file.close();
     return true;

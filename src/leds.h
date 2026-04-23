@@ -139,23 +139,37 @@ float smoothstep01(float x) {
     return x * x * (3.0f - 2.0f * x);
 }
 
+bool pulseAllowedForState(bool alertState, bool night) {
+    if (!night) return true;
+    return alertState ? gConfig.night.pulseOnAlert : gConfig.night.pulseOnClear;
+}
+
 float fixedTransitionBrightness(unsigned long elapsedMs, bool alertState, bool night, int logicalIndex, int logicalCount) {
     const unsigned long durationMs = 60000UL;
     float progress = min(1.0f, elapsedMs / (float)durationMs);
-    float ramp = smoothstep01(progress);
+    float rampIn = smoothstep01(min(1.0f, elapsedMs / (alertState ? 1600.0f : 2200.0f)));
+    float longRamp = smoothstep01(progress);
 
     float idxNorm = (logicalCount > 1) ? (logicalIndex / (float)(logicalCount - 1)) : 0.0f;
-    float phase = (elapsedMs / 1000.0f) * (alertState ? 2.4f : 1.5f) * 6.2831853f;
-    float breath = 0.5f + 0.5f * sinf(phase);
-    float wave = 0.5f + 0.5f * sinf(phase * 0.55f + idxNorm * 3.8f);
+    float t = elapsedMs / 1000.0f;
+    float phaseMain = t * (alertState ? 1.15f : 0.72f) * 6.2831853f;
+    float phaseSecondary = t * (alertState ? 0.43f : 0.32f) * 6.2831853f + idxNorm * 2.6f;
 
-    float baseMin = night ? 0.18f : 0.36f;
-    float baseMax = night ? (alertState ? 0.74f : 0.58f) : (alertState ? 0.98f : 0.82f);
-    float amplitude = alertState ? 0.26f : 0.18f;
-    float dynamic = constrain(0.72f * breath + 0.28f * wave, 0.0f, 1.0f);
+    float breath = 0.5f + 0.5f * sinf(phaseMain);
+    float wave = 0.5f + 0.5f * sinf(phaseSecondary);
+    float shimmer = 0.5f + 0.5f * sinf(phaseMain * 0.33f + idxNorm * 4.1f);
+
+    float baseMin = night ? 0.14f : 0.32f;
+    float baseMax = night ? (alertState ? 0.66f : 0.54f) : (alertState ? 0.95f : 0.78f);
+    float amplitude = alertState ? 0.22f : 0.15f;
+    if (!pulseAllowedForState(alertState, night))
+        amplitude = 0.04f;
+
+    float dynamic = constrain(0.60f * breath + 0.28f * wave + 0.12f * shimmer, 0.0f, 1.0f);
     float live = baseMin + (baseMax - baseMin) * (1.0f - amplitude + amplitude * dynamic);
 
-    return constrain((0.45f + 0.55f * ramp) * live, 0.0f, 1.0f);
+    float envelope = (0.34f + 0.66f * rampIn) * (0.78f + 0.22f * longRamp);
+    return constrain(envelope * live, 0.0f, 1.0f);
 }
 
 uint32_t fixedAlertClearColor(
@@ -366,7 +380,8 @@ void ledsHandle() {
     }
 
     if (strlen(gConfig.mqttHost) && !gMqttConnected) {
-        renderRetainedStateWithPulse(night, true);
+        // MQTT lost: keep retained autonomous state without pulsing.
+        renderRetainedState(night, true);
         return;
     }
 
