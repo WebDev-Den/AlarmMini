@@ -265,6 +265,8 @@ function normalizeConfig(cfg) {
     offlineAutonomousSeconds: Number(offline.a ?? source.offlineAutonomousSeconds ?? 60),
     pulseAmplitudePct: Number(offline.p ?? source.pulseAmplitudePct ?? 60),
     pulseDurationMs: Number(offline.d ?? source.pulseDurationMs ?? 2400),
+    pulseSpeedPct: Number(offline.s ?? source.pulseSpeedPct ?? 100),
+    pulseContrastPct: Number(offline.c ?? source.pulseContrastPct ?? 60),
     buzzerRegionIds: buzzer.r || source.buzzerRegionIds || source.buzzerRegions || [],
     ledRegionIds: source.l || source.ledRegionIds || source.leds || [],
     mqttHost: mqtt.h ?? source.mqttHost ?? "",
@@ -828,6 +830,8 @@ function applyConfig(cfg) {
   applySliderValue("nightVol", "nightVolVal", currentConfig.buzzerNightVol, (v) => `${v}%`);
   applySliderValue("pulseAmp", "pulseAmpVal", currentConfig.pulseAmplitudePct ?? 60, (v) => `${v}%`);
   applySliderValue("pulseDur", "pulseDurVal", currentConfig.pulseDurationMs ?? 2400, (v) => `${(Number(v) / 1000).toFixed(1)}s`);
+  applySliderValue("pulseSpeed", "pulseSpeedVal", currentConfig.pulseSpeedPct ?? 100, (v) => `${v}%`);
+  applySliderValue("pulseContrast", "pulseContrastVal", currentConfig.pulseContrastPct ?? 60, (v) => `${v}%`);
 
   $("nightEnabled").checked = Boolean(currentConfig.nightEnabled);
   $("buzzerEnabled").checked = Boolean(currentConfig.buzzerEnabled);
@@ -914,6 +918,8 @@ function buildPayload() {
     a: currentConfig.offlineAutonomousSeconds ?? payload.o?.a ?? 60,
     p: Number($("pulseAmp").value),
     d: Number($("pulseDur").value),
+    s: Number($("pulseSpeed").value),
+    c: Number($("pulseContrast").value),
   };
   if (MAX_LEDS > 0) {
     payload.l = ledRegionIds;

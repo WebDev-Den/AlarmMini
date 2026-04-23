@@ -148,6 +148,8 @@ struct OfflineConfig {
     uint16_t autonomousSeconds;
     uint8_t pulseAmplitudePct;   // 0-100: accent pulse amplitude for ALERT/CLEAR transitions
     uint16_t pulseDurationMs;    // duration of accent pulse envelope
+    uint8_t pulseSpeedPct;       // 20-220: pulse speed multiplier (%)
+    uint8_t pulseContrastPct;    // 0-100: pulse dynamic contrast
 };
 
 struct AppConfig {

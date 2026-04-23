@@ -150,10 +150,12 @@ float fixedTransitionBrightness(unsigned long elapsedMs, bool alertState, bool n
     float rampIn = smoothstep01(min(1.0f, elapsedMs / (alertState ? 1600.0f : 2200.0f)));
     float longRamp = smoothstep01(progress);
 
+    const float speedMul = constrain(gConfig.offline.pulseSpeedPct / 100.0f, 0.2f, 2.2f);
+    const float contrastMul = constrain(gConfig.offline.pulseContrastPct / 100.0f, 0.0f, 1.0f);
     float idxNorm = (logicalCount > 1) ? (logicalIndex / (float)(logicalCount - 1)) : 0.0f;
     float t = elapsedMs / 1000.0f;
-    float phaseMain = t * (alertState ? 1.15f : 0.72f) * 6.2831853f;
-    float phaseSecondary = t * (alertState ? 0.43f : 0.32f) * 6.2831853f + idxNorm * 2.6f;
+    float phaseMain = t * speedMul * (alertState ? 1.15f : 0.72f) * 6.2831853f;
+    float phaseSecondary = t * speedMul * (alertState ? 0.43f : 0.32f) * 6.2831853f + idxNorm * 2.6f;
 
     float breath = 0.5f + 0.5f * sinf(phaseMain);
     float wave = 0.5f + 0.5f * sinf(phaseSecondary);
@@ -169,6 +171,8 @@ float fixedTransitionBrightness(unsigned long elapsedMs, bool alertState, bool n
     }
 
     float dynamic = constrain(0.60f * breath + 0.28f * wave + 0.12f * shimmer, 0.0f, 1.0f);
+    // Contrast control: 0 -> softer, 100 -> sharper pulse profile.
+    dynamic = powf(dynamic, 1.4f - 0.9f * contrastMul);
     float live = baseMin + (baseMax - baseMin) * (1.0f - amplitude + amplitude * dynamic);
 
     float envelope = (0.34f + 0.66f * rampIn) * (0.78f + 0.22f * longRamp);
@@ -179,7 +183,7 @@ float fixedTransitionBrightness(unsigned long elapsedMs, bool alertState, bool n
     const float accentWindowSec = accentWindowSecCfg * (alertState ? 0.95f : 1.05f);
     float accentT = min(1.0f, elapsedMs / (accentWindowSec * 1000.0f));
     float accentFade = 1.0f - smoothstep01(accentT);
-    float accentWave = 0.5f + 0.5f * sinf((t * (alertState ? 2.6f : 1.9f) * 6.2831853f) + idxNorm * 3.4f);
+    float accentWave = 0.5f + 0.5f * sinf((t * speedMul * (alertState ? 2.6f : 1.9f) * 6.2831853f) + idxNorm * 3.4f);
     float accentBase = (alertState ? 0.12f : 0.10f) * accentAmpUser;
     float accent = accentBase * accentFade * accentWave;
 
