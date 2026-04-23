@@ -162,14 +162,28 @@ float fixedTransitionBrightness(unsigned long elapsedMs, bool alertState, bool n
     float baseMin = night ? 0.14f : 0.32f;
     float baseMax = night ? (alertState ? 0.66f : 0.54f) : (alertState ? 0.95f : 0.78f);
     float amplitude = alertState ? 0.22f : 0.15f;
-    if (!pulseAllowedForState(alertState, night))
-        amplitude = 0.04f;
+    const bool pulseAllowed = pulseAllowedForState(alertState, night);
+    if (!pulseAllowed) {
+        // Night mode can disable continuous pulse, but transition should still be visible.
+        amplitude = alertState ? 0.12f : 0.09f;
+    }
 
     float dynamic = constrain(0.60f * breath + 0.28f * wave + 0.12f * shimmer, 0.0f, 1.0f);
     float live = baseMin + (baseMax - baseMin) * (1.0f - amplitude + amplitude * dynamic);
 
     float envelope = (0.34f + 0.66f * rampIn) * (0.78f + 0.22f * longRamp);
-    return constrain(envelope * live, 0.0f, 1.0f);
+
+    // User-tunable accent on state change (both ALERT and CLEAR), within brightness caps.
+    const float accentAmpUser = constrain(gConfig.offline.pulseAmplitudePct / 100.0f, 0.0f, 1.0f);
+    const float accentWindowSecCfg = max(0.4f, gConfig.offline.pulseDurationMs / 1000.0f);
+    const float accentWindowSec = accentWindowSecCfg * (alertState ? 0.95f : 1.05f);
+    float accentT = min(1.0f, elapsedMs / (accentWindowSec * 1000.0f));
+    float accentFade = 1.0f - smoothstep01(accentT);
+    float accentWave = 0.5f + 0.5f * sinf((t * (alertState ? 2.6f : 1.9f) * 6.2831853f) + idxNorm * 3.4f);
+    float accentBase = (alertState ? 0.12f : 0.10f) * accentAmpUser;
+    float accent = accentBase * accentFade * accentWave;
+
+    return constrain(envelope * live + accent, 0.0f, 1.0f);
 }
 
 uint32_t fixedAlertClearColor(

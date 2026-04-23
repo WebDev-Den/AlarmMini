@@ -198,6 +198,7 @@ function normalizeConfig(cfg) {
   const night = source.n || {};
   const buzzer = source.z || {};
   const blink = source.k || {};
+  const offline = source.o || {};
   const wifi = source.w || {};
   const mqtt = source.m || {};
   const ntp = Array.isArray(source.t) ? source.t : [];
@@ -261,6 +262,9 @@ function normalizeConfig(cfg) {
     blinkEnabled: blink.e ?? source.blinkEnabled ?? true,
     blinkDayInt: Number(blinkIntensity[0] ?? source.blinkDayInt ?? 75),
     blinkNightInt: Number(blinkIntensity[1] ?? source.blinkNightInt ?? 30),
+    offlineAutonomousSeconds: Number(offline.a ?? source.offlineAutonomousSeconds ?? 60),
+    pulseAmplitudePct: Number(offline.p ?? source.pulseAmplitudePct ?? 60),
+    pulseDurationMs: Number(offline.d ?? source.pulseDurationMs ?? 2400),
     buzzerRegionIds: buzzer.r || source.buzzerRegionIds || source.buzzerRegions || [],
     ledRegionIds: source.l || source.ledRegionIds || source.leds || [],
     mqttHost: mqtt.h ?? source.mqttHost ?? "",
@@ -822,6 +826,8 @@ function applyConfig(cfg) {
   applySliderValue("nightClearBright", "nightClearBrightVal", currentConfig.nightClearA, (v) => `${Math.round(v / 2.55)}%`);
   applySliderValue("dayVol", "dayVolVal", currentConfig.buzzerDayVol, (v) => `${v}%`);
   applySliderValue("nightVol", "nightVolVal", currentConfig.buzzerNightVol, (v) => `${v}%`);
+  applySliderValue("pulseAmp", "pulseAmpVal", currentConfig.pulseAmplitudePct ?? 60, (v) => `${v}%`);
+  applySliderValue("pulseDur", "pulseDurVal", currentConfig.pulseDurationMs ?? 2400, (v) => `${(Number(v) / 1000).toFixed(1)}s`);
 
   $("nightEnabled").checked = Boolean(currentConfig.nightEnabled);
   $("buzzerEnabled").checked = Boolean(currentConfig.buzzerEnabled);
@@ -903,6 +909,11 @@ function buildPayload() {
   payload.k = {
     e: currentConfig.blinkEnabled ?? true,
     i: [currentConfig.blinkDayInt ?? 75, currentConfig.blinkNightInt ?? 30],
+  };
+  payload.o = {
+    a: currentConfig.offlineAutonomousSeconds ?? payload.o?.a ?? 60,
+    p: Number($("pulseAmp").value),
+    d: Number($("pulseDur").value),
   };
   if (MAX_LEDS > 0) {
     payload.l = ledRegionIds;

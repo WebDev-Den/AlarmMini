@@ -309,6 +309,8 @@ void applyDefaults()
     if (DEFAULT_BUZZER_REGION_INDEX >= 0 && DEFAULT_BUZZER_REGION_INDEX < REGIONS_COUNT)
         gConfig.buzzer.regions[DEFAULT_BUZZER_REGION_INDEX] = true;
     gConfig.offline.autonomousSeconds = 60;
+    gConfig.offline.pulseAmplitudePct = 60;
+    gConfig.offline.pulseDurationMs = 2400;
 
     gConfig.blink.enabled = true;
     gConfig.blink.dayIntensity = 75;
@@ -440,6 +442,8 @@ void sanitizeConfig()
 
     gConfig.mqttPort = clampU16(gConfig.mqttPort == 0 ? 1883 : gConfig.mqttPort, 1, 65535);
     gConfig.offline.autonomousSeconds = clampU16(gConfig.offline.autonomousSeconds == 0 ? 60 : gConfig.offline.autonomousSeconds, 5, 600);
+    gConfig.offline.pulseAmplitudePct = clampU8(gConfig.offline.pulseAmplitudePct, 0, 100);
+    gConfig.offline.pulseDurationMs = clampU16(gConfig.offline.pulseDurationMs == 0 ? 2400 : gConfig.offline.pulseDurationMs, 400, 10000);
     gConfig.logMask &= LOG_MASK_ALL;
 }
 
@@ -489,6 +493,12 @@ void storageApplyJson(JsonVariantConst doc)
     gConfig.offline.autonomousSeconds = compactOffline.containsKey("a")
                                             ? readU16(compactOffline["a"], 60)
                                             : readU16(doc["offlineAutonomousSeconds"], 60);
+    gConfig.offline.pulseAmplitudePct = compactOffline.containsKey("p")
+                                            ? readU8(compactOffline["p"], 60)
+                                            : readU8(doc["pulseAmplitudePct"], 60);
+    gConfig.offline.pulseDurationMs = compactOffline.containsKey("d")
+                                          ? readU16(compactOffline["d"], 2400)
+                                          : readU16(doc["pulseDurationMs"], 2400);
 
     copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, compactWifi.containsKey("s") ? readStr(compactWifi["s"]) : readStr(doc["wifiSsid"]));
     copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, compactWifi.containsKey("p") ? readStr(compactWifi["p"]) : readStr(doc["wifiPass"]));
@@ -599,6 +609,8 @@ void storagePopulateJson(JsonDocument &doc)
     blinkIntensity.add(gConfig.blink.nightIntensity);
     JsonObject offline = doc["o"].to<JsonObject>();
     offline["a"] = gConfig.offline.autonomousSeconds;
+    offline["p"] = gConfig.offline.pulseAmplitudePct;
+    offline["d"] = gConfig.offline.pulseDurationMs;
 
     JsonArray leds = doc["l"].to<JsonArray>();
     for (int i = 0; i < MAX_LEDS; i++)

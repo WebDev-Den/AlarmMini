@@ -9,7 +9,7 @@
 extern AppConfig gConfig;
 
 constexpr size_t CONFIG_JSON_CAPACITY = 4096;
-constexpr uint8_t CONFIG_SCHEMA_VERSION = 3;
+constexpr uint8_t CONFIG_SCHEMA_VERSION = 4;
 
 void storagePopulateJson(JsonDocument &doc);
 void storageApplyJson(JsonVariantConst doc);

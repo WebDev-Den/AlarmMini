@@ -477,6 +477,28 @@
                 </div>
                 <input type="time" id="nightEnd" value="07:00">
               </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Амплітуда пульсу</div>
+                  <div class="row-sub">PULSE AMPLITUDE</div>
+                </div>
+                <div class="brightness-control">
+                  <input type="range" id="pulseAmp" min="0" max="100" value="60"
+                    oninput="document.getElementById('pulseAmpVal').textContent=this.value+'%'">
+                  <span class="brightness-label" id="pulseAmpVal">60%</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="row-label">Тривалість пульсу</div>
+                  <div class="row-sub">PULSE DURATION</div>
+                </div>
+                <div class="brightness-control">
+                  <input type="range" id="pulseDur" min="400" max="10000" step="100" value="2400"
+                    oninput="document.getElementById('pulseDurVal').textContent=(this.value/1000).toFixed(1)+'s'">
+                  <span class="brightness-label" id="pulseDurVal">2.4s</span>
+                </div>
+              </div>
             </article>
           </section>
 
