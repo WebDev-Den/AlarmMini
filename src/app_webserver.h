@@ -394,6 +394,9 @@ void handleGetInfo()
     doc["hostname"] = gHostname;
     doc["ip"] = WiFi.localIP().toString();
     doc["firmwareVersion"] = FIRMWARE_VERSION;
+    doc["schemaVersion"] = CONFIG_SCHEMA_VERSION;
+    doc["configVersion"] = CONFIG_DOCUMENT_VERSION;
+    doc["nightSafetyCap"] = NIGHT_BRIGHTNESS_SAFE_CAP;
     doc["apSsid"] = AP_NAME;
     doc["apPassword"] = AP_PASSWORD;
     doc["ledPin"] = LED_PIN;
@@ -503,43 +506,6 @@ void handleTestRegionAlert()
         return;
     }
 
-    gServer.send(200, "text/plain", "OK");
-}
-
-void handleSimRegion()
-{
-    if (!ensureAuthorized())
-        return;
-
-    int idx = gServer.arg("region").toInt();
-    if (idx < 0 || idx >= REGIONS_COUNT)
-    {
-        addCors();
-        gServer.send(400, "text/plain", "Bad region");
-        return;
-    }
-
-    if (gServer.hasArg("clear") && gServer.arg("clear") == "1")
-    {
-        alertsClearManualRegionState(idx);
-        addCors();
-        gServer.send(200, "text/plain", "OK");
-        return;
-    }
-
-    bool isAlert = gServer.arg("alert") == "1";
-    unsigned long ttlMs = gServer.hasArg("ms") ? (unsigned long)gServer.arg("ms").toInt() : 45000UL;
-    alertsSetManualRegionState(idx, isAlert, ttlMs);
-    addCors();
-    gServer.send(200, "text/plain", "OK");
-}
-
-void handleSimRegionClearAll()
-{
-    if (!ensureAuthorized())
-        return;
-    alertsClearAllManualRegionStates();
-    addCors();
     gServer.send(200, "text/plain", "OK");
 }
 
@@ -680,6 +646,13 @@ void handleHealth()
     doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
     doc["mqttConnected"] = gMqttConnected;
     doc["internetConnected"] = gInternetConnected;
+    doc["mqttReconnectAttempts"] = gMqttReconnectAttempts;
+    doc["mqttReconnectSuccess"] = gMqttReconnectSuccess;
+    doc["mqttDisconnectEvents"] = gMqttDisconnectEvents;
+    doc["mqttPayloadErrors"] = gMqttPayloadErrors;
+    doc["mqttMessagesReceived"] = gMqttMessagesReceived;
+    doc["internetStateChanges"] = gInternetStateChanges;
+    doc["mqttLastMessageMsAgo"] = gLastMqttMessageAt ? (unsigned long)(millis() - gLastMqttMessageAt) : 0UL;
     doc["loopMaxMs"] = gLoopMaxDurationMs;
     doc["loopSlowCount"] = gLoopSlowCount;
     doc["loopIterations"] = gLoopIterationCount;
@@ -712,8 +685,6 @@ void webserverInit()
     gServer.on("/api/logs/disable", HTTP_POST, handleDisableLogs);
     gServer.on("/api/testBuzzer", HTTP_GET, handleTestBuzzer);
     gServer.on("/api/testRegionAlert", HTTP_GET, handleTestRegionAlert);
-    gServer.on("/api/simRegion", HTTP_GET, handleSimRegion);
-    gServer.on("/api/simRegion/clearAll", HTTP_GET, handleSimRegionClearAll);
     gServer.on("/api/calibrate/led", HTTP_GET, handleCalibrateLed);
     gServer.on("/api/calibrate/done", HTTP_GET, handleCalibrateDone);
     gServer.on("/api/restart", HTTP_GET, handleRestart);

@@ -21,6 +21,7 @@ def main():
     env = os.environ.copy()
     env["ALARMMINI_CONFIG_MODE"] = "release"
 
+    run([sys.executable, "scripts/validate_config_contract.py"], env)
     run(["platformio", "run", "-e", "esp8266"], env)
     run(["platformio", "run", "-t", "buildfs", "-e", "esp8266"], env)
     run(["platformio", "run", "-e", "esp32c3"], env)

@@ -17,9 +17,13 @@ bool gAlertTestActive               = false;
 bool gAlertTestRegions[REGIONS_COUNT] = {false};
 unsigned long gAlertTestStartedAt   = 0;
 unsigned long gRegionStateChangedAt[REGIONS_COUNT] = {0};
-bool gManualRegionOverrideActive[REGIONS_COUNT] = {false};
-bool gManualRegionOverrideState[REGIONS_COUNT] = {false};
-unsigned long gManualRegionOverrideUntil[REGIONS_COUNT] = {0};
+uint32_t gMqttReconnectAttempts = 0;
+uint32_t gMqttReconnectSuccess = 0;
+uint32_t gMqttDisconnectEvents = 0;
+uint32_t gMqttPayloadErrors = 0;
+uint32_t gMqttMessagesReceived = 0;
+uint32_t gInternetStateChanges = 0;
+unsigned long gLastMqttMessageAt = 0;
 
 static WiFiClient    _mqttWifi;
 static PubSubClient  _mqtt(_mqttWifi);
@@ -35,6 +39,8 @@ static constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 1;
 static constexpr unsigned long MQTT_LOOP_GUARD_MS = 10UL;
 static constexpr unsigned long MQTT_LOOP_HARD_LIMIT_MS = 2000UL;
 static constexpr unsigned int MQTT_MAX_PAYLOAD_BYTES = 1024U;
+static unsigned long _mqttLastFailLogAt = 0;
+static int _mqttLastFailState = 0;
 
 static void _formatLogClock(char* buffer, size_t size)
 {
@@ -75,15 +81,6 @@ static void _rebuildEffectiveAlerts() {
         effective[i] = gMqttAlerts[i];
     }
 
-    for (int i = 0; i < REGIONS_COUNT; i++) {
-        if (!gManualRegionOverrideActive[i]) continue;
-        if (gManualRegionOverrideUntil[i] > 0 && now >= gManualRegionOverrideUntil[i]) {
-            gManualRegionOverrideActive[i] = false;
-            continue;
-        }
-        effective[i] = gManualRegionOverrideState[i];
-    }
-
     if (gAlertTestActive) {
         unsigned long elapsed = now - gAlertTestStartedAt;
         bool alertPhase = elapsed < 30000UL;
@@ -101,37 +98,6 @@ static void _rebuildEffectiveAlerts() {
     }
 
     _applyEffectiveAlerts(effective);
-}
-
-bool alertsSetManualRegionState(int regionIndex, bool isAlert, unsigned long ttlMs) {
-    if (regionIndex < 0 || regionIndex >= REGIONS_COUNT) return false;
-    if (ttlMs < 500UL) ttlMs = 500UL;
-    if (ttlMs > 300000UL) ttlMs = 300000UL;
-    gManualRegionOverrideActive[regionIndex] = true;
-    gManualRegionOverrideState[regionIndex] = isAlert;
-    gManualRegionOverrideUntil[regionIndex] = millis() + ttlMs;
-    _rebuildEffectiveAlerts();
-    LOG_INFO(LOG_CAT_TEST, "Manual region override: %s -> %s for %lus",
-             REGIONS[regionIndex], isAlert ? "ALERT" : "CLEAR", ttlMs / 1000UL);
-    return true;
-}
-
-bool alertsClearManualRegionState(int regionIndex) {
-    if (regionIndex < 0 || regionIndex >= REGIONS_COUNT) return false;
-    gManualRegionOverrideActive[regionIndex] = false;
-    gManualRegionOverrideUntil[regionIndex] = 0;
-    _rebuildEffectiveAlerts();
-    LOG_INFO(LOG_CAT_TEST, "Manual region override cleared: %s", REGIONS[regionIndex]);
-    return true;
-}
-
-void alertsClearAllManualRegionStates() {
-    for (int i = 0; i < REGIONS_COUNT; i++) {
-        gManualRegionOverrideActive[i] = false;
-        gManualRegionOverrideUntil[i] = 0;
-    }
-    _rebuildEffectiveAlerts();
-    LOG_INFO(LOG_CAT_TEST, "Manual region overrides cleared");
 }
 
 bool alertsStartSubscribedRegionTest() {
@@ -154,6 +120,7 @@ bool alertsStartSubscribedRegionTest() {
 
 void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (length == 0 || length > MQTT_MAX_PAYLOAD_BYTES) {
+        gMqttPayloadErrors++;
         LOG_WARN(LOG_CAT_MQTT, "Payload size %u is out of safe bounds", length);
         gFetchOk = false;
         return;
@@ -161,6 +128,7 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, payload, length) || !doc.is<JsonArray>()) {
+        gMqttPayloadErrors++;
         LOG_WARN(LOG_CAT_MQTT, "Invalid payload, expected [0,1,0,...]");
         gFetchOk = false;
         return;
@@ -183,11 +151,14 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     _rebuildEffectiveAlerts();
     gFetchOk = true;
+    gMqttMessagesReceived++;
+    gLastMqttMessageAt = millis();
     LOG_INFO(LOG_CAT_MQTT, "Received %d states%s",
              (int)arr.size(), gAlertsChanged ? " (changed)" : "");
 }
 
 bool _mqttConnect() {
+    gMqttReconnectAttempts++;
     if (!strlen(gConfig.mqttHost)) {
         LOG_WARN(LOG_CAT_MQTT, "Broker is not configured");
         return false;
@@ -210,14 +181,21 @@ bool _mqttConnect() {
         const char* t = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : "alerts/status";
         _mqtt.subscribe(t, 1);
         gMqttConnected = true;
+        gMqttReconnectSuccess++;
         _mqttReconnectDelay = 2000;
         _transportDownSince = 0;
         LOG_INFO(LOG_CAT_MQTT, "Connected, topic: '%s'", t);
     } else {
         gMqttConnected = false;
         _mqttReconnectDelay = min(_mqttReconnectDelay * 2, 60000);
-        LOG_WARN(LOG_CAT_MQTT, "Connect error rc=%d, next retry in %ds",
-                 _mqtt.state(), _mqttReconnectDelay / 1000);
+        const int state = _mqtt.state();
+        const unsigned long now = millis();
+        if (_mqttLastFailState != state || (now - _mqttLastFailLogAt) > 10000UL) {
+            _mqttLastFailState = state;
+            _mqttLastFailLogAt = now;
+            LOG_WARN(LOG_CAT_MQTT, "Connect error rc=%d, next retry in %ds",
+                     state, _mqttReconnectDelay / 1000);
+        }
     }
 
     return ok;
@@ -257,9 +235,13 @@ void alertsHandle() {
         bool prevInternet = gInternetConnected;
         gInternetConnected = _checkInternetConnection();
         if (prevInternet != gInternetConnected) {
+            gInternetStateChanges++;
             LOG_INFO(LOG_CAT_INTERNET, "Internet %s", gInternetConnected ? "online" : "offline");
         }
     } else if (WiFi.status() != WL_CONNECTED) {
+        if (gInternetConnected) {
+            gInternetStateChanges++;
+        }
         gInternetConnected = false;
         _internetLastCheck = 0;
     }
@@ -282,6 +264,7 @@ void alertsHandle() {
         }
         if (gMqttConnected) {
             gMqttConnected = false;
+            gMqttDisconnectEvents++;
             LOG_WARN(LOG_CAT_MQTT, "Paused: waiting for WiFi/Internet recovery");
         }
         yield();
@@ -312,6 +295,7 @@ void alertsHandle() {
 
     if (gMqttConnected) {
         gMqttConnected = false;
+        gMqttDisconnectEvents++;
         LOG_WARN(LOG_CAT_MQTT, "Connection lost, keeping last alert state");
     }
 

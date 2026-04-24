@@ -24,8 +24,6 @@ const UI_LANG = window.LANG;
 const ALERT_POLL_MIN_MS = 8000;
 const ALERT_POLL_MAX_MS = 30000;
 let alertPollIntervalMs = 10000;
-let overviewPopupRegionIndex = null;
-const overviewSimulations = {};
 
 const TAB_META = {
   overview: { eyebrow: UI_LANG.tabs.overview.eyebrow, title: UI_LANG.tabs.overview.title },
@@ -457,7 +455,6 @@ function setActiveTab(tabId) {
     if (!confirm("Калібрування ще активне. Точно вийти з вкладки?")) return;
     calClose();
   }
-  if (activeTab === "overview" && tabId !== "overview") clearOverviewSimulations();
 
   activeTab = tabId;
   document.querySelectorAll(".nav-tab").forEach((button) => button.classList.toggle("active", button.dataset.tab === tabId));
@@ -1116,11 +1113,6 @@ function getAssignmentStats(sourceMap = gLedMap, total = MAX_LEDS) {
 
 function applyPreviewClasses(svg) {
   const alertRegions = new Set(currentAlerts.map((isAlert, index) => (isAlert ? REGIONS[index] : "")).filter(Boolean));
-  Object.values(overviewSimulations).forEach((sim) => {
-    if (!sim || typeof sim.region !== "string") return;
-    if (sim.alert) alertRegions.add(sim.region);
-    else alertRegions.delete(sim.region);
-  });
   svg.querySelectorAll("path[id]").forEach((path) => {
     const regionName = SVG_ID_TO_REGION[path.id];
     path.className.baseVal = "";
@@ -1129,143 +1121,6 @@ function applyPreviewClasses(svg) {
       return;
     }
     path.classList.add(alertRegions.has(regionName) ? "map-region-alert" : "map-region-clear");
-    const sim = Object.values(overviewSimulations).find((entry) => entry && entry.region === regionName);
-    if (sim) {
-      path.classList.add("map-region-simulated");
-      if (sim.alert && sim.mode === "day") path.classList.add("map-region-sim-alert-day");
-      if (sim.alert && sim.mode === "night") path.classList.add("map-region-sim-alert-night");
-      if (!sim.alert && sim.mode === "day") path.classList.add("map-region-sim-clear-day");
-      if (!sim.alert && sim.mode === "night") path.classList.add("map-region-sim-clear-night");
-    }
-  });
-}
-
-function isOverviewNightNow() {
-  if (!currentConfig.nightEnabled) return false;
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const startMinutes = Number(currentConfig.nightStartH || 0) * 60 + Number(currentConfig.nightStartM || 0);
-  const endMinutes = Number(currentConfig.nightEndH || 0) * 60 + Number(currentConfig.nightEndM || 0);
-  if (startMinutes === endMinutes) return true;
-  if (startMinutes < endMinutes) return nowMinutes >= startMinutes && nowMinutes < endMinutes;
-  return nowMinutes >= startMinutes || nowMinutes < endMinutes;
-}
-
-function resolveOverviewSimulationMode(rawMode) {
-  if (rawMode === "day" || rawMode === "night") return rawMode;
-  return isOverviewNightNow() ? "night" : "day";
-}
-
-function clearOverviewPopup() {
-  $("mapPreviewWrap").querySelector(".map-sim-popup")?.remove();
-  overviewPopupRegionIndex = null;
-}
-
-function setOverviewSimulation(regionIndex, alert, mode) {
-  const region = REGIONS[regionIndex];
-  if (!region) return;
-  overviewSimulations[String(regionIndex)] = { region, alert: Boolean(alert), mode: resolveOverviewSimulationMode(mode) };
-  refreshMapPreview();
-}
-
-function getOverviewSimulationAction(regionIndex) {
-  const sim = overviewSimulations[String(regionIndex)];
-  if (!sim) return "";
-  const state = sim.alert ? "alert" : "clear";
-  return `${state}-${sim.mode || "current"}`;
-}
-
-function clearOverviewSimulation(regionIndex) {
-  delete overviewSimulations[String(regionIndex)];
-  sendRegionSimulationClearToDevice(regionIndex);
-  refreshMapPreview();
-}
-
-function clearOverviewSimulations() {
-  Object.keys(overviewSimulations).forEach((key) => delete overviewSimulations[key]);
-  clearAllRegionSimulationsOnDevice();
-  clearOverviewPopup();
-  refreshMapPreview();
-}
-
-function showOverviewMapPopup(path, regionIndex) {
-  const wrap = $("mapPreviewWrap");
-  clearOverviewPopup();
-  overviewPopupRegionIndex = regionIndex;
-  const activeAction = getOverviewSimulationAction(regionIndex);
-
-  const popup = document.createElement("div");
-  popup.className = "map-sim-popup";
-  popup.innerHTML = `
-    <button type="button" class="map-sim-close" aria-label="Закрити">×</button>
-    <div class="map-sim-title">${REGIONS[regionIndex] || "Регіон"}</div>
-    <div class="map-sim-actions">
-      <button type="button" data-sim="alert-current" title="Імітувати тривогу за поточним режимом день/ніч"><span class="sim-ico sim-ico-alert">!</span>Тривога (поточний)</button>
-      <button type="button" data-sim="clear-current" title="Імітувати відбій за поточним режимом день/ніч"><span class="sim-ico sim-ico-clear">✓</span>Відбій (поточний)</button>
-      <button type="button" data-sim="alert-day" title="Імітувати тривогу в денному режимі"><span class="sim-ico sim-ico-day">D</span>Тривога (день)</button>
-      <button type="button" data-sim="clear-day" title="Імітувати відбій у денному режимі"><span class="sim-ico sim-ico-day">D</span>Відбій (день)</button>
-      <button type="button" data-sim="alert-night" title="Імітувати тривогу в нічному режимі"><span class="sim-ico sim-ico-night">N</span>Тривога (ніч)</button>
-      <button type="button" data-sim="clear-night" title="Імітувати відбій у нічному режимі"><span class="sim-ico sim-ico-night">N</span>Відбій (ніч)</button>
-      <button type="button" data-sim="clear" title="Прибрати імітацію й повернути реальний стан"><span class="sim-ico sim-ico-reset">×</span>Скасувати симуляцію</button>
-    </div>
-  `;
-
-  popup.querySelector(".map-sim-close")?.addEventListener("click", () => clearOverviewPopup());
-  popup.querySelectorAll("[data-sim]").forEach((button) => {
-    if (button.dataset.sim === activeAction) button.classList.add("is-active");
-    button.addEventListener("click", () => {
-      const action = button.dataset.sim || "";
-      if (action === "clear") {
-        clearOverviewSimulation(regionIndex);
-        clearOverviewPopup();
-        return;
-      }
-      const [state, mode] = action.split("-");
-      setOverviewSimulation(regionIndex, state === "alert", mode || "current");
-      sendRegionSimulationToDevice(regionIndex, state === "alert");
-    });
-  });
-
-  wrap.appendChild(popup);
-  const wrapRect = wrap.getBoundingClientRect();
-  const pathRect = path.getBoundingClientRect();
-  const popupRect = popup.getBoundingClientRect();
-  const centerX = pathRect.left + pathRect.width / 2 - wrapRect.left;
-  const left = Math.max(8, Math.min(wrap.clientWidth - popupRect.width - 8, centerX - popupRect.width / 2));
-  const top = Math.max(8, pathRect.top - wrapRect.top - popupRect.height - 10);
-  popup.style.left = `${Math.round(left)}px`;
-  popup.style.top = `${Math.round(top)}px`;
-}
-
-function sendRegionSimulationToDevice(regionIndex, isAlert) {
-  if (!currentSessionReady) return;
-  fetch(`/api/simRegion?region=${regionIndex}&alert=${isAlert ? 1 : 0}&ms=45000`, { credentials: "same-origin" })
-    .catch(() => {});
-}
-
-function sendRegionSimulationClearToDevice(regionIndex) {
-  if (!currentSessionReady) return;
-  fetch(`/api/simRegion?region=${regionIndex}&clear=1`, { credentials: "same-origin" })
-    .catch(() => {});
-}
-
-function clearAllRegionSimulationsOnDevice() {
-  if (!currentSessionReady) return;
-  fetch("/api/simRegion/clearAll", { credentials: "same-origin" })
-    .catch(() => {});
-}
-
-function bindOverviewMapInteractions(svg) {
-  svg.querySelectorAll("path[id]").forEach((path) => {
-    const regionName = SVG_ID_TO_REGION[path.id];
-    const regionIndex = REGIONS.indexOf(regionName);
-    if (regionIndex < 0) return;
-    path.classList.add("map-preview-region");
-    path.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      showOverviewMapPopup(path, regionIndex);
-    });
   });
 }
 
@@ -1276,15 +1131,6 @@ function refreshMapPreview() {
   svg.removeAttribute("id");
   applyPreviewClasses(svg);
   $("mapPreviewWrap").replaceChildren(svg);
-  bindOverviewMapInteractions(svg);
-  if (overviewPopupRegionIndex != null && REGIONS[overviewPopupRegionIndex]) {
-    const regionName = REGIONS[overviewPopupRegionIndex];
-    const targetPath = Array.from(svg.querySelectorAll("path[id]")).find((path) => SVG_ID_TO_REGION[path.id] === regionName);
-    if (targetPath) showOverviewMapPopup(targetPath, overviewPopupRegionIndex);
-  }
-  svg.addEventListener("click", (event) => {
-    if (!event.target.closest("path")) clearOverviewPopup();
-  });
 }
 
 function scheduleAlertsPolling(delayMs = alertPollIntervalMs) {

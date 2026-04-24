@@ -96,6 +96,7 @@ struct StateAnimationBinding {
 
 constexpr uint16_t ALERT_CLEAR_HOLD_MS = 30000;
 constexpr uint8_t SYSTEM_EFFECTS_MAX_BRIGHTNESS = 15;
+constexpr uint8_t NIGHT_BRIGHTNESS_SAFE_CAP = 150;
 
 constexpr float STARTUP_ANIMATION_SWEEP_MS = 1700.0f;
 constexpr float STARTUP_ANIMATION_TAIL_LENGTH = 5.8f;

@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  firmware:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -24,5 +24,33 @@ jobs:
       - name: Install PlatformIO and esptool deps
         run: pip install platformio intelhex
 
+      - name: Validate compact config contract
+        run: python scripts/validate_config_contract.py
+
       - name: Build firmware
         run: pio run -e ${{ matrix.env }}
+
+      - name: Build filesystem image
+        run: pio run -t buildfs -e ${{ matrix.env }}
+
+  installer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vercel_installer_local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: vercel_installer_local/package-lock.json
+
+      - name: Install installer dependencies
+        run: npm ci
+
+      - name: Build installer
+        run: npm run build

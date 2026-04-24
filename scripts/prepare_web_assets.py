@@ -18,16 +18,54 @@ CONFIG_EXAMPLE_PATH = os.path.join(WORK_SOURCE_DIR, "config.example.json")
 TEXT_ASSET_EXTENSIONS = {".html", ".css", ".js", ".svg"}
 CONFIG_MODE = os.environ.get("ALARMMINI_CONFIG_MODE", "").strip().lower()
 PROJECT_DIR = env.subst("$PROJECT_DIR")
+IS_RELEASE_BUILD = CONFIG_MODE == "release"
 
 load_dotenv(PROJECT_DIR)
 
+
+def _resolve_env(public_name, fallback, release_fallback=None):
+    value = os.environ.get(public_name, "").strip()
+    if IS_RELEASE_BUILD:
+        release_name = public_name.replace("ALARMMINI_", "ALARMMINI_RELEASE_", 1)
+        release_value = os.environ.get(release_name, "").strip()
+        if release_value:
+            return release_value
+        if release_fallback is not None:
+            return release_fallback
+        if value:
+            return value
+    return value or fallback
+
+
 ENV_REPLACEMENTS = {
-    "__ALARMMINI_SUPPORT_URL__": os.environ.get("ALARMMINI_SUPPORT_URL", "https://send.monobank.ua/jar/2PMhPjRk9j"),
-    "__ALARMMINI_TELEGRAM_URL__": os.environ.get("ALARMMINI_TELEGRAM_URL", "https://t.me/+j3zFZHE5gGoyNGYy"),
-    "__ALARMMINI_MQTT_HOST__": os.environ.get("ALARMMINI_MQTT_HOST", "mqtt.example.com"),
-    "__ALARMMINI_MQTT_TOPIC__": os.environ.get("ALARMMINI_MQTT_TOPIC", "ukraine/alarm/map/full"),
-    "__ALARMMINI_MQTT_USER__": os.environ.get("ALARMMINI_MQTT_USER", "mqtt_user"),
-    "__ALARMMINI_MQTT_PASS__": os.environ.get("ALARMMINI_MQTT_PASS", "change_me"),
+    "__ALARMMINI_SUPPORT_URL__": _resolve_env(
+        "ALARMMINI_SUPPORT_URL",
+        "https://send.monobank.ua/jar/2PMhPjRk9j",
+    ),
+    "__ALARMMINI_TELEGRAM_URL__": _resolve_env(
+        "ALARMMINI_TELEGRAM_URL",
+        "https://t.me/+j3zFZHE5gGoyNGYy",
+    ),
+    "__ALARMMINI_MQTT_HOST__": _resolve_env(
+        "ALARMMINI_MQTT_HOST",
+        "mqtt.example.com",
+        "mqtt.example.com",
+    ),
+    "__ALARMMINI_MQTT_TOPIC__": _resolve_env(
+        "ALARMMINI_MQTT_TOPIC",
+        "ukraine/alarm/map/full",
+        "ukraine/alarm/map/full",
+    ),
+    "__ALARMMINI_MQTT_USER__": _resolve_env(
+        "ALARMMINI_MQTT_USER",
+        "mqtt_user",
+        "mqtt_user",
+    ),
+    "__ALARMMINI_MQTT_PASS__": _resolve_env(
+        "ALARMMINI_MQTT_PASS",
+        "change_me",
+        "change_me",
+    ),
 }
 
 

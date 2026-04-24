@@ -175,6 +175,12 @@ bool validateFullConfigJson(JsonVariantConst cfg, char *error, size_t errorSize)
         return false;
     }
 
+    if (!cfg["cv"].isNull() && !isNumber(cfg["cv"]))
+    {
+        setErr("bad_cv");
+        return false;
+    }
+
     if (error && errorSize)
         error[0] = '\0';
     return true;
@@ -434,7 +440,9 @@ void sanitizeConfig()
     gConfig.night.endHour = clampU8(gConfig.night.endHour, 0, 23);
     gConfig.night.startMinute = clampU8(gConfig.night.startMinute, 0, 59);
     gConfig.night.endMinute = clampU8(gConfig.night.endMinute, 0, 59);
-    gConfig.night.maxBrightness = clampU8(gConfig.night.maxBrightness, 0, 255);
+    gConfig.night.maxBrightness = clampU8(gConfig.night.maxBrightness, 0, NIGHT_BRIGHTNESS_SAFE_CAP);
+    gConfig.nightMode.alertColor.a = min<uint8_t>(gConfig.nightMode.alertColor.a, gConfig.night.maxBrightness);
+    gConfig.nightMode.clearColor.a = min<uint8_t>(gConfig.nightMode.clearColor.a, gConfig.night.maxBrightness);
 
     gConfig.buzzer.dayVolume = clampU8(gConfig.buzzer.dayVolume, 0, 100);
     gConfig.buzzer.nightVolume = clampU8(gConfig.buzzer.nightVolume, 0, 100);
@@ -559,6 +567,7 @@ void storageApplyJson(JsonVariantConst doc)
 void storagePopulateJson(JsonDocument &doc)
 {
     doc.clear();
+    doc["cv"] = CONFIG_DOCUMENT_VERSION;
 
     JsonObject colors = doc["c"].to<JsonObject>();
     JsonObject day = colors["d"].to<JsonObject>();
@@ -758,7 +767,10 @@ bool storageInit()
             gLastSavedCrc = actualCrc;
             loadedConfig = true;
             loadedFrom = path;
-            needsRewrite = (version != CONFIG_SCHEMA_VERSION) || (storedCrc == 0U);
+            const uint8_t cfgVersion = cfg["cv"].isNull() ? 0 : readU8(cfg["cv"], 0);
+            needsRewrite = (version != CONFIG_SCHEMA_VERSION) ||
+                           (storedCrc == 0U) ||
+                           (cfgVersion != CONFIG_DOCUMENT_VERSION);
             LOG_INFO(LOG_CAT_CONFIG, "Config loaded from %s (v%d%s)", path, version,
                      needsRewrite ? ", migration pending" : "");
             return true;

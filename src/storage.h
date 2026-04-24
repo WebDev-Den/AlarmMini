@@ -9,7 +9,8 @@
 extern AppConfig gConfig;
 
 constexpr size_t CONFIG_JSON_CAPACITY = 4096;
-constexpr uint8_t CONFIG_SCHEMA_VERSION = 4;
+constexpr uint8_t CONFIG_SCHEMA_VERSION = 5;
+constexpr uint8_t CONFIG_DOCUMENT_VERSION = 1;
 
 void storagePopulateJson(JsonDocument &doc);
 void storageApplyJson(JsonVariantConst doc);
@@ -20,4 +21,3 @@ bool storageLoadConfigFromJson(JsonVariantConst configJson, char *error, size_t 
 
 bool storageSyncWifiCredentials();
 bool storageInit();
-

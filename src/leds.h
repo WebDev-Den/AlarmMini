@@ -200,7 +200,11 @@ uint32_t fixedAlertClearColor(
     uint8_t extraMaxBrightness = 255) {
     Color active = target;
     const uint8_t modeCap = modeBrightnessLimit(night);
-    const uint8_t allowedMax = min<uint8_t>(modeCap, extraMaxBrightness);
+    // Respect all brightness constraints at once:
+    // 1) global day/night mode cap
+    // 2) state-specific cap from animation/profile
+    // 3) explicit alpha from selected target color (UI-configured night/day color brightness)
+    const uint8_t allowedMax = min<uint8_t>(min<uint8_t>(modeCap, extraMaxBrightness), target.a);
     const uint8_t floorAlpha = max<uint8_t>(1, (uint8_t)(allowedMax * 0.20f));
     const float effectBrightness = fixedTransitionBrightness(elapsedMs, alertState, night, logicalIndex, logicalCount);
 

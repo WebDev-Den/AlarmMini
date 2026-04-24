@@ -234,24 +234,93 @@ function buildConfigValidationErrors(cfg: any) {
   if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) {
     return ["Корінь JSON має бути об'єктом"];
   }
+  const asNum = (v: unknown) => Number(v);
+  const inRange = (v: unknown, min: number, max: number) => Number.isFinite(asNum(v)) && asNum(v) >= min && asNum(v) <= max;
+  const isBool = (v: unknown) => typeof v === "boolean";
+  const isObj = (v: unknown) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
+  const isStr = (v: unknown) => typeof v === "string";
+  const isU8Color = (arr: unknown) =>
+    Array.isArray(arr) &&
+    arr.length === 4 &&
+    arr.every((x) => inRange(x, 0, 255));
 
-  if (!Array.isArray(cfg.l)) errors.push("Поле l (LED map) має бути масивом");
-  if (!cfg.w || typeof cfg.w !== "object") errors.push("Поле w (Wi‑Fi) відсутнє");
-  if (!cfg.m || typeof cfg.m !== "object") errors.push("Поле m (MQTT) відсутнє");
-  if (!Array.isArray(cfg.t)) errors.push("Поле t (NTP) має бути масивом із 3 значень");
-  if (cfg.g == null) errors.push("Поле g (log mask) відсутнє");
-
-  if (cfg.w && typeof cfg.w === "object") {
-    if (typeof cfg.w.s !== "string") errors.push("w.s (SSID) має бути рядком");
-    if (cfg.w.p != null && typeof cfg.w.p !== "string") errors.push("w.p (password) має бути рядком");
+  if (!Array.isArray(cfg.l) || cfg.l.length !== 27 || !cfg.l.every((x: unknown) => Number.isInteger(asNum(x)) && asNum(x) >= -1 && asNum(x) <= 24)) {
+    errors.push("l має бути масивом з 27 значень у діапазоні -1..24");
   }
 
-  if (cfg.m && typeof cfg.m === "object") {
-    if (cfg.m.h != null && typeof cfg.m.h !== "string") errors.push("m.h (host) має бути рядком");
-    if (cfg.m.t != null && typeof cfg.m.t !== "string") errors.push("m.t (topic) має бути рядком");
-    if (cfg.m.p != null && !Number.isFinite(Number(cfg.m.p))) errors.push("m.p (port) має бути числом");
+  if (!isObj(cfg.c) || !isObj(cfg.c.d) || !isObj(cfg.c.n)) {
+    errors.push("c/d/n (кольори) мають бути об'єктами");
+  } else {
+    if (!isU8Color(cfg.c.d.a)) errors.push("c.d.a має бути [r,g,b,a], 0..255");
+    if (!isU8Color(cfg.c.d.c)) errors.push("c.d.c має бути [r,g,b,a], 0..255");
+    if (!isU8Color(cfg.c.n.a)) errors.push("c.n.a має бути [r,g,b,a], 0..255");
+    if (!isU8Color(cfg.c.n.c)) errors.push("c.n.c має бути [r,g,b,a], 0..255");
   }
 
+  if (!isObj(cfg.n)) {
+    errors.push("n (нічний режим) має бути об'єктом");
+  } else {
+    if (!isBool(cfg.n.e)) errors.push("n.e має бути boolean");
+    if (!Array.isArray(cfg.n.s) || cfg.n.s.length !== 2 || !inRange(cfg.n.s[0], 0, 23) || !inRange(cfg.n.s[1], 0, 59)) {
+      errors.push("n.s має бути [hour,minute]");
+    }
+    if (!Array.isArray(cfg.n.x) || cfg.n.x.length !== 2 || !inRange(cfg.n.x[0], 0, 23) || !inRange(cfg.n.x[1], 0, 59)) {
+      errors.push("n.x має бути [hour,minute]");
+    }
+    if (!inRange(cfg.n.b, 0, 150)) errors.push("n.b має бути 0..150");
+    if (!Array.isArray(cfg.n.p) || cfg.n.p.length !== 2 || !cfg.n.p.every((x: unknown) => isBool(x))) {
+      errors.push("n.p має бути [bool,bool]");
+    }
+  }
+
+  if (!isObj(cfg.z) || !isBool(cfg.z.e)) {
+    errors.push("z (buzzer) має містити поле e:boolean");
+  } else {
+    if (!Array.isArray(cfg.z.v) || cfg.z.v.length !== 2 || !inRange(cfg.z.v[0], 0, 100) || !inRange(cfg.z.v[1], 0, 100)) {
+      errors.push("z.v має бути [dayVol,nightVol] у діапазоні 0..100");
+    }
+    if (!Array.isArray(cfg.z.r) || !cfg.z.r.every((x: unknown) => Number.isInteger(asNum(x)) && asNum(x) >= 0 && asNum(x) <= 24)) {
+      errors.push("z.r має бути масивом індексів регіонів 0..24");
+    }
+  }
+
+  if (!isObj(cfg.k) || !isBool(cfg.k.e)) {
+    errors.push("k (blink) має містити поле e:boolean");
+  } else if (!Array.isArray(cfg.k.i) || cfg.k.i.length !== 2 || !inRange(cfg.k.i[0], 0, 100) || !inRange(cfg.k.i[1], 0, 100)) {
+    errors.push("k.i має бути [day,night] у діапазоні 0..100");
+  }
+
+  if (!isObj(cfg.o)) {
+    errors.push("o (offline) має бути об'єктом");
+  } else {
+    if (!inRange(cfg.o.a, 5, 600)) errors.push("o.a має бути 5..600 секунд");
+    if (!inRange(cfg.o.p, 0, 100)) errors.push("o.p має бути 0..100");
+    if (!inRange(cfg.o.d, 400, 10000)) errors.push("o.d має бути 400..10000 мс");
+    if (!inRange(cfg.o.s, 20, 220)) errors.push("o.s має бути 20..220");
+    if (!inRange(cfg.o.c, 0, 100)) errors.push("o.c має бути 0..100");
+  }
+
+  if (!isObj(cfg.w)) errors.push("w (Wi‑Fi) відсутнє");
+  if (!isObj(cfg.m)) errors.push("m (MQTT) відсутнє");
+  if (!Array.isArray(cfg.t) || cfg.t.length !== 3 || !cfg.t.every((x: unknown) => isStr(x))) {
+    errors.push("t (NTP) має бути масивом із 3 рядків");
+  }
+  if (!Number.isFinite(asNum(cfg.g))) errors.push("g (log mask) має бути числом");
+
+  if (isObj(cfg.w)) {
+    if (!isStr(cfg.w.s)) errors.push("w.s (SSID) має бути рядком");
+    if (!isStr(cfg.w.p)) errors.push("w.p (password) має бути рядком");
+  }
+
+  if (isObj(cfg.m)) {
+    if (!isStr(cfg.m.h)) errors.push("m.h (host) має бути рядком");
+    if (!isStr(cfg.m.t)) errors.push("m.t (topic) має бути рядком");
+    if (!isStr(cfg.m.u)) errors.push("m.u (user) має бути рядком");
+    if (!isStr(cfg.m.s)) errors.push("m.s (pass) має бути рядком");
+    if (!inRange(cfg.m.p, 1, 65535)) errors.push("m.p (port) має бути 1..65535");
+  }
+
+  if (cfg.cv != null && !inRange(cfg.cv, 1, 255)) errors.push("cv має бути числом 1..255");
   return errors;
 }
 
@@ -821,6 +890,15 @@ export default function Page() {
     return cfg;
   }
 
+  async function snapshotCurrentConfigBeforeWrite() {
+    const snapshotObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
+    const snapshot = snapshotObj?.config;
+    if (snapshot && typeof snapshot === "object") {
+      persistBackupConfig(snapshot);
+      appendLog("[backup] Поточний config збережено перед записом");
+    }
+  }
+
   async function cmdSetWifi() {
     await ensureConnected(true);
     if (!wifiSsid.trim()) throw new Error("SSID порожній");
@@ -838,6 +916,7 @@ export default function Page() {
   async function cmdSetMqtt() {
     await ensureConnected(true);
     if (!mqttHost.trim()) throw new Error("MQTT host порожній");
+    await snapshotCurrentConfigBeforeWrite();
 
     let configObj: any;
     try {
@@ -871,6 +950,7 @@ export default function Page() {
 
   async function cmdSetConfig() {
     await ensureConnected(true);
+    await snapshotCurrentConfigBeforeWrite();
     const configObj = safeParseJsonObject(configText);
     const validation = buildConfigValidationErrors(configObj);
     setConfigValidationErrors(validation);
@@ -893,6 +973,17 @@ export default function Page() {
     setStatus("Конфіг записано");
     setNewDeviceMode(false);
     await cmdGetConfig();
+  }
+
+  async function cmdValidateConfigCompatibility() {
+    const configObj = safeParseJsonObject(configText);
+    const validation = buildConfigValidationErrors(configObj);
+    setConfigValidationErrors(validation);
+    if (validation.length) {
+      setStatus(`Знайдено ${validation.length} помилок сумісності конфігу`);
+      throw new Error("Конфіг не пройшов перевірку сумісності");
+    }
+    setStatus("Конфіг сумісний з прошивкою");
   }
 
   async function waitDeviceInfoAfterReconnect(tries = 6) {
@@ -1299,6 +1390,18 @@ export default function Page() {
       <section className="card">
         <h2>4. Config JSON</h2>
         <div className="row gap">
+          <button
+            className="btn"
+            disabled={flashBusy}
+            onClick={() =>
+              void cmdValidateConfigCompatibility().catch((error) => {
+                const message = error instanceof Error ? error.message : String(error);
+                setStatus(`Помилка перевірки: ${message}`);
+              })
+            }
+          >
+            Перевірити сумісність конфігу
+          </button>
           <button className="btn" disabled={flashBusy} onClick={() => void cmdSetConfig()}>
             Зберегти конфігурацію
           </button>

@@ -1,0 +1,139 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alarmmini.local/schema/config.schema.json",
+  "title": "AlarmMini Compact Config",
+  "type": "object",
+  "required": ["c", "n", "z", "k", "o", "l", "m", "w", "t", "g"],
+  "properties": {
+    "cv": { "type": "integer", "minimum": 1, "maximum": 255 },
+    "c": {
+      "type": "object",
+      "required": ["d", "n"],
+      "properties": {
+        "d": {
+          "type": "object",
+          "required": ["a", "c"],
+          "properties": {
+            "a": { "$ref": "#/$defs/color" },
+            "c": { "$ref": "#/$defs/color" }
+          }
+        },
+        "n": {
+          "type": "object",
+          "required": ["a", "c"],
+          "properties": {
+            "a": { "$ref": "#/$defs/color" },
+            "c": { "$ref": "#/$defs/color" }
+          }
+        }
+      }
+    },
+    "n": {
+      "type": "object",
+      "required": ["e", "s", "x", "b", "p"],
+      "properties": {
+        "e": { "type": "boolean" },
+        "s": { "$ref": "#/$defs/time2" },
+        "x": { "$ref": "#/$defs/time2" },
+        "b": { "type": "integer", "minimum": 0, "maximum": 150 },
+        "p": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "boolean" }
+        }
+      }
+    },
+    "z": {
+      "type": "object",
+      "required": ["e", "v", "r"],
+      "properties": {
+        "e": { "type": "boolean" },
+        "v": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "integer", "minimum": 0, "maximum": 100 }
+        },
+        "r": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0, "maximum": 24 }
+        }
+      }
+    },
+    "k": {
+      "type": "object",
+      "required": ["e", "i"],
+      "properties": {
+        "e": { "type": "boolean" },
+        "i": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "integer", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "o": {
+      "type": "object",
+      "required": ["a", "p", "d", "s", "c"],
+      "properties": {
+        "a": { "type": "integer", "minimum": 5, "maximum": 600 },
+        "p": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "d": { "type": "integer", "minimum": 400, "maximum": 10000 },
+        "s": { "type": "integer", "minimum": 20, "maximum": 220 },
+        "c": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "l": {
+      "type": "array",
+      "minItems": 27,
+      "maxItems": 27,
+      "items": { "type": "integer", "minimum": -1, "maximum": 24 }
+    },
+    "m": {
+      "type": "object",
+      "required": ["h", "p", "t", "u", "s"],
+      "properties": {
+        "h": { "type": "string", "maxLength": 63 },
+        "p": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "t": { "type": "string", "maxLength": 63 },
+        "u": { "type": "string", "maxLength": 31 },
+        "s": { "type": "string", "maxLength": 31 }
+      }
+    },
+    "w": {
+      "type": "object",
+      "required": ["s", "p"],
+      "properties": {
+        "s": { "type": "string", "maxLength": 63 },
+        "p": { "type": "string", "maxLength": 63 }
+      }
+    },
+    "t": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "string", "maxLength": 63 }
+    },
+    "g": { "type": "integer", "minimum": 0, "maximum": 65535 }
+  },
+  "$defs": {
+    "color": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+    },
+    "time2": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "type": "integer", "minimum": 0, "maximum": 23 },
+        { "type": "integer", "minimum": 0, "maximum": 59 }
+      ],
+      "items": false
+    }
+  }
+}

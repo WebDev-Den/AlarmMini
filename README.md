@@ -10,6 +10,7 @@ Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
 - ESP8266 (`env:esp8266`, board `d1_mini`)
 - ESP32-C3 SuperMini (`env:esp32c3`, board `esp32-c3-devkitm-1`)
+- Legacy alias for CI/scripts: `env:esp8266e12` (extends `esp8266`)
 
 ## Main features
 
@@ -42,6 +43,7 @@ Used by:
 - web asset placeholders during `buildfs`
 - installer public links
 - release default MQTT template values
+- CI/release safe build mode (`ALARMMINI_CONFIG_MODE=release`)
 
 ## Serial protocol (device)
 
@@ -118,6 +120,19 @@ Output folder:
 
 GitHub workflow `release-assets.yml` attaches these files to published releases.
 
+## Config validation
+
+Validate compact config contract before build/release:
+
+```powershell
+python scripts/validate_config_contract.py
+```
+
+Checks:
+
+- `work_data/config.example.json` (always)
+- `work_data/config.json` (if exists locally)
+
 ## Vercel installer
 
 Project root for installer: `vercel_installer_local/`
@@ -139,12 +154,14 @@ vercel alias set <deployment-url> alarmmini.vercel.app
 
 ## CI
 
-`firmware-ci.yml` builds both environments:
+`firmware-ci.yml` does:
 
-- `esp8266`
-- `esp32c3`
+- compact config validation (`scripts/validate_config_contract.py`)
+- firmware build for `esp8266` and `esp32c3`
+- LittleFS build for `esp8266` and `esp32c3`
+- Next.js installer build (`vercel_installer_local`)
 
-The workflow installs `platformio` and `intelhex` before build.
+`secret-scan.yml` runs Gitleaks on push/PR and daily schedule.
 
 ## Notes
 
