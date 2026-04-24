@@ -2,7 +2,7 @@
 
 AlarmMini is firmware + web tooling for a physical WS2812 Ukraine alarm map.
 
-Current firmware version: **1.0.5**
+Current firmware version: **1.1.0**
 
 Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
@@ -42,7 +42,7 @@ Used by:
 
 - web asset placeholders during `buildfs`
 - installer public links
-- release default MQTT template values
+- optional release-safe MQTT template values (`ALARMMINI_RELEASE_MQTT_*`)
 - CI/release safe build mode (`ALARMMINI_CONFIG_MODE=release`)
 
 ## Serial protocol (device)
