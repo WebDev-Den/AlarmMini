@@ -19,6 +19,7 @@ let calibrationMobileView = "map";
 let alertPollTimer = null;
 let logsTimer = null;
 let latestLogMask = 0;
+let latestRuntimeHealth = null;
 const ADMIN_PASSWORD_STORAGE_KEY = "alarmmini.adminPassword";
 const UI_LANG = window.LANG;
 const ALERT_POLL_MIN_MS = 8000;
@@ -1124,6 +1125,47 @@ function applyPreviewClasses(svg) {
   });
 }
 
+function setHealthChip(id, ok, text) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.borderColor = ok ? "rgba(123,228,149,.45)" : "rgba(255,107,107,.45)";
+  el.style.color = ok ? "var(--green)" : "var(--danger)";
+}
+
+async function updateRuntimeHealth() {
+  if (!currentSessionReady) return;
+  try {
+    const health = await fetchJson("/health");
+    latestRuntimeHealth = health;
+    const wifiOk = Boolean(health.wifiConnected);
+    const mqttOk = Boolean(health.mqttConnected);
+    const dataFresh = !Boolean(health.mqttDataStale);
+    setHealthChip("healthWifi", wifiOk, `Wi-Fi: ${wifiOk ? "OK" : "Немає"}`);
+    setHealthChip("healthMqtt", mqttOk, `MQTT: ${mqttOk ? "OK" : "Немає"}`);
+    setHealthChip("healthData", dataFresh, `Дані: ${dataFresh ? "Актуальні" : "Застарілі"}`);
+  } catch (_) {
+    setHealthChip("healthWifi", false, "Wi-Fi: помилка");
+    setHealthChip("healthMqtt", false, "MQTT: помилка");
+    setHealthChip("healthData", false, "Дані: помилка");
+  }
+}
+
+async function runSelfTest() {
+  try {
+    const result = await fetchJson("/api/selftest");
+    const ok = Boolean(result.ok);
+    const summary = ok
+      ? "Самотест пройдено"
+      : "Самотест: є проблеми (див. індикатори)";
+    showToast(summary, !ok);
+    await updateRuntimeHealth();
+  } catch (error) {
+    console.error(error);
+    showToast("Самотест не вдався", true);
+  }
+}
+
 function refreshMapPreview() {
   const sourceSvg = $("svgSourceStore").querySelector("svg");
   if (!sourceSvg) return;
@@ -1154,6 +1196,7 @@ async function updateAlertsOnWeb() {
     });
     refreshMapPreview();
     alertPollIntervalMs = ALERT_POLL_MIN_MS;
+    void updateRuntimeHealth();
   } catch (error) {
     alertPollIntervalMs = Math.min(ALERT_POLL_MAX_MS, alertPollIntervalMs + 4000);
     if (error.status === 401) setAuthLocked(true, "Сесію завершено. Увійди ще раз.");
@@ -1479,6 +1522,7 @@ async function bootAuthenticated() {
   $("mqttUser").value = info.mqttUser || "";
   $("mqttPass").value = info.mqttPass || "";
   applyDeviceInfo(info);
+  await updateRuntimeHealth();
   initRegionUI();
   const cfg = await fetchJson("/api/config");
   applyConfig(cfg);
@@ -1601,6 +1645,7 @@ window.testBuzzer = (isAlert) => {
   fetch(`/api/testBuzzer?alert=${isAlert ? 1 : 0}`, { credentials: "same-origin" }).catch(() => {});
   showToast(isAlert ? "Тест тривоги" : "Тест відбою");
 };
+window.runSelfTest = runSelfTest;
 window.save = async () => {
   try {
     await saveConfig();

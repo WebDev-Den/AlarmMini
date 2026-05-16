@@ -9,6 +9,7 @@
 
 Adafruit_NeoPixel strip(MAX_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 static constexpr unsigned long LED_FRAME_INTERVAL_MS = 33UL;
+static constexpr unsigned long LED_SOFTSTART_MS = 1500UL;
 static constexpr unsigned long INTERNET_OFFLINE_AUTONOMOUS_DEFAULT_MS = 60000UL;
 static unsigned long gLastLedFrameAt = 0;
 static unsigned long gInternetOfflineSinceMs = 0;
@@ -377,9 +378,16 @@ void ledsHandle() {
     }
     gLastLedFrameAt = now;
 
+    // Soft-start helps avoid current spikes right after boot.
+    const uint8_t startupBrightness = (now >= LED_SOFTSTART_MS)
+        ? 255
+        : (uint8_t)max(20UL, (now * 255UL) / LED_SOFTSTART_MS);
+    strip.setBrightness(startupBrightness);
+
     bool night = isNightMode();
     bool internetLost = (!gInternetConnected || WiFi.status() != WL_CONNECTED);
     if (internetLost) {
+        alertsAutonomousHealthTick();
         if (!gInternetOfflineTracked) {
             gInternetOfflineTracked = true;
             gInternetOfflineSinceMs = now;
@@ -410,6 +418,7 @@ void ledsHandle() {
     }
 
     if (strlen(gConfig.mqttHost) && !gMqttConnected) {
+        alertsAutonomousHealthTick();
         // MQTT lost: keep retained autonomous state without pulsing.
         renderRetainedState(night, true);
         return;

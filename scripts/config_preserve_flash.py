@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib import request, error
 
 import serial
 from serial.tools import list_ports
@@ -24,8 +25,10 @@ def _log(msg: str) -> None:
     print(f"[preserve] {msg}")
 
 
-def _platformio_run(env_name: str, target: str) -> None:
+def _platformio_run(env_name: str, target: str, upload_port: str | None = None) -> None:
     cmd = ["platformio", "run", "-e", env_name, "-t", target]
+    if upload_port:
+        cmd.extend(["--upload-port", upload_port])
     _log(f"run: {' '.join(cmd)}")
     subprocess.run(cmd, cwd=PROJECT_DIR, check=True)
 
@@ -41,8 +44,20 @@ def _pick_port(explicit_port: str | None) -> str:
     raise RuntimeError(f"Multiple serial ports found: {ports}. Pass --port explicitly.")
 
 
-def _open_serial(port: str) -> serial.Serial:
-    ser = serial.Serial(port=port, baudrate=BAUDRATE, timeout=0.25, write_timeout=1)
+def _open_serial(port: str, timeout_s: float = 6.0) -> serial.Serial:
+    deadline = time.time() + timeout_s
+    last_exc: Exception | None = None
+
+    while time.time() < deadline:
+        try:
+            ser = serial.Serial(port=port, baudrate=BAUDRATE, timeout=0.25, write_timeout=1)
+            break
+        except Exception as exc:
+            last_exc = exc
+            time.sleep(0.35)
+    else:
+        raise last_exc if last_exc else RuntimeError(f"Could not open serial port {port}")
+
     time.sleep(0.25)
     try:
         ser.reset_input_buffer()
@@ -144,30 +159,99 @@ def save_backup_file(env_name: str, port: str, config_obj: dict) -> Path:
     return backup_path
 
 
-def run_flash_flow(env_name: str, port: str, skip_fs: bool) -> None:
+def _http_get_json(url: str, timeout_s: float = 8.0) -> dict:
+    req = request.Request(url, method="GET")
+    with request.urlopen(req, timeout=timeout_s) as resp:
+        data = resp.read().decode("utf-8", errors="replace")
+        return json.loads(data)
+
+
+def _http_post_json(url: str, payload: dict, timeout_s: float = 10.0) -> dict | None:
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    req = request.Request(url, method="POST", data=body, headers={"Content-Type": "application/json"})
+    with request.urlopen(req, timeout=timeout_s) as resp:
+        raw = resp.read().decode("utf-8", errors="replace").strip()
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
+
+
+def backup_config_http(ip_or_host: str) -> dict:
+    base = f"http://{ip_or_host}"
+    _log(f"backup config over HTTP from {base}/config")
+    obj = _http_get_json(f"{base}/config", timeout_s=BACKUP_TIMEOUT_S)
+    if not isinstance(obj, dict):
+        raise RuntimeError("HTTP backup returned non-object JSON")
+    return obj
+
+
+def restore_config_http(ip_or_host: str, config_obj: dict) -> None:
+    base = f"http://{ip_or_host}"
+    _log(f"restore config over HTTP to {base}/config")
+    response = _http_post_json(f"{base}/config", config_obj, timeout_s=RESTORE_TIMEOUT_S)
+    if isinstance(response, dict) and response.get("ok") is False:
+        raise RuntimeError(f"HTTP restore rejected: {response}")
+
+
+def run_flash_flow_serial(env_name: str, port: str, skip_fs: bool) -> None:
     cfg = backup_config(port)
     backup_path = save_backup_file(env_name, port, cfg)
     _log(f"config backup saved: {backup_path}")
 
-    _platformio_run(env_name, "upload")
+    _platformio_run(env_name, "upload", upload_port=port)
     if not skip_fs:
-        _platformio_run(env_name, "uploadfs")
+        _platformio_run(env_name, "uploadfs", upload_port=port)
 
     wait_port_ready(port, RECONNECT_TIMEOUT_S)
     restore_config(port, cfg)
     _log("done: config preserved and restored")
 
 
+def run_flash_flow_ota(env_name: str, host: str, skip_fs: bool) -> None:
+    cfg = backup_config_http(host)
+    backup_path = save_backup_file(env_name, host, cfg)
+    _log(f"config backup saved: {backup_path}")
+
+    _platformio_run(env_name, "upload", upload_port=host)
+    if not skip_fs:
+        _platformio_run(env_name, "uploadfs", upload_port=host)
+
+    # OTA reboot can take a bit longer before HTTP endpoint becomes ready again.
+    deadline = time.time() + RECONNECT_TIMEOUT_S
+    last_err = None
+    while time.time() < deadline:
+        try:
+            _ = _http_get_json(f"http://{host}/health", timeout_s=4.0)
+            last_err = None
+            break
+        except Exception as exc:
+            last_err = exc
+            time.sleep(1.0)
+    if last_err is not None:
+        raise TimeoutError(f"Board did not return online over HTTP in time: {last_err}")
+
+    restore_config_http(host, cfg)
+    _log("done: OTA flash + HTTP config restore completed")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Flash firmware/filesystem with config preserve.")
     parser.add_argument("--env", required=True, help="PlatformIO environment, e.g. esp32c3 or esp8266")
     parser.add_argument("--port", default=None, help="Serial port, e.g. COM7")
+    parser.add_argument("--ota-host", default=None, help="OTA target host/IP, e.g. 192.168.1.77")
     parser.add_argument("--skip-fs", action="store_true", help="Do not upload LittleFS image")
     args = parser.parse_args()
 
-    port = _pick_port(args.port)
-    _log(f"selected port: {port}")
-    run_flash_flow(args.env, port, args.skip_fs)
+    if args.ota_host:
+        _log(f"selected OTA host: {args.ota_host}")
+        run_flash_flow_ota(args.env, args.ota_host, args.skip_fs)
+    else:
+        port = _pick_port(args.port)
+        _log(f"selected port: {port}")
+        run_flash_flow_serial(args.env, port, args.skip_fs)
     return 0
 
 

@@ -401,6 +401,7 @@ export default function Page() {
   const [waitProgress, setWaitProgress] = useState(0);
   const [dangerousWriteArmed, setDangerousWriteArmed] = useState(false);
   const [configValidationErrors, setConfigValidationErrors] = useState<string[]>([]);
+  const [configModalOpen, setConfigModalOpen] = useState(false);
   const [newDeviceMode, setNewDeviceMode] = useState(false);
   const [pipelineState, setPipelineState] = useState<Record<PipelineStepId, PipelineState>>(
     createPipelineInitialState(false),
@@ -462,6 +463,22 @@ export default function Page() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!configModalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setConfigModalOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [configModalOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1390,82 +1407,106 @@ export default function Page() {
       <section className="card">
         <h2>4. Config JSON</h2>
         <div className="row gap">
-          <button
-            className="btn"
-            disabled={flashBusy}
-            onClick={() =>
-              void cmdValidateConfigCompatibility().catch((error) => {
-                const message = error instanceof Error ? error.message : String(error);
-                setStatus(`Помилка перевірки: ${message}`);
-              })
-            }
-          >
-            Перевірити сумісність конфігу
+          <button className="btn primary" onClick={() => setConfigModalOpen(true)}>
+            Відкрити редактор конфігу
+          </button>
+          <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void cmdGetConfig()}>
+            Зчитати конфігурацію
           </button>
           <button className="btn" disabled={flashBusy} onClick={() => void cmdSetConfig()}>
             Зберегти конфігурацію
           </button>
-          <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void downloadBackupConfigFile()}>
-            Завантажити backup JSON
-          </button>
-          <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void cmdSafeRestoreNetworkFromBackup().catch((e) => {
-            const message = e instanceof Error ? e.message : String(e);
-            setStatus(`Safe restore помилка: ${message}`);
-          })}>
-            Safe restore Wi‑Fi+MQTT
-          </button>
-          <button
-            className="btn"
-            disabled={flashBusy || !backupAvailable}
-            onClick={() => void cmdRestoreBackupJsonManual().catch((error) => {
-              const message = error instanceof Error ? error.message : String(error);
-              setStatus(`Помилка backup restore: ${message}`);
-            })}
-          >
-            Відновити backup JSON
-          </button>
-          <button
-            className="btn"
-            disabled={flashBusy}
-            onClick={() => {
-              try {
-                setConfigText(JSON.stringify(safeParseJsonObject(configText), null, 2));
-              } catch {}
-            }}
-          >
-            Форматувати JSON
-          </button>
-          {dangerousWriteArmed ? (
-            <button className="btn" disabled={flashBusy} onClick={() => setDangerousWriteArmed(false)}>
-              Скасувати небезпечний запис
-            </button>
-          ) : null}
           <div className="status-pill">{backupAvailable ? "Backup: знайдено" : "Backup: відсутній"}</div>
           {dangerousWriteArmed ? <div className="status-pill">Підтвердження порожнього JSON: увімкнено</div> : null}
         </div>
-        {configValidationErrors.length > 0 ? (
-          <div className="validation-box">
-            {configValidationErrors.map((err, idx) => (
-              <div key={`${idx}-${err}`}>• {err}</div>
-            ))}
-          </div>
-        ) : null}
-        <div className="json-editor">
-          <CodeMirror
-            value={configText}
-            onChange={(value) => setConfigText(value)}
-            extensions={jsonExtensions}
-            theme={oneDark}
-            basicSetup={{
-              lineNumbers: true,
-              foldGutter: true,
-              bracketMatching: true,
-              autocompletion: true,
-              highlightActiveLine: true,
-            }}
-          />
-        </div>
       </section>
+
+      {configModalOpen ? (
+        <div className="modal-overlay" onClick={() => setConfigModalOpen(false)}>
+          <div className="modal-card card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>4. Config JSON</h2>
+              <button className="btn modal-close" onClick={() => setConfigModalOpen(false)} aria-label="Закрити">
+                x
+              </button>
+            </div>
+            <div className="row gap">
+              <button
+                className="btn"
+                disabled={flashBusy}
+                onClick={() =>
+                  void cmdValidateConfigCompatibility().catch((error) => {
+                    const message = error instanceof Error ? error.message : String(error);
+                    setStatus(`Помилка перевірки: ${message}`);
+                  })
+                }
+              >
+                Перевірити сумісність конфігу
+              </button>
+              <button className="btn" disabled={flashBusy} onClick={() => void cmdSetConfig()}>
+                Зберегти конфігурацію
+              </button>
+              <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void downloadBackupConfigFile()}>
+                Завантажити backup JSON
+              </button>
+              <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void cmdSafeRestoreNetworkFromBackup().catch((e) => {
+                const message = e instanceof Error ? e.message : String(e);
+                setStatus(`Safe restore помилка: ${message}`);
+              })}>
+                Safe restore Wi‑Fi+MQTT
+              </button>
+              <button
+                className="btn"
+                disabled={flashBusy || !backupAvailable}
+                onClick={() => void cmdRestoreBackupJsonManual().catch((error) => {
+                  const message = error instanceof Error ? error.message : String(error);
+                  setStatus(`Помилка backup restore: ${message}`);
+                })}
+              >
+                Відновити backup JSON
+              </button>
+              <button
+                className="btn"
+                disabled={flashBusy}
+                onClick={() => {
+                  try {
+                    setConfigText(JSON.stringify(safeParseJsonObject(configText), null, 2));
+                  } catch {}
+                }}
+              >
+                Форматувати JSON
+              </button>
+              {dangerousWriteArmed ? (
+                <button className="btn" disabled={flashBusy} onClick={() => setDangerousWriteArmed(false)}>
+                  Скасувати небезпечний запис
+                </button>
+              ) : null}
+            </div>
+            {configValidationErrors.length > 0 ? (
+              <div className="validation-box">
+                {configValidationErrors.map((err, idx) => (
+                  <div key={`${idx}-${err}`}>• {err}</div>
+                ))}
+              </div>
+            ) : null}
+            <div className="json-editor">
+              <CodeMirror
+                value={configText}
+                onChange={(value) => setConfigText(value)}
+                extensions={jsonExtensions}
+                theme={oneDark}
+                basicSetup={{
+                  lineNumbers: true,
+                  foldGutter: true,
+                  bracketMatching: true,
+                  autocompletion: true,
+                  highlightActiveLine: true,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="card">
         <h2>5. Прошивка</h2>

@@ -286,6 +286,12 @@
               </div>
               <p class="panel-text">Ця мапа лише показує, які області зараз у тривозі. Для привʼязки LED переходь у
                 вкладку калібрування.</p>
+              <div class="health-strip">
+                <div class="health-item" id="healthWifi">Wi-Fi: ...</div>
+                <div class="health-item" id="healthMqtt">MQTT: ...</div>
+                <div class="health-item" id="healthData">Дані: ...</div>
+                <button class="inline-btn inline-btn-primary" type="button" onclick="runSelfTest()">Самотест</button>
+              </div>
               <div class="map-preview-wrap" id="mapPreviewWrap">
                 <div class="map-preview-empty">Мапа ще не завантажена</div>
               </div>

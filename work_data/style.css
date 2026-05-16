@@ -620,6 +620,26 @@ body.auth-locked {
     padding-bottom: 22px;
 }
 
+.health-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 0 22px 12px;
+}
+
+.health-item {
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border2);
+    background: rgba(6, 18, 35, .72);
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+}
+
 .panel-actions {
     padding-left: 22px;
     padding-right: 22px;

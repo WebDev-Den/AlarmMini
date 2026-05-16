@@ -14,11 +14,14 @@ extern char gHostname[];
 static constexpr size_t INFO_DOC_CAPACITY = 3072;
 static constexpr size_t LOGS_DOC_CAPACITY = 4096;
 static constexpr size_t LOGS_EXPORT_LIMIT = 16;
+static constexpr size_t HEALTH_DOC_CAPACITY = 1024;
 
 AlarmWebServer gServer(80);
 char gSessionToken[33] = {0};
 bool gRestartScheduled = false;
 unsigned long gRestartAtMs = 0;
+bool gWebAssetsReady = false;
+uint8_t gWebAssetsMissingMask = 0;
 
 void scheduleRestart(unsigned long delayMs = 300)
 {
@@ -108,6 +111,40 @@ bool tryServeStaticWithGzipFallback(const String &requestUri)
         return streamStaticFile(gzipPath, mimeTypeFor(path), true);
 
     return false;
+}
+
+bool webAssetExists(const char *path)
+{
+    if (LittleFS.exists(path))
+        return true;
+
+    char gzipPath[32];
+    snprintf(gzipPath, sizeof(gzipPath), "%s.gz", path);
+    return LittleFS.exists(gzipPath);
+}
+
+void checkWebAssets()
+{
+    static const char *requiredAssets[] = {
+        "/index.html",
+        "/style.css",
+        "/main.js",
+        "/map.svg",
+        "/config.json",
+    };
+
+    gWebAssetsMissingMask = 0;
+    for (uint8_t i = 0; i < sizeof(requiredAssets) / sizeof(requiredAssets[0]); i++)
+    {
+        if (!webAssetExists(requiredAssets[i]))
+        {
+            gWebAssetsMissingMask |= (1U << i);
+            LOG_WARN(LOG_CAT_WEB, "Missing web asset: %s", requiredAssets[i]);
+        }
+    }
+
+    gWebAssetsReady = (gWebAssetsMissingMask == 0);
+    LOG_INFO(LOG_CAT_WEB, "Web assets %s", gWebAssetsReady ? "ready" : "incomplete");
 }
 
 String getCookieValue(const String &name)
@@ -637,7 +674,7 @@ void handleConfigApiPost()
 
 void handleHealth()
 {
-    StaticJsonDocument<768> doc;
+    StaticJsonDocument<HEALTH_DOC_CAPACITY> doc;
     doc["uptimeMs"] = millis();
     doc["heapFree"] = ESP.getFreeHeap();
     doc["heapMaxBlock"] = platformMaxFreeBlock();
@@ -645,14 +682,22 @@ void handleHealth()
     doc["wifiStatus"] = WiFi.status();
     doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
     doc["mqttConnected"] = gMqttConnected;
+    doc["mqttDataStale"] = gMqttDataStale;
+    doc["mqttUsingFallbackSnapshot"] = gUsingFallbackSnapshot;
     doc["internetConnected"] = gInternetConnected;
     doc["mqttReconnectAttempts"] = gMqttReconnectAttempts;
     doc["mqttReconnectSuccess"] = gMqttReconnectSuccess;
     doc["mqttDisconnectEvents"] = gMqttDisconnectEvents;
     doc["mqttPayloadErrors"] = gMqttPayloadErrors;
     doc["mqttMessagesReceived"] = gMqttMessagesReceived;
+    doc["mqttSubscriptionRefreshes"] = gMqttSubscriptionRefreshes;
+    doc["mqttSubscriptionRefreshFailures"] = gMqttSubscriptionRefreshFailures;
+    doc["mqttStaleReconnects"] = gMqttStaleReconnects;
+    doc["wifiRecoveryAttempts"] = gWifiRecoveryAttempts;
     doc["internetStateChanges"] = gInternetStateChanges;
     doc["mqttLastMessageMsAgo"] = gLastMqttMessageAt ? (unsigned long)(millis() - gLastMqttMessageAt) : 0UL;
+    doc["webAssetsReady"] = gWebAssetsReady;
+    doc["webAssetsMissingMask"] = gWebAssetsMissingMask;
     doc["loopMaxMs"] = gLoopMaxDurationMs;
     doc["loopSlowCount"] = gLoopSlowCount;
     doc["loopIterations"] = gLoopIterationCount;
@@ -660,9 +705,37 @@ void handleHealth()
     sendJson(doc);
 }
 
+void handleSelfTest()
+{
+    if (!ensureAuthorized())
+        return;
+
+    DynamicJsonDocument doc(768);
+    doc["event"] = "self_test";
+    doc["fw"] = FIRMWARE_VERSION;
+    doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
+    doc["internetConnected"] = gInternetConnected;
+    doc["mqttConnected"] = gMqttConnected;
+    doc["mqttDataStale"] = gMqttDataStale;
+    doc["usingFallbackSnapshot"] = gUsingFallbackSnapshot;
+    doc["webAssetsReady"] = gWebAssetsReady;
+    doc["webAssetsMissingMask"] = gWebAssetsMissingMask;
+    doc["heapFree"] = ESP.getFreeHeap();
+    doc["heapFragPct"] = platformHeapFragmentationPct();
+    doc["ledCount"] = gConfig.ledCount;
+    doc["buzzerEnabled"] = gConfig.buzzer.enabled;
+    doc["ok"] =
+        (doc["wifiConnected"].as<bool>() || strlen(gConfig.wifiSsid) == 0) &&
+        doc["webAssetsReady"].as<bool>() &&
+        (doc["heapFree"].as<unsigned long>() > 10000UL);
+
+    sendJson(doc);
+}
+
 void webserverInit()
 {
     collectCookieHeader(gServer);
+    checkWebAssets();
 
     gServer.on("/", HTTP_GET, []()
                {
@@ -688,6 +761,7 @@ void webserverInit()
     gServer.on("/api/calibrate/led", HTTP_GET, handleCalibrateLed);
     gServer.on("/api/calibrate/done", HTTP_GET, handleCalibrateDone);
     gServer.on("/api/restart", HTTP_GET, handleRestart);
+    gServer.on("/api/selftest", HTTP_GET, handleSelfTest);
     gServer.on("/config", HTTP_GET, handleConfigApiGet);
     gServer.on("/config", HTTP_POST, handleConfigApiPost);
     gServer.on("/health", HTTP_GET, handleHealth);
