@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #define AP_NAME     "AlarmMap-Setup"
-#define AP_PASSWORD "12345678"
+#define AP_PASSWORD ""
 #ifndef LED_PIN
 #define LED_PIN    5
 #endif
@@ -22,7 +22,7 @@
 #define WIFI_PASS_MAXLEN  64
 #define NTP_SERVER_MAXLEN 64
 #define ADMIN_PASS_MAXLEN 32
-#define FIRMWARE_VERSION  "1.1.1"
+#define FIRMWARE_VERSION  "2.0.0"
 
 #define REGIONS_COUNT 25
 

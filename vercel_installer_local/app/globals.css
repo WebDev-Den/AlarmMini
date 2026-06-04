@@ -298,6 +298,18 @@ input, .select, .config-area {
   font-weight: 600;
 }
 
+.board-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 212, 71, 0.12);
+  color: #ffe58d;
+  font-weight: 700;
+}
+
 .tabs {
   display: inline-flex;
   border: 1px solid var(--line);

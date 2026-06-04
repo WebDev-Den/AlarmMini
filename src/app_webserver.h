@@ -23,6 +23,13 @@ unsigned long gRestartAtMs = 0;
 bool gWebAssetsReady = false;
 uint8_t gWebAssetsMissingMask = 0;
 
+String provisioningApSsidForLabels()
+{
+    char suffix[5];
+    snprintf(suffix, sizeof(suffix), "%04X", platformChipId() & 0xFFFF);
+    return String(AP_NAME) + "-" + suffix;
+}
+
 void scheduleRestart(unsigned long delayMs = 300)
 {
     gRestartScheduled = true;
@@ -434,7 +441,7 @@ void handleGetInfo()
     doc["schemaVersion"] = CONFIG_SCHEMA_VERSION;
     doc["configVersion"] = CONFIG_DOCUMENT_VERSION;
     doc["nightSafetyCap"] = NIGHT_BRIGHTNESS_SAFE_CAP;
-    doc["apSsid"] = AP_NAME;
+    doc["apSsid"] = provisioningApSsidForLabels();
     doc["apPassword"] = AP_PASSWORD;
     doc["ledPin"] = LED_PIN;
     doc["buzzerPin"] = BUZZER_PIN;

@@ -20,11 +20,6 @@ char gHostname[32];
 unsigned long gLoopMaxDurationMs = 0;
 unsigned long gLoopSlowCount = 0;
 unsigned long gLoopIterationCount = 0;
-#if defined(ESP8266)
-static WiFiEventHandler gWifiConnectedHandler;
-static WiFiEventHandler gWifiDisconnectedHandler;
-static WiFiEventHandler gWifiGotIpHandler;
-#endif
 
 static const char *ntpServerOrDefault(const char *configured, const char *fallback)
 {
@@ -99,10 +94,8 @@ void setup()
     {
         LOG_INFO(LOG_CAT_CONFIG, "LittleFS ready");
     }
-#if defined(ESP8266)
     resetTraceInit();
     resetTraceSetStage("storage_init");
-#endif
 
     storageInit();
     loggerSetMask(gConfig.logMask);
@@ -112,26 +105,13 @@ void setup()
     snprintf(gHostname, sizeof(gHostname), "alarm-%04X", platformChipId() & 0xFFFF);
     platformSetHostname(gHostname);
     generateHardwareAdminPassword();
-#if defined(ESP8266)
-    gWifiConnectedHandler = WiFi.onStationModeConnected([](const WiFiEventStationModeConnected &event)
-                                                        { LOG_INFO(LOG_CAT_WIFI, "STA connected to '%s' (channel %d)", event.ssid.c_str(), event.channel); });
-    gWifiDisconnectedHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &event)
-                                                              { LOG_WARN(LOG_CAT_WIFI, "STA disconnected, reason=%d", event.reason); });
-    gWifiGotIpHandler = WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP &event)
-                                                { LOG_INFO(LOG_CAT_WIFI, "STA got IP %s mask %s gw %s", event.ip.toString().c_str(), event.mask.toString().c_str(), event.gw.toString().c_str()); });
-#endif
-
     ledsInit();
     buzzerInit();
-#if defined(ESP8266)
     resetTraceSetStage("wifi_start");
-#endif
 
     uint8_t ledCount = max((int)gConfig.ledCount, 1);
     startupWifiWithEffect(ledCount);
-#if defined(ESP8266)
     resetTraceSetStage("wifi_ready");
-#endif
 
     if (MDNS.begin(gHostname))
     {
@@ -150,9 +130,7 @@ void setup()
 
     alertsFetch();
     webserverInit();
-#if defined(ESP8266)
     resetTraceSetStage("runtime");
-#endif
     uartcfg::sendDeviceInfo();
 
     LOG_INFO(LOG_CAT_SYSTEM, "Ready at http://%s", WiFi.localIP().toString().c_str());
@@ -163,12 +141,7 @@ void loop()
 {
     const unsigned long loopStartedAt = millis();
     uartcfg::handle();
-    if (WiFi.status() == WL_CONNECTED)
-    {
-#if defined(ESP8266)
-        MDNS.update();
-#endif
-    }
+    startupProvisioningHandle();
     webserverHandle();
     alertsHandle();
     buzzerHandle();

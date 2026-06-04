@@ -11,6 +11,9 @@
 
 void scheduleRestart(unsigned long delayMs);
 extern char gHostname[];
+extern unsigned long gLoopMaxDurationMs;
+extern unsigned long gLoopSlowCount;
+extern unsigned long gLoopIterationCount;
 
 namespace uartcfg
 {
@@ -108,6 +111,61 @@ inline void sendDeviceInfo()
     snprintf(mdns, sizeof(mdns), "http://%s.local", gHostname[0] ? gHostname : "unset");
     doc["mdns"] = mdns;
 
+    serializeJson(doc, CONSOLE_PORT);
+    CONSOLE_PORT.println();
+}
+
+inline void sendDiagnostics()
+{
+    DynamicJsonDocument doc(1024);
+    doc["event"] = "diagnostics";
+    doc["fw"] = FIRMWARE_VERSION;
+    doc["hostname"] = gHostname[0] ? gHostname : "unset";
+    doc["uptimeMs"] = millis();
+    doc["heapFree"] = ESP.getFreeHeap();
+    doc["heapMaxBlock"] = platformMaxFreeBlock();
+    doc["heapFragPct"] = platformHeapFragmentationPct();
+    doc["resetReason"] = resetTraceReason();
+    doc["lastStage"] = resetTraceStage();
+    doc["bootCount"] = resetTraceBootCount();
+    doc["wifiConfigured"] = strlen(gConfig.wifiSsid) > 0;
+    doc["wifiConnected"] = WiFi.status() == WL_CONNECTED;
+    doc["wifiStatus"] = (int)WiFi.status();
+    doc["wifiSsid"] = WiFi.SSID();
+    doc["wifiRssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+    doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+    doc["apSsid"] = WiFi.softAPSSID();
+    doc["mqttConfigured"] = strlen(gConfig.mqttHost) > 0;
+    doc["mqttConnected"] = gMqttConnected;
+    doc["internetConnected"] = gInternetConnected;
+    doc["fetchOk"] = gFetchOk;
+    doc["mqttMessagesReceived"] = gMqttMessagesReceived;
+    doc["mqttReconnectAttempts"] = gMqttReconnectAttempts;
+    doc["mqttDisconnectEvents"] = gMqttDisconnectEvents;
+    doc["lastMqttMessageMsAgo"] = gLastMqttMessageAt ? (unsigned long)(millis() - gLastMqttMessageAt) : 0UL;
+    doc["ledCount"] = gConfig.ledCount;
+    doc["loopMaxMs"] = gLoopMaxDurationMs;
+    doc["loopSlowCount"] = gLoopSlowCount;
+    doc["loopIterations"] = gLoopIterationCount;
+    serializeJson(doc, CONSOLE_PORT);
+    CONSOLE_PORT.println();
+}
+
+inline void sendFactoryTest()
+{
+    DynamicJsonDocument doc(768);
+    doc["event"] = "factory_test";
+    doc["fw"] = FIRMWARE_VERSION;
+    doc["fs"] = LittleFS.exists("/amcfg.json") || LittleFS.exists("/amcfg.bak");
+    doc["heapOk"] = ESP.getFreeHeap() > 30000UL;
+    doc["heapFree"] = ESP.getFreeHeap();
+    doc["ledCount"] = gConfig.ledCount;
+    resetTraceSetStage("factory_wifi_scan");
+    const int found = WiFi.scanNetworks(false, true);
+    doc["wifiScanOk"] = found >= 0;
+    doc["wifiNetworks"] = max(found, 0);
+    WiFi.scanDelete();
+    doc["ok"] = doc["fs"].as<bool>() && doc["heapOk"].as<bool>() && doc["wifiScanOk"].as<bool>() && gConfig.ledCount > 0;
     serializeJson(doc, CONSOLE_PORT);
     CONSOLE_PORT.println();
 }
@@ -311,6 +369,18 @@ inline void handleSimpleProtocol(const char *line)
         return;
     }
 
+    if (strcmp(line, "get:diagnostics") == 0)
+    {
+        sendDiagnostics();
+        return;
+    }
+
+    if (strcmp(line, "factory:test") == 0)
+    {
+        sendFactoryTest();
+        return;
+    }
+
     if (strcmp(line, "get:config") == 0)
     {
         sendConfigJson();
@@ -435,6 +505,20 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
     {
         sendAck(cmd);
         sendDeviceInfo();
+        return;
+    }
+
+    if (strcmp(cmd, "diagnostics") == 0)
+    {
+        sendAck(cmd);
+        sendDiagnostics();
+        return;
+    }
+
+    if (strcmp(cmd, "factory_test") == 0)
+    {
+        sendAck(cmd);
+        sendFactoryTest();
         return;
     }
 
@@ -668,7 +752,9 @@ inline void processLine(const char *line)
     if (!line || !line[0])
         return;
 
-    if (strncmp(line, "get:", 4) == 0 || strncmp(line, "set:", 4) == 0)
+    if (strncmp(line, "get:", 4) == 0 ||
+        strncmp(line, "set:", 4) == 0 ||
+        strncmp(line, "factory:", 8) == 0)
     {
         handleSimpleProtocol(line);
         return;

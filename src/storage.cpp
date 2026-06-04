@@ -396,6 +396,28 @@ bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
     tmp.flush();
     tmp.close();
 
+    DynamicJsonDocument writtenRoot(CONFIG_JSON_CAPACITY + 2048);
+    if (!loadEnvelopeFromPath(CONFIG_TMP_PATH, writtenRoot))
+    {
+        LittleFS.remove(CONFIG_TMP_PATH);
+        LOG_ERROR(LOG_CAT_CONFIG, "Written config verification failed: tmp unreadable");
+        return false;
+    }
+
+    JsonVariantConst writtenCfg = writtenRoot["cfg"].as<JsonVariantConst>();
+    const uint32_t writtenMagic = writtenRoot["magic"] | 0U;
+    const uint32_t writtenCrc = writtenRoot["crc"] | 0U;
+    char verifyError[24] = {0};
+    if (writtenMagic != CONFIG_MAGIC ||
+        writtenCfg.isNull() ||
+        computeConfigCrc(writtenCfg) != writtenCrc ||
+        !validateFullConfigJson(writtenCfg, verifyError, sizeof(verifyError)))
+    {
+        LittleFS.remove(CONFIG_TMP_PATH);
+        LOG_ERROR(LOG_CAT_CONFIG, "Written config verification failed: %s", verifyError[0] ? verifyError : "bad_crc");
+        return false;
+    }
+
     LittleFS.remove(CONFIG_BAK_PATH);
     if (LittleFS.exists(CONFIG_PATH))
         LittleFS.rename(CONFIG_PATH, CONFIG_BAK_PATH);

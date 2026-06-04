@@ -261,7 +261,7 @@ bool _mqttConnect() {
         return false;
     }
 
-    // DNS resolution on unstable links can block long enough to trigger WDT on ESP8266.
+    // DNS resolution on unstable links can block long enough to disturb MQTT recovery.
     // Prefer cached/resolved IP and refresh it periodically.
     IPAddress hostIp;
     bool useResolvedIp = false;

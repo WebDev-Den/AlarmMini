@@ -10,17 +10,15 @@ Local installer/flasher UI for deploying AlarmMini from GitHub Releases on Verce
 - checks whether `Web Serial` is available in the browser
 - reads device info over UART via `get:info`
 - reads config over UART via `get:config`
-- writes config over UART via `set:config {...}`
-- applies Wi‑Fi over UART via `set:wifi {"ssid":"...","password":"..."}`
+- writes config over UART via chunked `cmd=set_begin` / `data=HEX` / `cmd=set_end` restore protocol
+- applies Wi-Fi over UART via `set:wifi {"ssid":"...","password":"..."}`
 - updates board snapshot from UART `device_info` events
-- preserves config during browser flashing flow (backup -> flash -> restore)
+- preserves config during browser flashing flow (backup -> flash -> reconnect -> chunked restore -> verify)
 
 ## Release assets expected by UI
 
 For each GitHub Release attach these files:
 
-- `alarmmini-esp8266-firmware.bin`
-- `alarmmini-esp8266-littlefs.bin`
 - `alarmmini-esp32c3-firmware.bin`
 - `alarmmini-esp32c3-littlefs.bin`
 - `alarmmini-esp32c3-bootloader.bin`
@@ -54,17 +52,6 @@ npm run dev
 2. Add the same environment variables in Vercel
 3. Deploy
 
-## Next step to make it a real flasher
+## Flashing layer
 
-Add a client-side flashing layer using:
-
-- `esptool-js`
-- or `ESP Web Tools`
-
-The current UI already separates:
-
-- release selection
-- asset selection
-- serial capability detection
-
-You only need to attach the actual write-to-flash logic.
+The installer uses ESP Web Tools plus Web Serial. The production flow supports reading config, flashing ESP32-C3 firmware + LittleFS, restoring Wi-Fi/MQTT/config, and verifying restored JSON after reboot.

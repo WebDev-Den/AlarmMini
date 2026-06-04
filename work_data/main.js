@@ -761,7 +761,11 @@ function applyDeviceInfo(info) {
   const adminPassword = info.adminPassword || "-";
   const firmwareVersion = info.firmwareVersion || "-";
   const apSsid = info.apSsid || "AlarmMap-Setup";
-  const apPassword = info.apPassword || "12345678";
+  const apPassword = info.apPassword || "";
+  const apPasswordLabel = apPassword ? apPassword : "Без пароля";
+  const apQrText = apPassword
+    ? `WIFI:T:WPA;S:${apSsid};P:${apPassword};;`
+    : `WIFI:T:nopass;S:${apSsid};;`;
   const ledPin = info.ledPin ?? "-";
   const buzzerPin = info.buzzerPin ?? "-";
   const mdnsHost = hostname ? `${hostname}.local` : "";
@@ -777,7 +781,7 @@ function applyDeviceInfo(info) {
   setText("labelIp", ip);
   setText("labelAdminPassword", adminPassword);
   setText("labelApSsid", apSsid);
-  setText("labelApPassword", apPassword);
+  setText("labelApPassword", apPasswordLabel);
   setText("ledPinValue", String(ledPin));
   setText("buzzerPinValue", String(buzzerPin));
   setValue("adminPassword", adminPassword);
@@ -810,8 +814,8 @@ function applyDeviceInfo(info) {
   renderSingleLabel("apLabelCanvas", {
     badge: "ap",
     title: "Access point",
-    qrText: `WIFI:T:WPA;S:${apSsid};P:${apPassword};;`,
-    lines: [["SSID", apSsid], ["Password", apPassword]],
+    qrText: apQrText,
+    lines: [["SSID", apSsid], ["Password", apPasswordLabel]],
   }).catch((error) => console.error("[label-ap]", error));
 }
 

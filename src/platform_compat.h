@@ -3,53 +3,14 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 
-#if defined(ESP8266)
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
-
-using AlarmWebServer = ESP8266WebServer;
-
-inline uint32_t platformChipId()
-{
-    return ESP.getChipId();
-}
-
-inline String platformResetReason()
-{
-    return ESP.getResetReason();
-}
-
-inline String platformResetInfo()
-{
-    return ESP.getResetInfo();
-}
-
-inline uint32_t platformMaxFreeBlock()
-{
-    return ESP.getMaxFreeBlockSize();
-}
-
-inline uint8_t platformHeapFragmentationPct()
-{
-    return ESP.getHeapFragmentation();
-}
-
-inline void platformSetHostname(const char *hostname)
-{
-    WiFi.hostname(hostname);
-}
-
-inline void collectCookieHeader(AlarmWebServer &server)
-{
-    server.collectHeaders("Cookie");
-}
-
-#elif defined(ESP32)
+#if defined(ESP32)
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <esp_system.h>
+#if !CONFIG_IDF_TARGET_ESP32C3
+#error "AlarmMini commercial firmware is validated only for ESP32-C3."
+#endif
 #if CONFIG_IDF_TARGET_ESP32C3
 #include <HWCDC.h>
 extern HWCDC USBSerial;
@@ -132,9 +93,5 @@ inline void collectCookieHeader(AlarmWebServer &server)
 #endif
 
 #else
-#error "Unsupported platform. This project supports ESP8266 and ESP32."
-#endif
-
-#if defined(ESP8266)
-#define CONSOLE_PORT Serial
+#error "Unsupported platform. AlarmMini commercial firmware targets ESP32-C3."
 #endif

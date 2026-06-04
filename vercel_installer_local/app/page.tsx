@@ -34,7 +34,6 @@ type DeviceInfo = {
   bootCount: string;
 };
 
-type BoardTarget = "esp8266" | "esp32c3";
 type PortState = "idle" | "connecting" | "connected";
 type NetworkTab = "wifi" | "mqtt";
 
@@ -119,22 +118,12 @@ function findAsset(assets: ReleaseAsset[], boardTokens: string[], kindTokens: st
   );
 }
 
-function resolveBoardAssets(release: GithubRelease | null, board: BoardTarget): BoardAssets {
+function resolveBoardAssets(release: GithubRelease | null): BoardAssets {
   if (!release) {
     return { firmware: null, littlefs: null, bootloader: null, partitions: null, bootApp0: null };
   }
 
   const assets = release.assets || [];
-  if (board === "esp8266") {
-    return {
-      firmware: findAsset(assets, ["esp8266", "d1-mini", "usb"], ["firmware"]),
-      littlefs: findAsset(assets, ["esp8266", "d1-mini", "usb"], ["littlefs", "spiffs"]),
-      bootloader: null,
-      partitions: null,
-      bootApp0: null,
-    };
-  }
-
   return {
     firmware: findAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["firmware"]),
     littlefs: findAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["littlefs", "spiffs"]),
@@ -190,6 +179,22 @@ function configLooksEmpty(cfg: any) {
     mqtt.user?.trim(),
   );
   return !hasLedMapping && !hasNetworkData;
+}
+
+function hasRestorableNetworkConfig(cfg: any) {
+  if (!cfg || typeof cfg !== "object") return false;
+  const wifi = extractWifi(cfg);
+  const mqtt = extractMqtt(cfg);
+  return Boolean(
+    wifi.ssid?.trim() ||
+      mqtt.host?.trim() ||
+      mqtt.topic?.trim() ||
+      mqtt.user?.trim(),
+  );
+}
+
+function isSafeBackupConfig(cfg: any) {
+  return Boolean(cfg && typeof cfg === "object" && !Array.isArray(cfg) && !configLooksEmpty(cfg) && hasRestorableNetworkConfig(cfg));
 }
 
 function sanitizeLogLine(raw: string) {
@@ -390,8 +395,6 @@ export default function Page() {
   const [releasesLoading, setReleasesLoading] = useState(true);
   const [releasesError, setReleasesError] = useState("");
   const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
-  const [targetBoard, setTargetBoard] = useState<BoardTarget>("esp8266");
-
   const [flashBusy, setFlashBusy] = useState(false);
   const [flashStatus, setFlashStatus] = useState("");
   const [supportQrSrc, setSupportQrSrc] = useState("");
@@ -499,23 +502,18 @@ export default function Page() {
     [releases, selectedReleaseId],
   );
 
-  const boardAssets = useMemo(
-    () => resolveBoardAssets(selectedRelease, targetBoard),
-    [selectedRelease, targetBoard],
-  );
+  const boardAssets = useMemo(() => resolveBoardAssets(selectedRelease), [selectedRelease]);
   const jsonExtensions = useMemo(() => [jsonLang()], []);
 
   const boardAssetList = useMemo(() => {
     const list: ReleaseAsset[] = [];
     if (boardAssets.firmware) list.push(boardAssets.firmware);
     if (boardAssets.littlefs) list.push(boardAssets.littlefs);
-    if (targetBoard === "esp32c3") {
-      if (boardAssets.bootloader) list.push(boardAssets.bootloader);
-      if (boardAssets.partitions) list.push(boardAssets.partitions);
-      if (boardAssets.bootApp0) list.push(boardAssets.bootApp0);
-    }
+    if (boardAssets.bootloader) list.push(boardAssets.bootloader);
+    if (boardAssets.partitions) list.push(boardAssets.partitions);
+    if (boardAssets.bootApp0) list.push(boardAssets.bootApp0);
     return list;
-  }, [boardAssets, targetBoard]);
+  }, [boardAssets]);
 
   const selectedReleaseUpdatedAt = useMemo(() => {
     if (!selectedRelease?.published_at) return "";
@@ -533,11 +531,8 @@ export default function Page() {
   const canFlash = useMemo(() => {
     if (!selectedRelease) return false;
     if (!boardAssets.firmware || !boardAssets.littlefs) return false;
-    if (targetBoard === "esp32c3") {
-      return Boolean(boardAssets.bootloader && boardAssets.partitions && boardAssets.bootApp0);
-    }
-    return true;
-  }, [selectedRelease, boardAssets, targetBoard]);
+    return Boolean(boardAssets.bootloader && boardAssets.partitions && boardAssets.bootApp0);
+  }, [selectedRelease, boardAssets]);
 
   const manifestUrl = useMemo(() => {
     if (!canFlash || !selectedRelease || !boardAssets.firmware || !boardAssets.littlefs) return "";
@@ -550,44 +545,33 @@ export default function Page() {
       name: "AlarmMini",
       version: selectedRelease.tag_name || selectedRelease.name || "unversioned",
       new_install_prompt_erase: false,
-      builds:
-        targetBoard === "esp32c3"
-          ? [
-              {
-                chipFamily: "ESP32-C3",
-                parts: [
-                  {
-                    path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.bootloader!.browser_download_url)}`,
-                    offset: 0,
-                  },
-                  {
-                    path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.partitions!.browser_download_url)}`,
-                    offset: 32768,
-                  },
-                  {
-                    path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.bootApp0!.browser_download_url)}`,
-                    offset: 57344,
-                  },
-                  { path: firmwarePath, offset: 65536 },
-                  { path: littlefsPath, offset: 2686976 },
-                ],
-              },
-            ]
-          : [
-              {
-                chipFamily: "ESP8266",
-                parts: [
-                  { path: firmwarePath, offset: 0 },
-                  { path: littlefsPath, offset: 2097152 },
-                ],
-              },
-            ],
+      builds: [
+        {
+          chipFamily: "ESP32-C3",
+          parts: [
+            {
+              path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.bootloader!.browser_download_url)}`,
+              offset: 0,
+            },
+            {
+              path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.partitions!.browser_download_url)}`,
+              offset: 32768,
+            },
+            {
+              path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.bootApp0!.browser_download_url)}`,
+              offset: 57344,
+            },
+            { path: firmwarePath, offset: 65536 },
+            { path: littlefsPath, offset: 2686976 },
+          ],
+        },
+      ],
     };
 
     if (manifestUrlRef.current) URL.revokeObjectURL(manifestUrlRef.current);
     manifestUrlRef.current = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/json" }));
     return manifestUrlRef.current;
-  }, [canFlash, selectedRelease, boardAssets, targetBoard]);
+  }, [canFlash, selectedRelease, boardAssets]);
 
   function appendLog(line: string) {
     setSerialLines((prev) => [sanitizeLogLine(line), ...prev].slice(0, 120));
@@ -652,7 +636,10 @@ export default function Page() {
   }
 
   function persistBackupConfig(cfg: any) {
-    if (!cfg || typeof cfg !== "object") return;
+    if (!isSafeBackupConfig(cfg)) {
+      appendLog("[backup] Пропущено: config без Wi‑Fi/MQTT не замінює збережений backup");
+      return;
+    }
     backupConfigRef.current = cfg;
     setBackupAvailable(true);
     if (typeof window !== "undefined") {
@@ -844,6 +831,28 @@ export default function Page() {
     return sendAndWaitInternal(line, matcher, timeoutMs, true);
   }
 
+  function bytesToHex(bytes: Uint8Array) {
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join("");
+  }
+
+  async function sendConfigChunked(configObj: any, label = "config") {
+    const payload = new TextEncoder().encode(JSON.stringify(configObj));
+    const chunkSize = 64;
+    appendLog(`[${label}] chunked upload ${payload.length} bytes`);
+    await sendAndWait("cmd=set_begin", (j) => j?.status === "ACK" && j?.cmd === "set_begin", 7000);
+
+    for (let offset = 0; offset < payload.length; offset += chunkSize) {
+      const chunk = payload.slice(offset, offset + chunkSize);
+      await sendAndWait(
+        `data=${bytesToHex(chunk)}`,
+        (j) => j?.status === "ACK" && j?.cmd === "set_data",
+        7000,
+      );
+    }
+
+    await sendAndWait("cmd=set_end", (j) => j?.status === "ACK" && j?.cmd === "set_end", 22000);
+  }
+
   async function sendAndWaitInternal(
     line: string,
     matcher: (obj: any) => boolean,
@@ -900,7 +909,7 @@ export default function Page() {
     const cfg = obj.config;
     applyConfigToUi(cfg);
     setNewDeviceMode(false);
-    if (!isFlashingFlow && !configLooksEmpty(cfg)) {
+    if (!isFlashingFlow && isSafeBackupConfig(cfg)) {
       persistBackupConfig(cfg);
     }
     setStatus("Конфіг зчитано");
@@ -911,8 +920,12 @@ export default function Page() {
     const snapshotObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
     const snapshot = snapshotObj?.config;
     if (snapshot && typeof snapshot === "object") {
-      persistBackupConfig(snapshot);
-      appendLog("[backup] Поточний config збережено перед записом");
+      if (isSafeBackupConfig(snapshot)) {
+        persistBackupConfig(snapshot);
+        appendLog("[backup] Поточний config збережено перед записом");
+      } else {
+        appendLog("[backup] Поточний config не містить Wi‑Fi/MQTT, старий backup залишено");
+      }
     }
   }
 
@@ -955,11 +968,7 @@ export default function Page() {
     };
 
     setStatus("Записуємо MQTT...");
-    await sendAndWait(
-      `set:config ${JSON.stringify(configObj)}`,
-      (j) => j?.status === "ACK" && (j?.cmd === "set:config" || j?.cmd === "config_set"),
-      14000,
-    );
+    await sendConfigChunked(configObj, "mqtt");
     setStatus("MQTT налаштовано");
     setNewDeviceMode(false);
     await cmdGetConfig();
@@ -981,11 +990,7 @@ export default function Page() {
     }
 
     setStatus("Записуємо set:config...");
-    await sendAndWait(
-      `set:config ${JSON.stringify(configObj)}`,
-      (j) => j?.status === "ACK" && (j?.cmd === "set:config" || j?.cmd === "config_set"),
-      14000,
-    );
+    await sendConfigChunked(configObj, "manual_config");
     setDangerousWriteArmed(false);
     setStatus("Конфіг записано");
     setNewDeviceMode(false);
@@ -1021,12 +1026,13 @@ export default function Page() {
       try {
         await waitDeviceInfoAfterReconnect(4);
         setFlashStatus(`Відновлення backup JSON: спроба ${attempt}/${maxAttempts}...`);
-        await sendAndWait(
-          `set:config ${JSON.stringify(backup)}`,
-          (j) => j?.status === "ACK" && (j?.cmd === "set:config" || j?.cmd === "config_set"),
-          18000,
-        );
+        await sendConfigChunked(backup, "backup_restore");
+        await waitDeviceInfoAfterReconnect(4);
         const restored = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
+        const diffs = collectDiffPaths(backup, restored?.config ?? {});
+        if (diffs.length) {
+          throw new Error(`Backup записано не повністю: ${diffs.length} відмінностей`);
+        }
         applyConfigToUi(restored.config);
         return;
       } catch (error) {
@@ -1067,11 +1073,7 @@ export default function Page() {
       m: backup.m ?? current.m,
     };
     setStatus("Safe restore: записуємо Wi‑Fi + MQTT...");
-    await sendAndWait(
-      `set:config ${JSON.stringify(merged)}`,
-      (j) => j?.status === "ACK" && (j?.cmd === "set:config" || j?.cmd === "config_set"),
-      18000,
-    );
+    await sendConfigChunked(merged, "safe_network_restore");
     await cmdGetConfig();
     setStatus("Safe restore завершено");
   }
@@ -1087,7 +1089,9 @@ export default function Page() {
         const cfg = cfgObj?.config;
         applyConfigToUi(cfg);
         if (cfg && !configLooksEmpty(cfg)) {
-          persistBackupConfig(cfg);
+          if (isSafeBackupConfig(cfg)) {
+            persistBackupConfig(cfg);
+          }
         }
       });
       setNewDeviceMode(false);
@@ -1137,19 +1141,23 @@ export default function Page() {
         setFlashStatus("Перед прошивкою зчитуємо config з плати...");
         const obj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
         backup = obj.config;
+        if (!isSafeBackupConfig(backup)) {
+          throw new Error("Config з плати не містить Wi‑Fi/MQTT, backup для відновлення небезпечний");
+        }
         persistBackupConfig(backup);
         applyConfigToUi(backup);
         setFlashStatus("Backup config збережено. Запускаємо прошивку...");
         setPipelineStep("backup", "done");
       } catch {
         const fallbackBackup = backupConfigRef.current;
-        if (fallbackBackup && typeof fallbackBackup === "object") {
+        if (isSafeBackupConfig(fallbackBackup)) {
           backup = fallbackBackup;
           setFlashStatus("Поточний config недоступний. Використовуємо останній збережений backup.");
           setPipelineStep("backup", "done");
         } else {
-          setFlashStatus("Backup config недоступний. Продовжуємо прошивку без backup.");
+          setFlashStatus("Backup config недоступний. Прошивку з відновленням зупинено.");
           setPipelineStep("backup", "error");
+          throw new Error("Backup config недоступний. Щоб не втратити Wi‑Fi/MQTT/налаштування, прошивку з відновленням зупинено. Використай режим 'новий пристрій' лише якщо це справді чиста плата.");
         }
       }
     }
@@ -1224,7 +1232,7 @@ export default function Page() {
       if (!backupConfigRef.current) {
         const cfgObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
         const cfg = cfgObj?.config;
-        if (cfg && !configLooksEmpty(cfg)) {
+        if (isSafeBackupConfig(cfg)) {
           persistBackupConfig(cfg);
           applyConfigToUi(cfg);
         }
@@ -1511,10 +1519,7 @@ export default function Page() {
       <section className="card">
         <h2>5. Прошивка</h2>
         <div className="row gap">
-          <div className="toggle-wrap" role="group" aria-label="Board">
-            <button className={`toggle ${targetBoard === "esp8266" ? "active" : ""}`} onClick={() => setTargetBoard("esp8266")}>ESP8266</button>
-            <button className={`toggle ${targetBoard === "esp32c3" ? "active" : ""}`} onClick={() => setTargetBoard("esp32c3")}>ESP32-C3</button>
-          </div>
+          <div className="board-pill" aria-label="Плата">ESP32-C3 SuperMini</div>
           <select
             className="select"
             value={selectedReleaseId ?? ""}
@@ -1560,12 +1565,12 @@ export default function Page() {
             : releasesLoading
               ? "Завантаження релізів..."
               : canFlash
-                ? "Файли для обраної плати знайдено."
-                : "Для обраної плати бракує файлів у релізі."}
+                ? "Файли для ESP32-C3 знайдено."
+                : "У релізі бракує файлів для ESP32-C3."}
         </p>
 
         <div className="asset-block">
-          <h3>Файли прошивки для {targetBoard.toUpperCase()}</h3>
+          <h3>Файли прошивки для ESP32-C3</h3>
           {boardAssetList.length === 0 ? (
             <p>Немає файлів для цієї плати в обраному релізі.</p>
           ) : (

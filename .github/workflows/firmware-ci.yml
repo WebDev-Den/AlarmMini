@@ -8,10 +8,6 @@ on:
 jobs:
   firmware:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        env: [esp32c3, esp8266]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,10 +24,10 @@ jobs:
         run: python scripts/validate_config_contract.py
 
       - name: Build firmware
-        run: pio run -e ${{ matrix.env }}
+        run: pio run -e esp32c3
 
       - name: Build filesystem image
-        run: pio run -t buildfs -e ${{ matrix.env }}
+        run: pio run -t buildfs -e esp32c3
 
   installer:
     runs-on: ubuntu-latest

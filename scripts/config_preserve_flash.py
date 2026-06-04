@@ -16,6 +16,7 @@ BACKUP_TIMEOUT_S = 20.0
 RESTORE_TIMEOUT_S = 20.0
 RECONNECT_TIMEOUT_S = 35.0
 CHUNK_BYTES = 64
+VERIFY_DIFF_LIMIT = 40
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 BACKUP_DIR = PROJECT_DIR / ".pio" / "config-backups"
@@ -139,16 +140,74 @@ def restore_config(port: str, config_obj: dict) -> None:
         _wait_ack(ser, "set_end", RESTORE_TIMEOUT_S)
 
 
-def wait_port_ready(port: str, timeout_s: float) -> None:
-    _log("waiting board reconnect")
+def wait_device_protocol_ready(port: str, timeout_s: float) -> None:
+    _log("waiting board protocol readiness")
     deadline = time.time() + timeout_s
+    last_exc: Exception | None = None
     while time.time() < deadline:
         try:
-            with _open_serial(port):
+            with _open_serial(port, timeout_s=2.5) as ser:
+                _write_line(ser, "get:info")
+
+                def is_device_info(line: str) -> bool:
+                    obj = _try_parse_json(line)
+                    return bool(obj and obj.get("event") == "device_info")
+
+                _read_lines_until(ser, min(5.0, max(1.0, deadline - time.time())), is_device_info)
                 return
-        except Exception:
+        except Exception as exc:
+            last_exc = exc
             time.sleep(0.6)
-    raise TimeoutError(f"Board did not reconnect on {port} in time")
+    raise TimeoutError(f"Board did not become protocol-ready on {port} in time: {last_exc}")
+
+
+def _collect_diffs(expected, actual, path: str = "$", out: list[str] | None = None) -> list[str]:
+    if out is None:
+        out = []
+    if len(out) >= VERIFY_DIFF_LIMIT:
+        return out
+    if type(expected) is not type(actual):
+        out.append(path)
+        return out
+    if expected is None or actual is None:
+        if expected != actual:
+            out.append(path)
+        return out
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            out.append(path)
+            return out
+        for key in sorted(expected.keys()):
+            child = f"{path}.{key}"
+            if key not in actual:
+                out.append(child)
+            else:
+                _collect_diffs(expected[key], actual[key], child, out)
+            if len(out) >= VERIFY_DIFF_LIMIT:
+                break
+        return out
+    if isinstance(expected, list):
+        if not isinstance(actual, list) or len(expected) != len(actual):
+            out.append(f"{path}.length")
+            return out
+        for idx, item in enumerate(expected):
+            _collect_diffs(item, actual[idx], f"{path}[{idx}]", out)
+            if len(out) >= VERIFY_DIFF_LIMIT:
+                break
+        return out
+    if expected != actual:
+        out.append(path)
+    return out
+
+
+def verify_restored_config(port: str, expected_config: dict) -> None:
+    _log("verify restored config")
+    actual = backup_config(port)
+    diffs = _collect_diffs(expected_config, actual)
+    if diffs:
+        preview = ", ".join(diffs[:8])
+        suffix = " ..." if len(diffs) > 8 else ""
+        raise RuntimeError(f"Restored config verification failed: {len(diffs)} diffs: {preview}{suffix}")
 
 
 def save_backup_file(env_name: str, port: str, config_obj: dict) -> Path:
@@ -196,18 +255,52 @@ def restore_config_http(ip_or_host: str, config_obj: dict) -> None:
         raise RuntimeError(f"HTTP restore rejected: {response}")
 
 
+def wait_http_ready(host: str, timeout_s: float) -> None:
+    deadline = time.time() + timeout_s
+    last_err = None
+    while time.time() < deadline:
+        try:
+            _ = _http_get_json(f"http://{host}/health", timeout_s=4.0)
+            return
+        except Exception as exc:
+            last_err = exc
+            time.sleep(1.0)
+    raise TimeoutError(f"Board did not return online over HTTP in time: {last_err}")
+
+
+def verify_restored_config_http(host: str, expected_config: dict) -> None:
+    _log("verify restored config over HTTP")
+    actual = backup_config_http(host)
+    diffs = _collect_diffs(expected_config, actual)
+    if diffs:
+        preview = ", ".join(diffs[:8])
+        suffix = " ..." if len(diffs) > 8 else ""
+        raise RuntimeError(f"HTTP restored config verification failed: {len(diffs)} diffs: {preview}{suffix}")
+
+
 def run_flash_flow_serial(env_name: str, port: str, skip_fs: bool) -> None:
     cfg = backup_config(port)
     backup_path = save_backup_file(env_name, port, cfg)
     _log(f"config backup saved: {backup_path}")
 
-    _platformio_run(env_name, "upload", upload_port=port)
-    if not skip_fs:
-        _platformio_run(env_name, "uploadfs", upload_port=port)
+    flash_error: subprocess.CalledProcessError | None = None
+    try:
+        _platformio_run(env_name, "upload", upload_port=port)
+        if not skip_fs:
+            _platformio_run(env_name, "uploadfs", upload_port=port)
+    except subprocess.CalledProcessError as exc:
+        flash_error = exc
+        _log(f"flash step failed, will still try to restore saved config: {exc}")
 
-    wait_port_ready(port, RECONNECT_TIMEOUT_S)
+    wait_device_protocol_ready(port, RECONNECT_TIMEOUT_S)
     restore_config(port, cfg)
-    _log("done: config preserved and restored")
+    wait_device_protocol_ready(port, RECONNECT_TIMEOUT_S)
+    verify_restored_config(port, cfg)
+
+    if flash_error is not None:
+        raise flash_error
+
+    _log("done: config preserved, restored and verified")
 
 
 def run_flash_flow_ota(env_name: str, host: str, skip_fs: bool) -> None:
@@ -215,31 +308,29 @@ def run_flash_flow_ota(env_name: str, host: str, skip_fs: bool) -> None:
     backup_path = save_backup_file(env_name, host, cfg)
     _log(f"config backup saved: {backup_path}")
 
-    _platformio_run(env_name, "upload", upload_port=host)
-    if not skip_fs:
-        _platformio_run(env_name, "uploadfs", upload_port=host)
+    flash_error: subprocess.CalledProcessError | None = None
+    try:
+        _platformio_run(env_name, "upload", upload_port=host)
+        if not skip_fs:
+            _platformio_run(env_name, "uploadfs", upload_port=host)
+    except subprocess.CalledProcessError as exc:
+        flash_error = exc
+        _log(f"OTA flash step failed, will still try to restore saved config: {exc}")
 
-    # OTA reboot can take a bit longer before HTTP endpoint becomes ready again.
-    deadline = time.time() + RECONNECT_TIMEOUT_S
-    last_err = None
-    while time.time() < deadline:
-        try:
-            _ = _http_get_json(f"http://{host}/health", timeout_s=4.0)
-            last_err = None
-            break
-        except Exception as exc:
-            last_err = exc
-            time.sleep(1.0)
-    if last_err is not None:
-        raise TimeoutError(f"Board did not return online over HTTP in time: {last_err}")
-
+    wait_http_ready(host, RECONNECT_TIMEOUT_S)
     restore_config_http(host, cfg)
-    _log("done: OTA flash + HTTP config restore completed")
+    wait_http_ready(host, RECONNECT_TIMEOUT_S)
+    verify_restored_config_http(host, cfg)
+
+    if flash_error is not None:
+        raise flash_error
+
+    _log("done: OTA flash + HTTP config restore completed and verified")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Flash firmware/filesystem with config preserve.")
-    parser.add_argument("--env", required=True, help="PlatformIO environment, e.g. esp32c3 or esp8266")
+    parser.add_argument("--env", default="esp32c3", help="PlatformIO environment (default: esp32c3)")
     parser.add_argument("--port", default=None, help="Serial port, e.g. COM7")
     parser.add_argument("--ota-host", default=None, help="OTA target host/IP, e.g. 192.168.1.77")
     parser.add_argument("--skip-fs", action="store_true", help="Do not upload LittleFS image")

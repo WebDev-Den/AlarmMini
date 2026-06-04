@@ -378,13 +378,15 @@ void ledsHandle() {
     }
     gLastLedFrameAt = now;
 
-    // Soft-start helps avoid current spikes right after boot.
+    bool night = isNightMode();
+
+    // Soft-start helps avoid current spikes right after boot. The night cap is
+    // also applied globally as a last-resort safety net before any frame render.
     const uint8_t startupBrightness = (now >= LED_SOFTSTART_MS)
         ? 255
         : (uint8_t)max(20UL, (now * 255UL) / LED_SOFTSTART_MS);
-    strip.setBrightness(startupBrightness);
+    strip.setBrightness(night ? min<uint8_t>(startupBrightness, modeBrightnessLimit(true)) : startupBrightness);
 
-    bool night = isNightMode();
     bool internetLost = (!gInternetConnected || WiFi.status() != WL_CONNECTED);
     if (internetLost) {
         alertsAutonomousHealthTick();

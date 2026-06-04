@@ -34,8 +34,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release_artifacts/alarmmini-esp8266-firmware.bin
-            release_artifacts/alarmmini-esp8266-littlefs.bin
             release_artifacts/alarmmini-esp32c3-firmware.bin
             release_artifacts/alarmmini-esp32c3-littlefs.bin
             release_artifacts/alarmmini-esp32c3-bootloader.bin
