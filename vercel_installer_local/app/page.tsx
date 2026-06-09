@@ -154,6 +154,7 @@ function normalizeHttpUrl(value: string) {
 }
 
 function buildDeviceBaseUrl(info: DeviceInfo) {
+  if (/^192\.168\.4\./.test(info.ip)) return "http://192.168.4.1";
   if (isKnownValue(info.hostname)) return `http://${info.hostname}.local`;
   if (isKnownValue(info.mdns)) return normalizeHttpUrl(info.mdns);
   if (isKnownValue(info.ip)) return `http://${info.ip}`;
@@ -163,6 +164,7 @@ function buildDeviceBaseUrl(info: DeviceInfo) {
 function buildAdminUrl(info: DeviceInfo) {
   const baseUrl = buildDeviceBaseUrl(info);
   if (!baseUrl) return "";
+  if (/^192\.168\.4\./.test(info.ip)) return `${baseUrl}/`;
   const password = isKnownValue(info.adminPassword) ? info.adminPassword : "";
   return `${baseUrl}/index.html${password ? `?p=${encodeURIComponent(password)}` : ""}`;
 }
@@ -503,7 +505,7 @@ export default function Page() {
       .then(setApQrSrc)
       .catch(() => setApQrSrc(""));
 
-    setWebCheckStatus(isApModeIp ? "Плата зараз в AP режимі" : "QR готові, web перевірку ще не запускали");
+    setWebCheckStatus(isApModeIp ? "AP режим: QR веде на Wi‑Fi налаштування 192.168.4.1" : "QR готові, web перевірку ще не запускали");
   }, [adminUrl, info.apSsid, info.apPassword, isApModeIp]);
 
   useEffect(() => {
@@ -1527,9 +1529,9 @@ export default function Page() {
               <article className="qr-label-card">
                 <div className="label-copy">
                   <span>Admin</span>
-                  <h3>Web panel</h3>
-                  <p>URL: {deviceBaseUrl || "-"}</p>
-                  <p>Password: {info.adminPassword}</p>
+                <h3>{isApModeIp ? "Wi‑Fi setup" : "Web panel"}</h3>
+                <p>URL: {deviceBaseUrl || "-"}</p>
+                <p>{isApModeIp ? "Setup portal" : `Password: ${info.adminPassword}`}</p>
                 </div>
                 {adminQrSrc ? <img src={adminQrSrc} alt="QR web panel" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
                 <div className="row gap no-print">
