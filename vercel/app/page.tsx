@@ -77,6 +77,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
+const SITE_VERSION = "2.0.2";
 
 function buildStandardNewDeviceConfig() {
   return {
@@ -1424,7 +1425,10 @@ export default function Page() {
         <div className="brand">
           <img src="/icon.svg" alt="AlarmMini" className="brand-logo" />
           <div>
-            <h1>AlarmMini Installer</h1>
+            <div className="title-row">
+              <h1>AlarmMini Installer</h1>
+              <span className="version-badge">Site v{SITE_VERSION}</span>
+            </div>
             <p>Підключення, читання/запис налаштувань, безпечна прошивка з автоматичним відновленням</p>
           </div>
         </div>
