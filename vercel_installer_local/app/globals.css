@@ -251,6 +251,22 @@ html, body {
   margin-top: 12px;
 }
 
+.service-qr-panel {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(7, 18, 34, 0.5);
+  padding: 12px;
+}
+
+.service-qr-panel .section-head h3 {
+  margin: 0 0 6px;
+}
+
+.qr-label-grid.compact {
+  grid-template-columns: 1fr;
+}
+
 .qr-label-card {
   display: grid;
   grid-template-columns: 1fr auto;
