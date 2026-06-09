@@ -31,6 +31,8 @@ jobs:
     defaults:
       run:
         working-directory: vercel
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,8 +60,19 @@ jobs:
           const token = process.env.VERCEL_TOKEN;
           const projectId = process.env.VERCEL_PROJECT_ID;
           const teamSlug = process.env.VERCEL_TEAM_SLUG;
+          const explicitOrgId = process.env.VERCEL_ORG_ID;
 
           async function main() {
+            if (explicitOrgId) {
+              fs.mkdirSync(".vercel", { recursive: true });
+              fs.writeFileSync(
+                ".vercel/project.json",
+                JSON.stringify({ orgId: explicitOrgId, projectId }, null, 2)
+              );
+              console.log(`Linked Vercel project ${projectId} with configured org id`);
+              return;
+            }
+
             const res = await fetch("https://api.vercel.com/v2/teams", {
               headers: { Authorization: `Bearer ${token}` },
             });
@@ -105,6 +118,8 @@ jobs:
     defaults:
       run:
         working-directory: vercel
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -132,8 +147,19 @@ jobs:
           const token = process.env.VERCEL_TOKEN;
           const projectId = process.env.VERCEL_PROJECT_ID;
           const teamSlug = process.env.VERCEL_TEAM_SLUG;
+          const explicitOrgId = process.env.VERCEL_ORG_ID;
 
           async function main() {
+            if (explicitOrgId) {
+              fs.mkdirSync(".vercel", { recursive: true });
+              fs.writeFileSync(
+                ".vercel/project.json",
+                JSON.stringify({ orgId: explicitOrgId, projectId }, null, 2)
+              );
+              console.log(`Linked Vercel project ${projectId} with configured org id`);
+              return;
+            }
+
             const res = await fetch("https://api.vercel.com/v2/teams", {
               headers: { Authorization: `Bearer ${token}` },
             });
