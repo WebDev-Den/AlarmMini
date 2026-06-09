@@ -77,7 +77,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.2";
+const SITE_VERSION = "2.0.3";
 
 function buildStandardNewDeviceConfig() {
   return {
