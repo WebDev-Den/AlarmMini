@@ -22,7 +22,7 @@ concurrency:
 env:
   VERCEL_CLI_VERSION: 50.28.0
   VERCEL_SCOPE: webdevdens-projects
-  VERCEL_PROJECT: alarm_mini
+  VERCEL_PROJECT: prj_ZthdDaptOcvRvXbgLh4aViAjRWJg
 
 jobs:
   preview:
@@ -44,6 +44,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check Vercel token
+        run: test -n "${{ secrets.VERCEL_TOKEN }}"
 
       - name: Link Vercel preview project
         run: npx vercel@${{ env.VERCEL_CLI_VERSION }} link --yes --scope=${{ env.VERCEL_SCOPE }} --project=${{ env.VERCEL_PROJECT }} --token=${{ secrets.VERCEL_TOKEN }}
@@ -80,6 +83,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check Vercel token
+        run: test -n "${{ secrets.VERCEL_TOKEN }}"
 
       - name: Link Vercel production project
         run: npx vercel@${{ env.VERCEL_CLI_VERSION }} link --yes --scope=${{ env.VERCEL_SCOPE }} --project=${{ env.VERCEL_PROJECT }} --token=${{ secrets.VERCEL_TOKEN }}
