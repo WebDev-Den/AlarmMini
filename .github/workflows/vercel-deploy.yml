@@ -21,7 +21,6 @@ concurrency:
 
 env:
   VERCEL_CLI_VERSION: 50.28.0
-  VERCEL_SCOPE: webdevdens-projects
   VERCEL_PROJECT: prj_ZthdDaptOcvRvXbgLh4aViAjRWJg
 
 jobs:
@@ -49,7 +48,7 @@ jobs:
         run: test -n "${{ secrets.VERCEL_TOKEN }}"
 
       - name: Link Vercel preview project
-        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} link --yes --scope=${{ env.VERCEL_SCOPE }} --project=${{ env.VERCEL_PROJECT }} --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} link --yes --project=${{ env.VERCEL_PROJECT }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Pull Vercel preview environment
         run: npx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
@@ -88,7 +87,7 @@ jobs:
         run: test -n "${{ secrets.VERCEL_TOKEN }}"
 
       - name: Link Vercel production project
-        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} link --yes --scope=${{ env.VERCEL_SCOPE }} --project=${{ env.VERCEL_PROJECT }} --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} link --yes --project=${{ env.VERCEL_PROJECT }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Pull Vercel production environment
         run: npx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
