@@ -29,6 +29,8 @@ type DeviceInfo = {
   mdns: string;
   hostname: string;
   adminPassword: string;
+  apSsid: string;
+  apPassword: string;
   resetReason: string;
   lastStage: string;
   bootCount: string;
@@ -100,6 +102,8 @@ const EMPTY_INFO: DeviceInfo = {
   mdns: "-",
   hostname: "-",
   adminPassword: "-",
+  apSsid: "AlarmMap-Setup",
+  apPassword: "",
   resetReason: "-",
   lastStage: "-",
   bootCount: "-",
@@ -137,6 +141,36 @@ function formatBytes(size: number) {
   if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(2)} MB`;
   if (size >= 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${size} B`;
+}
+
+function isKnownValue(value: string) {
+  return Boolean(value && value !== "-" && value !== "unset");
+}
+
+function normalizeHttpUrl(value: string) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed || trimmed === "-") return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed.replace(/\/$/, "") : `http://${trimmed.replace(/\/$/, "")}`;
+}
+
+function buildDeviceBaseUrl(info: DeviceInfo) {
+  if (isKnownValue(info.hostname)) return `http://${info.hostname}.local`;
+  if (isKnownValue(info.mdns)) return normalizeHttpUrl(info.mdns);
+  if (isKnownValue(info.ip)) return `http://${info.ip}`;
+  return "";
+}
+
+function buildAdminUrl(info: DeviceInfo) {
+  const baseUrl = buildDeviceBaseUrl(info);
+  if (!baseUrl) return "";
+  const password = isKnownValue(info.adminPassword) ? info.adminPassword : "";
+  return `${baseUrl}/index.html${password ? `?p=${encodeURIComponent(password)}` : ""}`;
+}
+
+function buildApWifiQrText(info: DeviceInfo) {
+  const ssid = isKnownValue(info.apSsid) ? info.apSsid : "AlarmMap-Setup";
+  const pass = info.apPassword || "";
+  return pass ? `WIFI:T:WPA;S:${ssid};P:${pass};;` : `WIFI:T:nopass;S:${ssid};;`;
 }
 
 function extractWifi(configObj: any) {
@@ -398,6 +432,9 @@ export default function Page() {
   const [flashBusy, setFlashBusy] = useState(false);
   const [flashStatus, setFlashStatus] = useState("");
   const [supportQrSrc, setSupportQrSrc] = useState("");
+  const [adminQrSrc, setAdminQrSrc] = useState("");
+  const [apQrSrc, setApQrSrc] = useState("");
+  const [webCheckStatus, setWebCheckStatus] = useState("Очікує підключення плати");
   const [isFlashingFlow, setIsFlashingFlow] = useState(false);
   const [waitActive, setWaitActive] = useState(false);
   const [waitLabel, setWaitLabel] = useState("");
@@ -435,6 +472,39 @@ export default function Page() {
       .then(setSupportQrSrc)
       .catch(() => setSupportQrSrc(""));
   }, []);
+
+  const deviceBaseUrl = useMemo(() => buildDeviceBaseUrl(info), [info]);
+  const adminUrl = useMemo(() => buildAdminUrl(info), [info]);
+  const healthUrl = useMemo(() => (deviceBaseUrl ? `${deviceBaseUrl}/health` : ""), [deviceBaseUrl]);
+  const ipWebUrl = useMemo(() => (isKnownValue(info.ip) ? `http://${info.ip}` : ""), [info.ip]);
+  const isApModeIp = useMemo(() => /^192\.168\.4\./.test(info.ip), [info.ip]);
+
+  useEffect(() => {
+    if (!adminUrl) {
+      setAdminQrSrc("");
+      setApQrSrc("");
+      setWebCheckStatus("Очікує підключення плати");
+      return;
+    }
+
+    QRCode.toDataURL(adminUrl, {
+      width: 256,
+      margin: 1,
+      color: { dark: "#06101f", light: "#ffffff" },
+    })
+      .then(setAdminQrSrc)
+      .catch(() => setAdminQrSrc(""));
+
+    QRCode.toDataURL(buildApWifiQrText(info), {
+      width: 256,
+      margin: 1,
+      color: { dark: "#06101f", light: "#ffffff" },
+    })
+      .then(setApQrSrc)
+      .catch(() => setApQrSrc(""));
+
+    setWebCheckStatus(isApModeIp ? "Плата зараз в AP режимі" : "QR готові, web перевірку ще не запускали");
+  }, [adminUrl, info.apSsid, info.apPassword, isApModeIp]);
 
   useEffect(() => {
     if (!owner || !repo) {
@@ -681,6 +751,8 @@ export default function Page() {
       mdns: String(payload?.mdns ?? info.mdns ?? "-"),
       hostname: String(payload?.hostname ?? info.hostname ?? "-"),
       adminPassword: String(payload?.adminPassword ?? info.adminPassword ?? "-"),
+      apSsid: String(payload?.apSsid ?? info.apSsid ?? "AlarmMap-Setup"),
+      apPassword: String(payload?.apPassword ?? info.apPassword ?? ""),
       resetReason: String(payload?.resetReason ?? info.resetReason ?? "-"),
       lastStage: String(payload?.lastStage ?? info.lastStage ?? "-"),
       bootCount: String(payload?.bootCount ?? info.bootCount ?? "-"),
@@ -900,6 +972,81 @@ export default function Page() {
     const obj = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
     updateInfoFromPayload(obj);
     setStatus("Інформацію зчитано");
+  }
+
+  async function refreshInfoAndLabels() {
+    await cmdGetInfo();
+    setStatus("QR наклейки оновлено з плати");
+  }
+
+  async function checkWebInterface() {
+    await ensureConnected(true);
+    const obj = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+    updateInfoFromPayload(obj);
+
+    const nextInfo: DeviceInfo = {
+      fw: String(obj?.fw ?? info.fw ?? "-"),
+      ip: String(obj?.ip ?? info.ip ?? "-"),
+      mdns: String(obj?.mdns ?? info.mdns ?? "-"),
+      hostname: String(obj?.hostname ?? info.hostname ?? "-"),
+      adminPassword: String(obj?.adminPassword ?? info.adminPassword ?? "-"),
+      apSsid: String(obj?.apSsid ?? info.apSsid ?? "AlarmMap-Setup"),
+      apPassword: String(obj?.apPassword ?? info.apPassword ?? ""),
+      resetReason: String(obj?.resetReason ?? info.resetReason ?? "-"),
+      lastStage: String(obj?.lastStage ?? info.lastStage ?? "-"),
+      bootCount: String(obj?.bootCount ?? info.bootCount ?? "-"),
+    };
+
+    if (!isKnownValue(nextInfo.ip)) {
+      setWebCheckStatus("IP ще не отримано. Перевір Wi‑Fi або режим AP.");
+      return;
+    }
+
+    if (/^192\.168\.4\./.test(nextInfo.ip)) {
+      setWebCheckStatus("Плата в AP режимі. Для LAN-перевірки підключи її до Wi‑Fi мережі.");
+      return;
+    }
+
+    const base = buildDeviceBaseUrl(nextInfo);
+    if (!base) {
+      setWebCheckStatus("Немає URL для перевірки web-інтерфейсу.");
+      return;
+    }
+
+    setWebCheckStatus("Перевіряємо /health у локальній мережі...");
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 4500);
+    try {
+      const response = await fetch(`${base}/health?ts=${Date.now()}`, {
+        method: "GET",
+        cache: "no-store",
+        mode: "cors",
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const health = await response.json().catch(() => null);
+      const heap = health?.heapFree ? ` heap=${health.heapFree}` : "";
+      setWebCheckStatus(`Web UI доступний: ${base}${heap}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setWebCheckStatus(
+        `COM OK, IP не AP. Браузер не прочитав /health (${message}). Відкрий web UI кнопкою поруч.`,
+      );
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  function printQrLabels() {
+    if (typeof window !== "undefined") window.print();
+  }
+
+  function downloadQrPng(dataUrl: string, filename: string) {
+    if (!dataUrl) return;
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = filename;
+    a.click();
   }
 
   async function cmdGetConfig() {
@@ -1337,6 +1484,7 @@ export default function Page() {
             <div><span>mDNS</span><strong>{info.mdns}</strong></div>
             <div><span>Hostname</span><strong>{info.hostname}</strong></div>
             <div><span>Admin пароль</span><strong>{info.adminPassword}</strong></div>
+            <div><span>AP SSID</span><strong>{info.apSsid}</strong></div>
             <div><span>Reset reason</span><strong>{info.resetReason}</strong></div>
             <div><span>Last stage</span><strong>{info.lastStage}</strong></div>
             <div><span>Boot count</span><strong>{info.bootCount}</strong></div>
@@ -1412,8 +1560,75 @@ export default function Page() {
         </div>
       </section>
 
+      <section className="card qr-print-panel">
+        <div className="section-head">
+          <div>
+            <h2>4. QR / Друк наклейок</h2>
+            <p className="hint">Зчитується напряму з підключеної плати: IP, mDNS, пароль адмінки та AP-мережа.</p>
+          </div>
+          <div className="row gap no-print">
+            <button className="btn primary" disabled={portState !== "connected" || flashBusy} onClick={() => void refreshInfoAndLabels()}>
+              Прочитати з плати
+            </button>
+            <button className="btn" disabled={!adminQrSrc} onClick={printQrLabels}>
+              Друк QR
+            </button>
+          </div>
+        </div>
+
+        <div className="row gap no-print">
+          <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void checkWebInterface()}>
+            Перевірити web UI
+          </button>
+          <a className="btn" href={adminUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!adminUrl}>
+            Відкрити web panel
+          </a>
+          <a className="btn" href={healthUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!healthUrl}>
+            Відкрити /health
+          </a>
+          {ipWebUrl ? (
+            <a className="btn" href={ipWebUrl} target="_blank" rel="noreferrer">
+              Відкрити по IP
+            </a>
+          ) : null}
+          <div className={`status-pill ${isApModeIp ? "warn" : ""}`}>{webCheckStatus}</div>
+        </div>
+
+        <div className="qr-label-grid">
+          <article className="qr-label-card">
+            <div className="label-copy">
+              <span>Admin</span>
+              <h3>Web panel</h3>
+              <p>URL: {deviceBaseUrl || "-"}</p>
+              <p>Password: {info.adminPassword}</p>
+            </div>
+            {adminQrSrc ? <img src={adminQrSrc} alt="QR web panel" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
+            <div className="row gap no-print">
+              <button className="btn" disabled={!adminQrSrc} onClick={() => downloadQrPng(adminQrSrc, `${info.hostname || "alarmmini"}-admin.png`)}>
+                PNG
+              </button>
+            </div>
+          </article>
+
+          <article className="qr-label-card">
+            <div className="label-copy">
+              <span>AP</span>
+              <h3>Access point</h3>
+              <p>SSID: {info.apSsid}</p>
+              <p>Password: {info.apPassword || "Без пароля"}</p>
+            </div>
+            {apQrSrc ? <img src={apQrSrc} alt="QR access point" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
+            <div className="row gap no-print">
+              <button className="btn" disabled={!apQrSrc} onClick={() => downloadQrPng(apQrSrc, `${info.hostname || "alarmmini"}-ap.png`)}>
+                PNG
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section className="card">
-        <h2>4. Config JSON</h2>
+        <h2>5. Config JSON</h2>
         <div className="row gap">
           <button className="btn primary" onClick={() => setConfigModalOpen(true)}>
             Відкрити редактор конфігу
@@ -1433,7 +1648,7 @@ export default function Page() {
         <div className="modal-overlay" onClick={() => setConfigModalOpen(false)}>
           <div className="modal-card card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <h2>4. Config JSON</h2>
+              <h2>5. Config JSON</h2>
               <button className="btn modal-close" onClick={() => setConfigModalOpen(false)} aria-label="Закрити">
                 x
               </button>
@@ -1517,7 +1732,7 @@ export default function Page() {
       ) : null}
 
       <section className="card">
-        <h2>5. Прошивка</h2>
+        <h2>6. Прошивка</h2>
         <div className="row gap">
           <div className="board-pill" aria-label="Плата">ESP32-C3 SuperMini</div>
           <select

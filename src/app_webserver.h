@@ -39,7 +39,16 @@ void scheduleRestart(unsigned long delayMs = 300)
 void addCors()
 {
     gServer.sendHeader("Access-Control-Allow-Origin", "*");
+    gServer.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    gServer.sendHeader("Access-Control-Allow-Headers", "content-type");
+    gServer.sendHeader("Access-Control-Allow-Private-Network", "true");
     gServer.sendHeader("Cache-Control", "no-store");
+}
+
+void handleCorsOptions()
+{
+    addCors();
+    gServer.send(204, "text/plain", "");
 }
 
 String mimeTypeFor(const String &path)
@@ -757,6 +766,7 @@ void webserverInit()
     gServer.on("/api/login", HTTP_POST, handleLogin);
     gServer.on("/api/logout", HTTP_POST, handleLogout);
     gServer.on("/api/info", HTTP_GET, handleGetInfo);
+    gServer.on("/api/info", HTTP_OPTIONS, handleCorsOptions);
     gServer.on("/api/config", HTTP_GET, handleGetConfig);
     gServer.on("/api/alerts", HTTP_GET, handleGetAlerts);
     gServer.on("/api/saveSettings", HTTP_POST, handleSaveSettings);
@@ -772,6 +782,7 @@ void webserverInit()
     gServer.on("/config", HTTP_GET, handleConfigApiGet);
     gServer.on("/config", HTTP_POST, handleConfigApiPost);
     gServer.on("/health", HTTP_GET, handleHealth);
+    gServer.on("/health", HTTP_OPTIONS, handleCorsOptions);
 
     gServer.onNotFound([]()
                        {

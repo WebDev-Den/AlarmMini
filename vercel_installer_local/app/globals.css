@@ -168,6 +168,19 @@ html, body {
   color: var(--muted);
 }
 
+.status-pill.warn {
+  border-color: rgba(255, 166, 96, 0.56);
+  color: #ffd7a9;
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .wait-mini {
   margin-top: 10px;
   border: 1px solid var(--line);
@@ -229,6 +242,63 @@ html, body {
   display: block;
   margin-top: 4px;
   word-break: break-word;
+}
+
+.qr-label-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.qr-label-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(7, 18, 34, 0.66);
+  padding: 14px;
+}
+
+.label-copy span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 212, 71, 0.42);
+  color: #ffe58d;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.label-copy h3 {
+  margin: 10px 0;
+  font-size: 22px;
+}
+
+.label-copy p {
+  margin: 4px 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.label-qr,
+.qr-placeholder {
+  width: 156px;
+  height: 156px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+}
+
+.qr-placeholder {
+  display: grid;
+  place-items: center;
+  color: #06101f;
+  font-weight: 700;
 }
 
 label {
@@ -518,6 +588,11 @@ input, .select, .config-area {
     grid-template-columns: 1fr;
   }
 
+  .qr-label-grid,
+  .qr-label-card {
+    grid-template-columns: 1fr;
+  }
+
   .topbar {
     grid-template-columns: 1fr;
     align-items: flex-start;
@@ -526,5 +601,55 @@ input, .select, .config-area {
   .support-box {
     justify-content: flex-start;
     align-items: center;
+  }
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .qr-print-panel,
+  .qr-print-panel * {
+    visibility: visible !important;
+  }
+
+  .qr-print-panel {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .qr-label-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10mm;
+  }
+
+  .qr-label-card {
+    break-inside: avoid;
+    border: 1px solid #222;
+    border-radius: 6px;
+    background: #fff !important;
+    color: #111 !important;
+    min-height: 52mm;
+  }
+
+  .label-copy span,
+  .label-copy p {
+    color: #111 !important;
   }
 }
