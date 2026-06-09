@@ -2,7 +2,7 @@
 
 AlarmMini is firmware + web tooling for a physical WS2812 Ukraine alarm map.
 
-Current firmware version: **2.0.1**
+Current firmware version: **2.0.2**
 
 Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
