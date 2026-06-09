@@ -21,7 +21,8 @@ concurrency:
 
 env:
   VERCEL_CLI_VERSION: 50.28.0
-  VERCEL_PROJECT: prj_ZthdDaptOcvRvXbgLh4aViAjRWJg
+  VERCEL_PROJECT_ID: prj_ZthdDaptOcvRvXbgLh4aViAjRWJg
+  VERCEL_TEAM_SLUG: webdevdens-projects
 
 jobs:
   preview:
@@ -47,18 +48,53 @@ jobs:
       - name: Check Vercel token
         run: test -n "${{ secrets.VERCEL_TOKEN }}"
 
-      - name: Link Vercel preview project
-        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} link --yes --project=${{ env.VERCEL_PROJECT }} --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Resolve Vercel preview project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+
+          const token = process.env.VERCEL_TOKEN;
+          const projectId = process.env.VERCEL_PROJECT_ID;
+          const teamSlug = process.env.VERCEL_TEAM_SLUG;
+
+          async function main() {
+            const res = await fetch("https://api.vercel.com/v2/teams", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+              throw new Error(`Vercel teams API failed: ${res.status}`);
+            }
+            const data = await res.json();
+            const teams = Array.isArray(data.teams) ? data.teams : [];
+            const team = teams.find((item) => item.slug === teamSlug);
+            if (!team) {
+              throw new Error(`Vercel team slug not found: ${teamSlug}`);
+            }
+            fs.mkdirSync(".vercel", { recursive: true });
+            fs.writeFileSync(
+              ".vercel/project.json",
+              JSON.stringify({ orgId: team.id, projectId }, null, 2)
+            );
+            console.log(`Linked Vercel project ${projectId} in team ${team.slug}`);
+          }
+
+          main().catch((error) => {
+            console.error(error.message);
+            process.exit(1);
+          });
+          NODE
 
       - name: Pull Vercel preview environment
-        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=preview --scope=${{ env.VERCEL_TEAM_SLUG }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build preview
-        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} build --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} build --scope=${{ env.VERCEL_TEAM_SLUG }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy preview
         run: |
-          url=$(npx vercel@${{ env.VERCEL_CLI_VERSION }} deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(npx vercel@${{ env.VERCEL_CLI_VERSION }} deploy --prebuilt --scope=${{ env.VERCEL_TEAM_SLUG }} --token=${{ secrets.VERCEL_TOKEN }})
           echo "Preview deployment: $url"
           curl --fail --silent --show-error --location "$url" > /dev/null
 
@@ -86,18 +122,53 @@ jobs:
       - name: Check Vercel token
         run: test -n "${{ secrets.VERCEL_TOKEN }}"
 
-      - name: Link Vercel production project
-        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} link --yes --project=${{ env.VERCEL_PROJECT }} --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Resolve Vercel production project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+
+          const token = process.env.VERCEL_TOKEN;
+          const projectId = process.env.VERCEL_PROJECT_ID;
+          const teamSlug = process.env.VERCEL_TEAM_SLUG;
+
+          async function main() {
+            const res = await fetch("https://api.vercel.com/v2/teams", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+              throw new Error(`Vercel teams API failed: ${res.status}`);
+            }
+            const data = await res.json();
+            const teams = Array.isArray(data.teams) ? data.teams : [];
+            const team = teams.find((item) => item.slug === teamSlug);
+            if (!team) {
+              throw new Error(`Vercel team slug not found: ${teamSlug}`);
+            }
+            fs.mkdirSync(".vercel", { recursive: true });
+            fs.writeFileSync(
+              ".vercel/project.json",
+              JSON.stringify({ orgId: team.id, projectId }, null, 2)
+            );
+            console.log(`Linked Vercel project ${projectId} in team ${team.slug}`);
+          }
+
+          main().catch((error) => {
+            console.error(error.message);
+            process.exit(1);
+          });
+          NODE
 
       - name: Pull Vercel production environment
-        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=production --scope=${{ env.VERCEL_TEAM_SLUG }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build production
-        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@${{ env.VERCEL_CLI_VERSION }} build --prod --scope=${{ env.VERCEL_TEAM_SLUG }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy production
         run: |
-          url=$(npx vercel@${{ env.VERCEL_CLI_VERSION }} deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(npx vercel@${{ env.VERCEL_CLI_VERSION }} deploy --prebuilt --prod --scope=${{ env.VERCEL_TEAM_SLUG }} --token=${{ secrets.VERCEL_TOKEN }})
           echo "Production deployment: $url"
           curl --fail --silent --show-error --location "$url" > /dev/null
 
