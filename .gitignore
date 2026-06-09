@@ -1,14 +1,14 @@
-﻿.pio/
-.env
-.env.*
-!.env.example
-__pycache__/
+firmware/.pio/
+firmware/.env
+firmware/.env.*
+!firmware/.env.example
+firmware/**/__pycache__/
 *.pyc
 
 # Generated web build output
-data/
-data_build/
-work_data/config.json
+firmware/data/
+firmware/data_build/
+firmware/work_data/config.json
 
 # VS Code local files
 .vscode/
@@ -24,10 +24,15 @@ LOCAL_RELEASE_GUIDE.md
 .claude/
 
 # Vercel installer build artifacts
-vercel_installer_local/node_modules/
-vercel_installer_local/.next/
+vercel/node_modules/
+vercel/.next/
+vercel/.vercel/
+vercel/.env
+vercel/.env.*
+!vercel/.env.example
+!vercel/.env.production
 
 # Build/release outputs
-release_artifacts/
-config_backups/
-config_lock.json
+firmware/release_artifacts/
+firmware/config_backups/
+firmware/config_lock.json

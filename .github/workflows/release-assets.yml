@@ -11,6 +11,9 @@ permissions:
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,11 +37,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release_artifacts/alarmmini-esp32c3-firmware.bin
-            release_artifacts/alarmmini-esp32c3-littlefs.bin
-            release_artifacts/alarmmini-esp32c3-bootloader.bin
-            release_artifacts/alarmmini-esp32c3-partitions.bin
-            release_artifacts/alarmmini-esp32c3-boot_app0.bin
+            firmware/release_artifacts/alarmmini-esp32c3-firmware.bin
+            firmware/release_artifacts/alarmmini-esp32c3-littlefs.bin
+            firmware/release_artifacts/alarmmini-esp32c3-bootloader.bin
+            firmware/release_artifacts/alarmmini-esp32c3-partitions.bin
+            firmware/release_artifacts/alarmmini-esp32c3-boot_app0.bin
           fail_on_unmatched_files: true
           overwrite_files: true
 
@@ -47,4 +50,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: alarmmini-release-assets
-          path: release_artifacts/*.bin
+          path: firmware/release_artifacts/*.bin

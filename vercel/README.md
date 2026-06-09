@@ -1,6 +1,8 @@
 # AlarmMini Vercel Installer
 
-Local installer/flasher UI for deploying AlarmMini from GitHub Releases on Vercel.
+Installer/flasher UI for deploying AlarmMini from GitHub Releases on Vercel.
+
+Production URL: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
 ## What it does
 
@@ -48,9 +50,25 @@ npm run dev
 
 ## Deploy to Vercel
 
-1. Create a new Vercel project from this folder
+1. Create a new Vercel project from this `vercel/` folder
 2. Add the same environment variables in Vercel
 3. Deploy
+
+## GitHub Actions deployment
+
+Production and preview deployments are handled by `.github/workflows/vercel-deploy.yml`.
+
+Required GitHub repository secrets:
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+Production URL:
+
+- `https://alarmmini.vercel.app/`
+
+If the production URL returns `401 Unauthorized`, disable Vercel Deployment Protection for production or allow public access for this project in the Vercel dashboard.
 
 ## Flashing layer
 

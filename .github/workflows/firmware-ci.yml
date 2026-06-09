@@ -8,6 +8,9 @@ on:
 jobs:
   firmware:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,11 +32,23 @@ jobs:
       - name: Build filesystem image
         run: pio run -t buildfs -e esp32c3
 
+      - name: Upload firmware CI binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: alarmmini-esp32c3-ci-binaries
+          path: |
+            firmware/.pio/build/esp32c3/firmware.bin
+            firmware/.pio/build/esp32c3/littlefs.bin
+            firmware/.pio/build/esp32c3/bootloader.bin
+            firmware/.pio/build/esp32c3/partitions.bin
+          if-no-files-found: error
+          retention-days: 14
+
   installer:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: vercel_installer_local
+        working-directory: vercel
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,7 +58,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: vercel_installer_local/package-lock.json
+          cache-dependency-path: vercel/package-lock.json
 
       - name: Install installer dependencies
         run: npm ci

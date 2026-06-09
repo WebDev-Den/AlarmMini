@@ -1,158 +1,62 @@
 # AlarmMini
 
-AlarmMini is firmware + web tooling for a physical WS2812 Ukraine alarm map.
+Commercial AlarmMini project split into two independent work areas.
 
-Current firmware version: **2.0.0**
+## Folders
 
-Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
+- `firmware/` - ESP32-C3 firmware, LittleFS web UI assets, serial/config tools, release scripts, STL files.
+- `vercel/` - Vercel/Next.js installer for flashing boards, reading/writing full config JSON, and printing QR labels.
 
-## Supported boards
-
-- ESP32-C3 SuperMini (`env:esp32c3`, board `esp32-c3-devkitm-1`)
-
-## Main features
-
-- Real-time alarm map rendering by regions (MQTT input)
-- Day/night modes with brightness limits
-- Web UI from LittleFS
-- Serial JSON protocol for installer and service tasks
-- Config backup/restore during flashing
-- mDNS, custom Wi-Fi provisioning portal, MQTT reconnect logic
-- Release assets for ESP32-C3
-
-## Repository layout
-
-- `src/` - firmware sources
-- `work_data/` - editable web assets
-- `data/` - generated/minified LittleFS assets (generated)
-- `scripts/` - build/flash/release helper scripts
-- `vercel_installer_local/` - Next.js web installer
-- `.github/workflows/` - CI/release pipelines
-
-## Environment variables
-
-Use only one env file in project root: **`.env`**.
-
-- Template: `.env.example`
-- `.env` is ignored by git
-
-Used by:
-
-- web asset placeholders during `buildfs`
-- installer public links
-- optional release-safe MQTT template values (`ALARMMINI_RELEASE_MQTT_*`)
-- CI/release safe build mode (`ALARMMINI_CONFIG_MODE=release`)
-
-## Serial protocol (device)
-
-Device accepts text commands and responds with JSON.
-
-- `get:info`
-- `get:config`
-- `set:config { ... }`
-- `set:wifi {"ssid":"...","password":"..."}`
-
-## Local development
-
-### 1) Build firmware
+## Firmware
 
 ```powershell
+cd firmware
 platformio run -e esp32c3
-```
-
-### 2) Build filesystem
-
-```powershell
 platformio run -t buildfs -e esp32c3
 ```
 
-### 3) Upload to board
+Release binaries:
 
 ```powershell
-platformio run -t upload -e esp32c3
-platformio run -t uploadfs -e esp32c3
-```
-
-## Safe flashing with config restore
-
-Custom targets back up config from serial, flash firmware/filesystem, then restore config.
-
-```powershell
-# firmware + fs + restore config
-platformio run -e esp32c3 -t flash_preserve
-
-# firmware only + restore config
-platformio run -e esp32c3 -t flash_preserve_fw
-```
-
-Manual mode:
-
-```powershell
-python scripts/config_preserve_flash.py --env esp32c3 --port COM7
-```
-
-## Release artifacts
-
-Create all binaries locally:
-
-```powershell
+cd firmware
 python scripts/build_release_assets.py
 ```
 
-Output folder:
+## Vercel Installer
 
-- `release_artifacts/alarmmini-esp32c3-firmware.bin`
-- `release_artifacts/alarmmini-esp32c3-littlefs.bin`
-- `release_artifacts/alarmmini-esp32c3-bootloader.bin`
-- `release_artifacts/alarmmini-esp32c3-partitions.bin`
-- `release_artifacts/alarmmini-esp32c3-boot_app0.bin`
-
-GitHub workflow `release-assets.yml` attaches these files to published releases.
-
-## Config validation
-
-Validate compact config contract before build/release:
+Production URL: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
 ```powershell
-python scripts/validate_config_contract.py
-```
-
-Checks:
-
-- `work_data/config.example.json` (always)
-- `work_data/config.json` (if exists locally)
-
-## Vercel installer
-
-Project root for installer: `vercel_installer_local/`
-
-Build:
-
-```powershell
-cd vercel_installer_local
+cd vercel
 npm install
 npm run build
 ```
 
-Deploy production:
+Deploy:
 
 ```powershell
+cd vercel
 vercel --prod
-vercel alias set <deployment-url> alarmmini.vercel.app
 ```
 
-## CI
+## CI/CD
 
-`firmware-ci.yml` does:
+GitHub Actions:
 
-- compact config validation (`scripts/validate_config_contract.py`)
-- firmware build for `esp32c3`
-- LittleFS build for `esp32c3`
-- Next.js installer build (`vercel_installer_local`)
+- `firmware-ci.yml` validates config, builds firmware, builds LittleFS, and uploads CI `.bin` artifacts.
+- `release-assets.yml` builds release `.bin` files from `firmware/` and attaches them to GitHub Releases.
+- `vercel-deploy.yml` builds and deploys the installer from `vercel/` to Vercel.
 
-`secret-scan.yml` runs Gitleaks on push/PR and daily schedule.
+Required GitHub repository secrets for Vercel deployment:
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+The Vercel project must have production domain [alarmmini.vercel.app](https://alarmmini.vercel.app).
 
 ## Notes
 
-- `server.json` is intentionally not part of this firmware/release flow.
-- Keep private tokens and MQTT credentials only in root `.env` or GitHub secrets.
+- Keep firmware secrets in `firmware/.env`.
+- Keep Vercel public settings in `vercel/.env.local` or the Vercel dashboard.
+- Generated folders such as `firmware/.pio`, `firmware/data`, `firmware/release_artifacts`, `vercel/.next`, and `vercel/node_modules` are ignored.
