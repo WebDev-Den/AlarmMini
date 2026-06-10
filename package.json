@@ -1,0 +1,8 @@
+{
+  "name": "alarmmini-root",
+  "private": true,
+  "scripts": {
+    "vercel-build": "npm --prefix vercel run build",
+    "build": "npm --prefix vercel run build"
+  }
+}
