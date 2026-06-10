@@ -53,6 +53,15 @@ type BoardAssets = {
   partitions?: ReleaseAsset | null;
   bootApp0?: ReleaseAsset | null;
 };
+type BoardTargetId = "esp32c3" | "esp8266";
+type BoardTarget = {
+  id: BoardTargetId;
+  label: string;
+  assetTokens: string[];
+  chipFamily: "ESP32-C3" | "ESP8266";
+  fsOffset: number;
+  requiresEsp32BootAssets: boolean;
+};
 type PipelineState = "pending" | "active" | "done" | "error" | "skipped";
 type PipelineStepId = "backup" | "flash" | "reconnect" | "restoreWifi" | "restoreConfig" | "verify";
 
@@ -77,7 +86,25 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.3";
+const SITE_VERSION = "2.0.4";
+const BOARD_TARGETS: BoardTarget[] = [
+  {
+    id: "esp32c3",
+    label: "ESP32-C3 SuperMini",
+    assetTokens: ["esp32c3", "esp32-c3", "c3"],
+    chipFamily: "ESP32-C3",
+    fsOffset: 2686976,
+    requiresEsp32BootAssets: true,
+  },
+  {
+    id: "esp8266",
+    label: "ESP8266 / Wemos D1 mini",
+    assetTokens: ["esp8266", "d1-mini", "d1mini"],
+    chipFamily: "ESP8266",
+    fsOffset: 2097152,
+    requiresEsp32BootAssets: false,
+  },
+];
 
 function buildStandardNewDeviceConfig() {
   return {
@@ -123,18 +150,18 @@ function findAsset(assets: ReleaseAsset[], boardTokens: string[], kindTokens: st
   );
 }
 
-function resolveBoardAssets(release: GithubRelease | null): BoardAssets {
+function resolveBoardAssets(release: GithubRelease | null, board: BoardTarget): BoardAssets {
   if (!release) {
     return { firmware: null, littlefs: null, bootloader: null, partitions: null, bootApp0: null };
   }
 
   const assets = release.assets || [];
   return {
-    firmware: findAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["firmware"]),
-    littlefs: findAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["littlefs", "spiffs"]),
-    bootloader: findAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["bootloader"]),
-    partitions: findAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["partitions"]),
-    bootApp0: findAsset(assets, ["esp32c3", "esp32-c3", "c3"], ["boot-app0", "boot_app0", "bootapp0"]),
+    firmware: findAsset(assets, board.assetTokens, ["firmware"]),
+    littlefs: findAsset(assets, board.assetTokens, ["littlefs", "spiffs"]),
+    bootloader: findAsset(assets, board.assetTokens, ["bootloader"]),
+    partitions: findAsset(assets, board.assetTokens, ["partitions"]),
+    bootApp0: findAsset(assets, board.assetTokens, ["boot-app0", "boot_app0", "bootapp0"]),
   };
 }
 
@@ -432,6 +459,7 @@ export default function Page() {
   const [releasesLoading, setReleasesLoading] = useState(true);
   const [releasesError, setReleasesError] = useState("");
   const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
+  const [selectedBoardId, setSelectedBoardId] = useState<BoardTargetId>("esp32c3");
   const [flashBusy, setFlashBusy] = useState(false);
   const [flashStatus, setFlashStatus] = useState("");
   const [supportQrSrc, setSupportQrSrc] = useState("");
@@ -575,7 +603,11 @@ export default function Page() {
     [releases, selectedReleaseId],
   );
 
-  const boardAssets = useMemo(() => resolveBoardAssets(selectedRelease), [selectedRelease]);
+  const selectedBoard = useMemo(
+    () => BOARD_TARGETS.find((board) => board.id === selectedBoardId) ?? BOARD_TARGETS[0],
+    [selectedBoardId],
+  );
+  const boardAssets = useMemo(() => resolveBoardAssets(selectedRelease, selectedBoard), [selectedRelease, selectedBoard]);
   const jsonExtensions = useMemo(() => [jsonLang()], []);
 
   const boardAssetList = useMemo(() => {
@@ -604,8 +636,9 @@ export default function Page() {
   const canFlash = useMemo(() => {
     if (!selectedRelease) return false;
     if (!boardAssets.firmware || !boardAssets.littlefs) return false;
+    if (!selectedBoard.requiresEsp32BootAssets) return true;
     return Boolean(boardAssets.bootloader && boardAssets.partitions && boardAssets.bootApp0);
-  }, [selectedRelease, boardAssets]);
+  }, [selectedRelease, selectedBoard, boardAssets]);
 
   const manifestUrl = useMemo(() => {
     if (!canFlash || !selectedRelease || !boardAssets.firmware || !boardAssets.littlefs) return "";
@@ -614,29 +647,36 @@ export default function Page() {
     const firmwarePath = `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.firmware.browser_download_url)}`;
     const littlefsPath = `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.littlefs.browser_download_url)}`;
 
+    const parts = selectedBoard.requiresEsp32BootAssets
+      ? [
+          {
+            path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.bootloader!.browser_download_url)}`,
+            offset: 0,
+          },
+          {
+            path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.partitions!.browser_download_url)}`,
+            offset: 32768,
+          },
+          {
+            path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.bootApp0!.browser_download_url)}`,
+            offset: 57344,
+          },
+          { path: firmwarePath, offset: 65536 },
+          { path: littlefsPath, offset: selectedBoard.fsOffset },
+        ]
+      : [
+          { path: firmwarePath, offset: 0 },
+          { path: littlefsPath, offset: selectedBoard.fsOffset },
+        ];
+
     const manifest = {
       name: "AlarmMini",
       version: selectedRelease.tag_name || selectedRelease.name || "unversioned",
       new_install_prompt_erase: false,
       builds: [
         {
-          chipFamily: "ESP32-C3",
-          parts: [
-            {
-              path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.bootloader!.browser_download_url)}`,
-              offset: 0,
-            },
-            {
-              path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.partitions!.browser_download_url)}`,
-              offset: 32768,
-            },
-            {
-              path: `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.bootApp0!.browser_download_url)}`,
-              offset: 57344,
-            },
-            { path: firmwarePath, offset: 65536 },
-            { path: littlefsPath, offset: 2686976 },
-          ],
+          chipFamily: selectedBoard.chipFamily,
+          parts,
         },
       ],
     };
@@ -644,7 +684,7 @@ export default function Page() {
     if (manifestUrlRef.current) URL.revokeObjectURL(manifestUrlRef.current);
     manifestUrlRef.current = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/json" }));
     return manifestUrlRef.current;
-  }, [canFlash, selectedRelease, boardAssets]);
+  }, [canFlash, selectedRelease, selectedBoard, boardAssets]);
 
   function appendLog(line: string) {
     setSerialLines((prev) => [sanitizeLogLine(line), ...prev].slice(0, 120));
@@ -1739,7 +1779,17 @@ export default function Page() {
       <section className="card">
         <h2>5. Прошивка</h2>
         <div className="row gap">
-          <div className="board-pill" aria-label="Плата">ESP32-C3 SuperMini</div>
+          <select
+            className="select board-select"
+            aria-label="Тип плати"
+            value={selectedBoardId}
+            onChange={(e) => setSelectedBoardId(e.target.value as BoardTargetId)}
+            disabled={flashBusy}
+          >
+            {BOARD_TARGETS.map((board) => (
+              <option key={board.id} value={board.id}>{board.label}</option>
+            ))}
+          </select>
           <select
             className="select"
             value={selectedReleaseId ?? ""}
@@ -1785,12 +1835,12 @@ export default function Page() {
             : releasesLoading
               ? "Завантаження релізів..."
               : canFlash
-                ? "Файли для ESP32-C3 знайдено."
-                : "У релізі бракує файлів для ESP32-C3."}
+                ? `Файли для ${selectedBoard.label} знайдено.`
+                : `У релізі бракує файлів для ${selectedBoard.label}.`}
         </p>
 
         <div className="asset-block">
-          <h3>Файли прошивки для ESP32-C3</h3>
+          <h3>Файли прошивки для {selectedBoard.label}</h3>
           {boardAssetList.length === 0 ? (
             <p>Немає файлів для цієї плати в обраному релізі.</p>
           ) : (

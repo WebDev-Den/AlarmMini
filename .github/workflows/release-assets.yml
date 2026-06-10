@@ -42,6 +42,8 @@ jobs:
             firmware/release_artifacts/alarmmini-esp32c3-bootloader.bin
             firmware/release_artifacts/alarmmini-esp32c3-partitions.bin
             firmware/release_artifacts/alarmmini-esp32c3-boot_app0.bin
+            firmware/release_artifacts/alarmmini-esp8266-firmware.bin
+            firmware/release_artifacts/alarmmini-esp8266-littlefs.bin
           fail_on_unmatched_files: true
           overwrite_files: true
 

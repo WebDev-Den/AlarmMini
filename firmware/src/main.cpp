@@ -42,7 +42,7 @@ static void generateHardwareAdminPassword()
     for (uint8_t value : mac)
         mix(value);
 
-    uint32_t chipId = platformChipId();
+    uint32_t chipId = platformUniqueId24();
     mix((chipId >> 0) & 0xFF);
     mix((chipId >> 8) & 0xFF);
     mix((chipId >> 16) & 0xFF);
@@ -102,7 +102,7 @@ void setup()
     WiFi.persistent(false);
     WiFi.setAutoReconnect(true);
 
-    snprintf(gHostname, sizeof(gHostname), "alarm-%04X", platformChipId() & 0xFFFF);
+    platformDeviceHostname(gHostname, sizeof(gHostname));
     platformSetHostname(gHostname);
     generateHardwareAdminPassword();
     ledsInit();

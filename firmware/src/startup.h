@@ -2,7 +2,9 @@
 #include <Arduino.h>
 #include <DNSServer.h>
 #include <ArduinoJson.h>
+#if defined(ESP32)
 #include <esp_wifi.h>
+#endif
 #include "platform_compat.h"
 #include "config.h"
 #include "storage.h"
@@ -19,9 +21,7 @@ static unsigned long gProvisioningApLastEnsureAt = 0;
 
 static String _provisioningApSsid()
 {
-    char suffix[5];
-    snprintf(suffix, sizeof(suffix), "%04X", platformChipId() & 0xFFFF);
-    return String(AP_NAME) + "-" + suffix;
+    return platformProvisioningApSsid(AP_NAME);
 }
 
 static void _showStartupBounceFlagAnimation(uint8_t ledCount,
@@ -224,6 +224,18 @@ static const char* _wifiAuthLabel(uint8_t encryption)
 {
     switch (encryption)
     {
+#if defined(ESP8266)
+    case AUTH_OPEN:
+        return "open";
+    case AUTH_WEP:
+        return "wep";
+    case AUTH_WPA_PSK:
+        return "wpa";
+    case AUTH_WPA2_PSK:
+        return "wpa2";
+    case AUTH_WPA_WPA2_PSK:
+        return "wpa/wpa2";
+#else
     case WIFI_AUTH_OPEN:
         return "open";
     case WIFI_AUTH_WEP:
@@ -240,9 +252,19 @@ static const char* _wifiAuthLabel(uint8_t encryption)
         return "wpa3";
     case WIFI_AUTH_WPA2_WPA3_PSK:
         return "wpa2/wpa3";
+#endif
     default:
         return "secured";
     }
+}
+
+static bool _wifiAuthIsOpen(uint8_t encryption)
+{
+#if defined(ESP8266)
+    return encryption == AUTH_OPEN;
+#else
+    return encryption == WIFI_AUTH_OPEN;
+#endif
 }
 
 static void _sendProvisionNetworks(AlarmWebServer& server)
@@ -282,7 +304,7 @@ static void _sendProvisionNetworks(AlarmWebServer& server)
             item["rssi"] = WiFi.RSSI(i);
             item["channel"] = WiFi.channel(i);
             item["auth"] = _wifiAuthLabel(enc);
-            item["open"] = enc == WIFI_AUTH_OPEN;
+            item["open"] = _wifiAuthIsOpen(enc);
         }
     }
 
@@ -375,23 +397,16 @@ void startupProvisioningHandle()
 static void _startProvisioningAp()
 {
     WiFi.softAPdisconnect(true);
-    WiFi.disconnect(false, false);
-    WiFi.setSleep(false);
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);
+    platformWifiDisconnect();
+    platformWifiDisableSleep();
+    platformWifiSetMaxTxPower();
     delay(120);
 
     // AP+STA keeps the setup network visible while allowing Wi-Fi scans.
     WiFi.mode(WIFI_AP_STA);
     delay(120);
 
-    wifi_country_t country = {
-        .cc = "UA",
-        .schan = 1,
-        .nchan = 11,
-        .policy = WIFI_COUNTRY_POLICY_MANUAL,
-    };
-    esp_wifi_set_country(&country);
-    esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
+    platformWifiConfigureApRadio();
 
     IPAddress apIp(192, 168, 4, 1);
     IPAddress apGateway(192, 168, 4, 1);
@@ -558,7 +573,7 @@ bool startupWifiWithEffect(uint8_t ledCount)
                         }
                         else
                         {
-                            WiFi.disconnect(false, false);
+                            platformWifiDisconnect();
                             snprintf(gConfig.wifiSsid, WIFI_SSID_MAXLEN, "%s", prevSsid);
                             snprintf(gConfig.wifiPass, WIFI_PASS_MAXLEN, "%s", prevPass);
                             WiFi.mode(WIFI_AP_STA);

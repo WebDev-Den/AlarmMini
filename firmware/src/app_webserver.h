@@ -25,9 +25,7 @@ uint8_t gWebAssetsMissingMask = 0;
 
 String provisioningApSsidForLabels()
 {
-    char suffix[5];
-    snprintf(suffix, sizeof(suffix), "%04X", platformChipId() & 0xFFFF);
-    return String(AP_NAME) + "-" + suffix;
+    return platformProvisioningApSsid(AP_NAME);
 }
 
 void scheduleRestart(unsigned long delayMs = 300)
@@ -445,6 +443,9 @@ void handleGetInfo()
     doc["mqttPass"] = gConfig.mqttPass;
     doc["adminPassword"] = gConfig.adminPassword;
     doc["hostname"] = gHostname;
+    char deviceId[7] = {0};
+    platformUniqueSuffix(deviceId, sizeof(deviceId));
+    doc["deviceId"] = deviceId;
     doc["ip"] = WiFi.localIP().toString();
     doc["firmwareVersion"] = FIRMWARE_VERSION;
     doc["schemaVersion"] = CONFIG_SCHEMA_VERSION;

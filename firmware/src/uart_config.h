@@ -94,14 +94,12 @@ inline void sendNack(const char *cmd, const char *reason)
 
 inline String provisioningApSsidForUart()
 {
-    char suffix[5];
-    snprintf(suffix, sizeof(suffix), "%04X", platformChipId() & 0xFFFF);
-    return String(AP_NAME) + "-" + suffix;
+    return platformProvisioningApSsid(AP_NAME);
 }
 
 inline void sendDeviceInfo()
 {
-    StaticJsonDocument<384> doc;
+    StaticJsonDocument<512> doc;
     doc["event"] = "device_info";
     doc["fw"] = FIRMWARE_VERSION;
     IPAddress ip = WiFi.localIP();
@@ -110,6 +108,9 @@ inline void sendDeviceInfo()
     doc["ip"] = ip.toString();
     doc["adminPassword"] = gConfig.adminPassword;
     doc["hostname"] = gHostname[0] ? gHostname : "unset";
+    char deviceId[7] = {0};
+    platformUniqueSuffix(deviceId, sizeof(deviceId));
+    doc["deviceId"] = deviceId;
     doc["apSsid"] = provisioningApSsidForUart();
     doc["apPassword"] = AP_PASSWORD;
     doc["resetReason"] = resetTraceReason();

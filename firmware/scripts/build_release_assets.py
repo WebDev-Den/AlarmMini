@@ -9,6 +9,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = PROJECT_DIR / "release_artifacts"
 ESP32C3_BUILD_DIR = PROJECT_DIR / ".pio" / "build" / "esp32c3"
+ESP8266_BUILD_DIR = PROJECT_DIR / ".pio" / "build" / "esp8266"
 
 
 def run(cmd, env):
@@ -23,6 +24,8 @@ def main():
     run([sys.executable, "scripts/validate_config_contract.py"], env)
     run(["platformio", "run", "-e", "esp32c3"], env)
     run(["platformio", "run", "-t", "buildfs", "-e", "esp32c3"], env)
+    run(["platformio", "run", "-e", "esp8266"], env)
+    run(["platformio", "run", "-t", "buildfs", "-e", "esp8266"], env)
 
     OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -38,6 +41,8 @@ def main():
         / "tools"
         / "partitions"
         / "boot_app0.bin",
+        "alarmmini-esp8266-firmware.bin": ESP8266_BUILD_DIR / "firmware.bin",
+        "alarmmini-esp8266-littlefs.bin": ESP8266_BUILD_DIR / "littlefs.bin",
     }
 
     for name, src in artifacts.items():

@@ -1,6 +1,6 @@
 # AlarmMini
 
-AlarmMini is a commercial firmware and web-installer project for a compact physical Ukraine alert map based on addressable WS2812B LEDs and an ESP32-C3 controller.
+AlarmMini is a commercial firmware and web-installer project for a compact physical Ukraine alert map based on addressable WS2812B LEDs and ESP32-C3 or ESP8266 controllers.
 
 Production installer: [https://alarmmini.vercel.app](https://alarmmini.vercel.app)
 
@@ -10,7 +10,7 @@ AlarmMini is designed as a ready-to-assemble IoT map controller. A user can conn
 
 The project includes:
 
-- embedded firmware for ESP32-C3 SuperMini;
+- embedded firmware for ESP32-C3 SuperMini and ESP8266 / Wemos D1 mini;
 - LittleFS web interface served directly from the board;
 - UART service protocol for factory setup and recovery;
 - Vercel web installer for flashing, config backup/restore, and QR label printing;
@@ -20,6 +20,7 @@ The project includes:
 ## Supported Hardware
 
 - ESP32-C3 SuperMini, PlatformIO environment `esp32c3`.
+- ESP8266 / Wemos D1 mini, PlatformIO environment `esp8266`.
 - WS2812B addressable LED strip or PCB LEDs.
 - Optional buzzer.
 - USB connection for flashing, serial diagnostics, config import/export, and service setup.
@@ -62,6 +63,7 @@ Install PlatformIO, then run from the repository root:
 ```powershell
 cd firmware
 platformio run -e esp32c3
+platformio run -e esp8266
 ```
 
 Build LittleFS image:
@@ -69,6 +71,7 @@ Build LittleFS image:
 ```powershell
 cd firmware
 platformio run -t buildfs -e esp32c3
+platformio run -t buildfs -e esp8266
 ```
 
 Flash firmware and filesystem:
@@ -77,6 +80,9 @@ Flash firmware and filesystem:
 cd firmware
 platformio run -t upload -e esp32c3
 platformio run -t uploadfs -e esp32c3
+# or
+platformio run -t upload -e esp8266
+platformio run -t uploadfs -e esp8266
 ```
 
 Safe flashing with config preservation:
@@ -84,6 +90,8 @@ Safe flashing with config preservation:
 ```powershell
 cd firmware
 platformio run -e esp32c3 -t flash_preserve
+# or
+platformio run -e esp8266 -t flash_preserve
 ```
 
 Manual config-preserving flash:
@@ -91,6 +99,8 @@ Manual config-preserving flash:
 ```powershell
 cd firmware
 python scripts/config_preserve_flash.py --env esp32c3 --port COM7
+# or
+python scripts/config_preserve_flash.py --env esp8266 --port COM7
 ```
 
 ## Firmware Release Assets
@@ -109,6 +119,8 @@ Expected output:
 - `firmware/release_artifacts/alarmmini-esp32c3-bootloader.bin`
 - `firmware/release_artifacts/alarmmini-esp32c3-partitions.bin`
 - `firmware/release_artifacts/alarmmini-esp32c3-boot_app0.bin`
+- `firmware/release_artifacts/alarmmini-esp8266-firmware.bin`
+- `firmware/release_artifacts/alarmmini-esp8266-littlefs.bin`
 
 These files are attached to GitHub Releases by `.github/workflows/release-assets.yml`. The Vercel installer reads GitHub Releases and uses these assets for browser flashing.
 
@@ -244,7 +256,9 @@ Before release:
 cd firmware
 python scripts/validate_config_contract.py
 platformio run -e esp32c3
+platformio run -e esp8266
 platformio run -t buildfs -e esp32c3
+platformio run -t buildfs -e esp8266
 python scripts/build_release_assets.py
 ```
 

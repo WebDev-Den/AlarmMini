@@ -2,13 +2,14 @@
 
 AlarmMini is firmware + web tooling for a physical WS2812 Ukraine alarm map.
 
-Current firmware version: **2.0.3**
+Current firmware version: **2.0.4**
 
 Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
 ## Supported boards
 
 - ESP32-C3 SuperMini (`env:esp32c3`, board `esp32-c3-devkitm-1`)
+- ESP8266 / Wemos D1 mini (`env:esp8266`, board `d1_mini`)
 
 ## Main features
 
@@ -18,7 +19,7 @@ Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 - Serial JSON protocol for installer and service tasks
 - Config backup/restore during flashing
 - mDNS, custom Wi-Fi provisioning portal, MQTT reconnect logic
-- Release assets for ESP32-C3
+- Release assets for ESP32-C3 and ESP8266
 
 ## Repository layout
 
@@ -58,12 +59,14 @@ Device accepts text commands and responds with JSON.
 
 ```powershell
 platformio run -e esp32c3
+platformio run -e esp8266
 ```
 
 ### 2) Build filesystem
 
 ```powershell
 platformio run -t buildfs -e esp32c3
+platformio run -t buildfs -e esp8266
 ```
 
 ### 3) Upload to board
@@ -71,6 +74,9 @@ platformio run -t buildfs -e esp32c3
 ```powershell
 platformio run -t upload -e esp32c3
 platformio run -t uploadfs -e esp32c3
+# or
+platformio run -t upload -e esp8266
+platformio run -t uploadfs -e esp8266
 ```
 
 ## Safe flashing with config restore
@@ -80,15 +86,18 @@ Custom targets back up config from serial, flash firmware/filesystem, then resto
 ```powershell
 # firmware + fs + restore config
 platformio run -e esp32c3 -t flash_preserve
+platformio run -e esp8266 -t flash_preserve
 
 # firmware only + restore config
 platformio run -e esp32c3 -t flash_preserve_fw
+platformio run -e esp8266 -t flash_preserve_fw
 ```
 
 Manual mode:
 
 ```powershell
 python scripts/config_preserve_flash.py --env esp32c3 --port COM7
+python scripts/config_preserve_flash.py --env esp8266 --port COM7
 ```
 
 ## Release artifacts
@@ -106,6 +115,8 @@ Output folder:
 - `release_artifacts/alarmmini-esp32c3-bootloader.bin`
 - `release_artifacts/alarmmini-esp32c3-partitions.bin`
 - `release_artifacts/alarmmini-esp32c3-boot_app0.bin`
+- `release_artifacts/alarmmini-esp8266-firmware.bin`
+- `release_artifacts/alarmmini-esp8266-littlefs.bin`
 
 GitHub workflow `release-assets.yml` attaches these files to published releases.
 
@@ -146,8 +157,8 @@ vercel alias set <deployment-url> alarmmini.vercel.app
 `firmware-ci.yml` does:
 
 - compact config validation (`scripts/validate_config_contract.py`)
-- firmware build for `esp32c3`
-- LittleFS build for `esp32c3`
+- firmware build for `esp32c3` and `esp8266`
+- LittleFS build for `esp32c3` and `esp8266`
 - CI `.bin` artifact upload for test flashing
 - Next.js installer build (`vercel`)
 

@@ -26,21 +26,29 @@ jobs:
       - name: Validate compact config contract
         run: python scripts/validate_config_contract.py
 
-      - name: Build firmware
+      - name: Build ESP32-C3 firmware
         run: pio run -e esp32c3
 
-      - name: Build filesystem image
+      - name: Build ESP32-C3 filesystem image
         run: pio run -t buildfs -e esp32c3
+
+      - name: Build ESP8266 firmware
+        run: pio run -e esp8266
+
+      - name: Build ESP8266 filesystem image
+        run: pio run -t buildfs -e esp8266
 
       - name: Upload firmware CI binaries
         uses: actions/upload-artifact@v4
         with:
-          name: alarmmini-esp32c3-ci-binaries
+          name: alarmmini-firmware-ci-binaries
           path: |
             firmware/.pio/build/esp32c3/firmware.bin
             firmware/.pio/build/esp32c3/littlefs.bin
             firmware/.pio/build/esp32c3/bootloader.bin
             firmware/.pio/build/esp32c3/partitions.bin
+            firmware/.pio/build/esp8266/firmware.bin
+            firmware/.pio/build/esp8266/littlefs.bin
           if-no-files-found: error
           retention-days: 14
 

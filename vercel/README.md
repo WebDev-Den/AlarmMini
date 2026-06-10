@@ -21,11 +21,18 @@ Production URL: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
 For each GitHub Release attach these files:
 
+ESP32-C3:
+
 - `alarmmini-esp32c3-firmware.bin`
 - `alarmmini-esp32c3-littlefs.bin`
 - `alarmmini-esp32c3-bootloader.bin`
 - `alarmmini-esp32c3-partitions.bin`
 - `alarmmini-esp32c3-boot_app0.bin`
+
+ESP8266 / Wemos D1 mini:
+
+- `alarmmini-esp8266-firmware.bin`
+- `alarmmini-esp8266-littlefs.bin`
 
 ## Environment
 
@@ -72,4 +79,4 @@ If the production URL returns `401 Unauthorized`, disable Vercel Deployment Prot
 
 ## Flashing layer
 
-The installer uses ESP Web Tools plus Web Serial. The production flow supports reading config, flashing ESP32-C3 firmware + LittleFS, restoring Wi-Fi/MQTT/config, and verifying restored JSON after reboot.
+The installer uses ESP Web Tools plus Web Serial. The production flow supports reading config, choosing ESP32-C3 or ESP8266 firmware, flashing firmware + LittleFS, restoring Wi-Fi/MQTT/config, and verifying restored JSON after reboot.

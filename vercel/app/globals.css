@@ -414,6 +414,14 @@ input, .select, .config-area {
   font-weight: 700;
 }
 
+.board-select {
+  min-width: 230px;
+  border-color: rgba(255, 212, 71, 0.45);
+  background: rgba(255, 212, 71, 0.12);
+  color: #ffe58d;
+  font-weight: 700;
+}
+
 .tabs {
   display: inline-flex;
   border: 1px solid var(--line);
