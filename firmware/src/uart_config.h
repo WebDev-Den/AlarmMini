@@ -111,6 +111,9 @@ inline void sendDeviceInfo()
     char deviceId[7] = {0};
     platformUniqueSuffix(deviceId, sizeof(deviceId));
     doc["deviceId"] = deviceId;
+    char mqttClientId[32] = {0};
+    mqttBuildClientId(mqttClientId, sizeof(mqttClientId));
+    doc["mqttClientId"] = mqttClientId;
     doc["apSsid"] = provisioningApSsidForUart();
     doc["apPassword"] = AP_PASSWORD;
     doc["resetReason"] = resetTraceReason();
@@ -147,6 +150,9 @@ inline void sendDiagnostics()
     doc["apSsid"] = WiFi.softAPSSID();
     doc["mqttConfigured"] = strlen(gConfig.mqttHost) > 0;
     doc["mqttConnected"] = gMqttConnected;
+    char mqttClientId[32] = {0};
+    mqttBuildClientId(mqttClientId, sizeof(mqttClientId));
+    doc["mqttClientId"] = mqttClientId;
     doc["internetConnected"] = gInternetConnected;
     doc["fetchOk"] = gFetchOk;
     doc["mqttMessagesReceived"] = gMqttMessagesReceived;

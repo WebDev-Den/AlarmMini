@@ -220,6 +220,7 @@ static void _sendProvisionStatus(AlarmWebServer& server, bool portalActive)
     _sendProvisionJson(server, doc);
 }
 
+#if ALARMMINI_FEATURE_WIFI_SCAN_PORTAL
 static const char* _wifiAuthLabel(uint8_t encryption)
 {
     switch (encryption)
@@ -266,9 +267,19 @@ static bool _wifiAuthIsOpen(uint8_t encryption)
     return encryption == WIFI_AUTH_OPEN;
 #endif
 }
+#endif
 
 static void _sendProvisionNetworks(AlarmWebServer& server)
 {
+#if !ALARMMINI_FEATURE_WIFI_SCAN_PORTAL
+    DynamicJsonDocument doc(192);
+    doc["ok"] = true;
+    doc["scanDisabled"] = true;
+    doc["count"] = 0;
+    doc.createNestedArray("networks");
+    _sendProvisionJson(server, doc);
+    return;
+#else
     DynamicJsonDocument doc(4096);
     doc["ok"] = true;
     JsonArray networks = doc.createNestedArray("networks");
@@ -310,10 +321,53 @@ static void _sendProvisionNetworks(AlarmWebServer& server)
 
     WiFi.scanDelete();
     _sendProvisionJson(server, doc);
+#endif
 }
 
 static void _sendProvisionPage(AlarmWebServer& server)
 {
+#if defined(ESP8266)
+    const String savedSsid = _htmlEscape(String(gConfig.wifiSsid));
+
+    server.sendHeader("Cache-Control", "no-store");
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "text/html; charset=utf-8", "");
+    server.sendContent(F("<!doctype html><html lang='uk'><head><meta charset='utf-8'>"
+                         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                         "<title>AlarmMini Wi-Fi Setup</title>"
+                         "<style>"
+                         "body{margin:0;padding:18px;background:#06101f;color:#eef6ff;font-family:Arial,sans-serif}"
+                         "main{max-width:520px;margin:auto;padding:18px;border:1px solid #28476e;border-radius:18px;background:#0d1f38}"
+                         "h1{margin:0 0 8px}.hint{color:#9ab4d6;line-height:1.45}.pill{padding:8px 10px;border:1px solid #28476e;border-radius:999px;color:#9ab4d6;display:inline-block}"
+                         "label{display:block;margin-top:14px;color:#9ab4d6}input,button{width:100%;min-height:46px;border-radius:12px;font-size:16px;box-sizing:border-box}"
+                         "input{margin-top:6px;padding:0 12px;border:1px solid #28476e;background:#07172c;color:#eef6ff}"
+                         "button{margin-top:16px;border:0;background:linear-gradient(135deg,#4ea8ff,#ffd447);font-weight:800;color:#06101f}"
+                         ".status{margin-top:14px;padding:10px;border:1px solid #28476e;border-radius:12px;white-space:pre-wrap;color:#9ab4d6;font-family:Consolas,monospace;font-size:12px}"
+                         ".ok{border-color:#46e68b;color:#a9ffc9}.err{border-color:#ff6b6b;color:#ffc5c5}"
+                         "</style></head><body><main><h1>AlarmMini Wi-Fi</h1>"
+                         "<p class='hint'>ESP8266 setup mode. Enter Wi-Fi SSID and password, then wait for device IP.</p>"
+                         "<p class='pill'>AP: <b>"));
+    server.sendContent(_htmlEscape(_provisioningApSsid()));
+    server.sendContent(F("</b></p><form id='f'><label>SSID</label><input id='ssid' name='ssid' required value=\""));
+    server.sendContent(savedSsid);
+    server.sendContent(F("\" autocomplete='off'><label>Password</label><input id='password' name='password' type='password'>"
+                         "<button>Save Wi-Fi</button></form><div class='status' id='s'>Ready</div>"
+                         "<script>"
+                         "const s=document.getElementById('s'),f=document.getElementById('f');"
+                         "function st(c,t){s.className='status '+(c||'');s.textContent=t}"
+                         "async function poll(){try{let r=await fetch('/api/provision/status',{cache:'no-store'});let j=await r.json();"
+                         "let text='AP: '+(j.apSsid||'')+'\\nSetup IP: '+(j.apIp||'192.168.4.1');"
+                         "if(j.wifiConnected&&j.ip&&j.ip!='0.0.0.0'){text+='\\n\\nConnected: http://'+j.ip+'/';st('ok',text)}"
+                         "else if(!s.classList.contains('err'))st('',text+'\\n\\nWaiting for Wi-Fi settings.')}catch(e){st('err','Status error: '+e.message)}}"
+                         "f.onsubmit=async e=>{e.preventDefault();let body={ssid:document.getElementById('ssid').value.trim(),password:document.getElementById('password').value};"
+                         "if(!body.ssid){st('err','SSID is required');return}st('', 'Saving Wi-Fi...');"
+                         "try{let r=await fetch('/api/provision/wifi',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});let text=await r.text();let j={};try{j=JSON.parse(text)}catch(_){}"
+                         "if(!r.ok||j.ok===false)throw new Error(j.error||text||('HTTP '+r.status));st('ok','Wi-Fi saved. Connecting to '+body.ssid+'...');setTimeout(poll,1200)}catch(e){st('err','Save failed: '+e.message)}};"
+                         "setInterval(poll,2000);poll();"
+                         "</script></main></body></html>"));
+    return;
+#else
+
     const String savedSsid = _htmlEscape(String(gConfig.wifiSsid));
     String page;
     page.reserve(9000);
@@ -348,6 +402,7 @@ setInterval(st,1500);document.getElementById('scan').onclick=scan;document.getEl
 
     server.sendHeader("Cache-Control", "no-store");
     server.send(200, "text/html; charset=utf-8", page);
+#endif
 }
 static void _redirectProvisionHome(AlarmWebServer& server)
 {

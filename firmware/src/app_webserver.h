@@ -446,15 +446,28 @@ void handleGetInfo()
     char deviceId[7] = {0};
     platformUniqueSuffix(deviceId, sizeof(deviceId));
     doc["deviceId"] = deviceId;
+    char mqttClientId[32] = {0};
+    mqttBuildClientId(mqttClientId, sizeof(mqttClientId));
+    doc["mqttClientId"] = mqttClientId;
     doc["ip"] = WiFi.localIP().toString();
     doc["firmwareVersion"] = FIRMWARE_VERSION;
     doc["schemaVersion"] = CONFIG_SCHEMA_VERSION;
     doc["configVersion"] = CONFIG_DOCUMENT_VERSION;
     doc["nightSafetyCap"] = NIGHT_BRIGHTNESS_SAFE_CAP;
+#if defined(ESP8266)
+    doc["esp8266Lite"] = true;
+#else
+    doc["esp8266Lite"] = false;
+#endif
     doc["apSsid"] = provisioningApSsidForLabels();
     doc["apPassword"] = AP_PASSWORD;
     doc["ledPin"] = LED_PIN;
+    doc["buzzerEnabled"] = (bool)ALARMMINI_FEATURE_BUZZER;
+#if ALARMMINI_FEATURE_BUZZER
     doc["buzzerPin"] = BUZZER_PIN;
+#else
+    doc["buzzerPin"] = -1;
+#endif
     JsonObject logCategoryBits = doc.createNestedObject("logCategoryBits");
     logCategoryBits["system"] = LOG_CAT_SYSTEM;
     logCategoryBits["wifi"] = LOG_CAT_WIFI;
@@ -542,10 +555,15 @@ void handleTestBuzzer()
     if (!ensureAuthorized())
         return;
 
+#if ALARMMINI_FEATURE_BUZZER
     buzzerTest(gServer.arg("alert") == "1");
     LOG_INFO(LOG_CAT_TEST, "Buzzer test requested");
     addCors();
     gServer.send(200, "text/plain", "OK");
+#else
+    addCors();
+    gServer.send(404, "application/json", "{\"ok\":false,\"error\":\"buzzer_disabled\"}");
+#endif
 }
 
 void handleTestRegionAlert()
@@ -594,6 +612,47 @@ void handleCalibrateDone()
     LOG_INFO(LOG_CAT_CALIBRATION, "Calibration mode finished");
     addCors();
     gServer.send(200, "text/plain", "OK");
+}
+
+void handleSaveCalibrationLite()
+{
+    if (!ensureAuthorized())
+        return;
+
+    if (!gServer.hasArg("plain"))
+    {
+        addCors();
+        gServer.send(400, "application/json", "{\"ok\":false,\"reason\":\"missing_body\"}");
+        return;
+    }
+
+    StaticJsonDocument<512> doc;
+    const DeserializationError err = deserializeJson(doc, gServer.arg("plain"));
+    JsonArrayConst leds = doc["l"].as<JsonArrayConst>();
+    if (err || leds.isNull() || leds.size() > MAX_LEDS)
+    {
+        addCors();
+        gServer.send(422, "application/json", "{\"ok\":false,\"reason\":\"bad_led_map\"}");
+        return;
+    }
+
+    for (int i = 0; i < MAX_LEDS; i++)
+    {
+        int value = -1;
+        if (i < (int)leds.size())
+            value = leds[i] | -1;
+        gConfig.ledRegion[i] = (value >= 0 && value < REGIONS_COUNT) ? value : -1;
+    }
+
+    if (!storageSaveCurrentConfig(true))
+    {
+        addCors();
+        gServer.send(500, "application/json", "{\"ok\":false,\"reason\":\"save_failed\"}");
+        return;
+    }
+
+    addCors();
+    gServer.send(200, "application/json", "{\"ok\":true}");
 }
 
 void handleRestart()
@@ -699,6 +758,9 @@ void handleHealth()
     doc["wifiStatus"] = WiFi.status();
     doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
     doc["mqttConnected"] = gMqttConnected;
+    char mqttClientId[32] = {0};
+    mqttBuildClientId(mqttClientId, sizeof(mqttClientId));
+    doc["mqttClientId"] = mqttClientId;
     doc["mqttDataStale"] = gMqttDataStale;
     doc["mqttUsingFallbackSnapshot"] = gUsingFallbackSnapshot;
     doc["internetConnected"] = gInternetConnected;
@@ -740,11 +802,15 @@ void handleSelfTest()
     doc["heapFree"] = ESP.getFreeHeap();
     doc["heapFragPct"] = platformHeapFragmentationPct();
     doc["ledCount"] = gConfig.ledCount;
-    doc["buzzerEnabled"] = gConfig.buzzer.enabled;
+    doc["buzzerEnabled"] = (bool)(ALARMMINI_FEATURE_BUZZER && gConfig.buzzer.enabled);
     doc["ok"] =
         (doc["wifiConnected"].as<bool>() || strlen(gConfig.wifiSsid) == 0) &&
         doc["webAssetsReady"].as<bool>() &&
+#if defined(ESP8266)
+        (doc["heapFree"].as<unsigned long>() > 3500UL);
+#else
         (doc["heapFree"].as<unsigned long>() > 10000UL);
+#endif
 
     sendJson(doc);
 }
@@ -778,6 +844,7 @@ void webserverInit()
     gServer.on("/api/testRegionAlert", HTTP_GET, handleTestRegionAlert);
     gServer.on("/api/calibrate/led", HTTP_GET, handleCalibrateLed);
     gServer.on("/api/calibrate/done", HTTP_GET, handleCalibrateDone);
+    gServer.on("/api/calibrate/save", HTTP_POST, handleSaveCalibrationLite);
     gServer.on("/api/restart", HTTP_GET, handleRestart);
     gServer.on("/api/selftest", HTTP_GET, handleSelfTest);
     gServer.on("/config", HTTP_GET, handleConfigApiGet);

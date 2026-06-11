@@ -8,7 +8,11 @@
 
 extern AppConfig gConfig;
 
+#if defined(ESP8266)
+constexpr size_t CONFIG_JSON_CAPACITY = 3584;
+#else
 constexpr size_t CONFIG_JSON_CAPACITY = 4096;
+#endif
 constexpr uint8_t CONFIG_SCHEMA_VERSION = 5;
 constexpr uint8_t CONFIG_DOCUMENT_VERSION = 1;
 

@@ -28,6 +28,7 @@ type DeviceInfo = {
   ip: string;
   mdns: string;
   hostname: string;
+  mqttClientId: string;
   adminPassword: string;
   apSsid: string;
   apPassword: string;
@@ -86,7 +87,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.4";
+const SITE_VERSION = "2.0.5";
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -129,6 +130,7 @@ const EMPTY_INFO: DeviceInfo = {
   ip: "-",
   mdns: "-",
   hostname: "-",
+  mqttClientId: "-",
   adminPassword: "-",
   apSsid: "AlarmMap-Setup",
   apPassword: "",
@@ -793,6 +795,7 @@ export default function Page() {
       ip: String(payload?.ip ?? info.ip ?? "-"),
       mdns: String(payload?.mdns ?? info.mdns ?? "-"),
       hostname: String(payload?.hostname ?? info.hostname ?? "-"),
+      mqttClientId: String(payload?.mqttClientId ?? info.mqttClientId ?? "-"),
       adminPassword: String(payload?.adminPassword ?? info.adminPassword ?? "-"),
       apSsid: String(payload?.apSsid ?? info.apSsid ?? "AlarmMap-Setup"),
       apPassword: String(payload?.apPassword ?? info.apPassword ?? ""),
@@ -1032,6 +1035,7 @@ export default function Page() {
       ip: String(obj?.ip ?? info.ip ?? "-"),
       mdns: String(obj?.mdns ?? info.mdns ?? "-"),
       hostname: String(obj?.hostname ?? info.hostname ?? "-"),
+      mqttClientId: String(obj?.mqttClientId ?? info.mqttClientId ?? "-"),
       adminPassword: String(obj?.adminPassword ?? info.adminPassword ?? "-"),
       apSsid: String(obj?.apSsid ?? info.apSsid ?? "AlarmMap-Setup"),
       apPassword: String(obj?.apPassword ?? info.apPassword ?? ""),
@@ -1529,6 +1533,7 @@ export default function Page() {
             <div><span>IP</span><strong>{info.ip}</strong></div>
             <div><span>mDNS</span><strong>{info.mdns}</strong></div>
             <div><span>Hostname</span><strong>{info.hostname}</strong></div>
+            <div><span>MQTT Client ID</span><strong>{info.mqttClientId}</strong></div>
             <div><span>Admin пароль</span><strong>{info.adminPassword}</strong></div>
             <div><span>AP SSID</span><strong>{info.apSsid}</strong></div>
             <div><span>Reset reason</span><strong>{info.resetReason}</strong></div>

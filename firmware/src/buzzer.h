@@ -6,6 +6,8 @@
 #include "alerts.h"
 #include "platform_audio.h"
 
+#if ALARMMINI_FEATURE_BUZZER
+
 #define NOTE_C4 262
 #define NOTE_D4 294
 #define NOTE_E4 330
@@ -93,3 +95,20 @@ void buzzerHandle() {
         gPlaying = false;
     }
 }
+
+#else
+
+void buzzerInit() {
+    LOG_INFO(LOG_CAT_SYSTEM, "Buzzer disabled in ESP8266 Lite build");
+}
+
+void buzzerPlay(bool) {
+}
+
+void buzzerTest(bool) {
+}
+
+void buzzerHandle() {
+}
+
+#endif

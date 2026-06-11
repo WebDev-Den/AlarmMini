@@ -26,6 +26,22 @@
 
 #define REGIONS_COUNT 25
 
+#ifndef ALARMMINI_FEATURE_BUZZER
+#if defined(ESP8266)
+#define ALARMMINI_FEATURE_BUZZER 0
+#else
+#define ALARMMINI_FEATURE_BUZZER 1
+#endif
+#endif
+
+#ifndef ALARMMINI_FEATURE_WIFI_SCAN_PORTAL
+#if defined(ESP8266)
+#define ALARMMINI_FEATURE_WIFI_SCAN_PORTAL 0
+#else
+#define ALARMMINI_FEATURE_WIFI_SCAN_PORTAL 1
+#endif
+#endif
+
 const char* const REGIONS[REGIONS_COUNT] = {
     "Вінницька область",         // 0
     "Волинська область",         // 1

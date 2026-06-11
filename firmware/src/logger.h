@@ -25,8 +25,13 @@ constexpr uint16_t LOG_MASK_ALL = LOG_CAT_SYSTEM | LOG_CAT_WIFI | LOG_CAT_INTERN
                                   LOG_CAT_MQTT | LOG_CAT_WEB | LOG_CAT_CONFIG |
                                   LOG_CAT_CALIBRATION | LOG_CAT_TEST;
 
+#if defined(ESP8266)
+constexpr size_t LOG_MESSAGE_LEN = 80;
+constexpr size_t LOG_BUFFER_SIZE = 18;
+#else
 constexpr size_t LOG_MESSAGE_LEN = 112;
 constexpr size_t LOG_BUFFER_SIZE = 80;
+#endif
 
 struct LogEntry
 {

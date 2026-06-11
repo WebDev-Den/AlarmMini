@@ -396,6 +396,7 @@ bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
     tmp.flush();
     tmp.close();
 
+#if !defined(ESP8266)
     DynamicJsonDocument writtenRoot(CONFIG_JSON_CAPACITY + 2048);
     if (!loadEnvelopeFromPath(CONFIG_TMP_PATH, writtenRoot))
     {
@@ -417,6 +418,7 @@ bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
         LOG_ERROR(LOG_CAT_CONFIG, "Written config verification failed: %s", verifyError[0] ? verifyError : "bad_crc");
         return false;
     }
+#endif
 
     LittleFS.remove(CONFIG_BAK_PATH);
     if (LittleFS.exists(CONFIG_PATH))
@@ -698,7 +700,15 @@ bool storageSaveConfigFromJson(JsonVariantConst configJson, bool forceWrite, cha
     if (!storageLoadConfigFromJson(configJson, error, errorSize))
         return false;
 
-    return storageSaveCurrentConfig(forceWrite);
+    const uint32_t crc = computeConfigCrc(configJson);
+    if (!forceWrite && crc == gLastSavedCrc)
+        return true;
+
+    if (!writeEnvelopeAtomically(configJson, crc))
+        return false;
+
+    gLastSavedCrc = crc;
+    return true;
 }
 
 bool storageSaveCurrentConfig(bool forceWrite)

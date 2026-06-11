@@ -69,6 +69,28 @@ static constexpr char MQTT_SNAPSHOT_PATH[] = "/mqtt_snapshot.json";
 static bool _mqttSnapshotLoadedOnce = false;
 static void _rebuildEffectiveAlerts();
 
+inline const char *mqttPlatformTag()
+{
+#if defined(ESP8266)
+    return "ESP8266";
+#elif defined(ESP32) && CONFIG_IDF_TARGET_ESP32C3
+    return "ESP32C3";
+#else
+    return "GENERIC";
+#endif
+}
+
+inline void mqttBuildClientId(char *out, size_t outSize)
+{
+    if (!out || outSize == 0)
+        return;
+
+    char suffix[7] = {0};
+    platformUniqueSuffix(suffix, sizeof(suffix));
+    snprintf(out, outSize, "AlarmMini-%s-%s", mqttPlatformTag(), suffix);
+    out[outSize - 1] = '\0';
+}
+
 static bool _saveMqttSnapshot()
 {
     StaticJsonDocument<256> doc;
@@ -299,8 +321,8 @@ bool _mqttConnect() {
     _mqttWifi.setTimeout(1000);
     _mqttWifi.stop();
 
-    char clientId[24];
-    snprintf(clientId, sizeof(clientId), "alarm-map-%06X", platformChipId());
+    char clientId[32];
+    mqttBuildClientId(clientId, sizeof(clientId));
 
     bool ok = strlen(gConfig.mqttUser)
         ? _mqtt.connect(clientId, gConfig.mqttUser, gConfig.mqttPass)
