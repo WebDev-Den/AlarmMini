@@ -87,7 +87,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.5";
+const SITE_VERSION = "2.0.6";
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -1544,9 +1544,9 @@ export default function Page() {
             <div className="section-head">
               <div>
                 <h3>QR / Друк наклейок</h3>
-                <p className="hint">QR формується з IP, mDNS і пароля адмінки, які щойно зчитані з плати.</p>
+                <p className="hint">Готові наклейки для корпусу: окремо web-доступ і окремо AP налаштування.</p>
               </div>
-              <div className="row gap no-print">
+              <div className="qr-actions no-print">
                 <button className="btn primary" disabled={portState !== "connected" || flashBusy} onClick={() => void refreshInfoAndLabels()}>
                   Прочитати з плати
                 </button>
@@ -1556,34 +1556,39 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="row gap no-print">
-              <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void checkWebInterface()}>
-                Перевірити web UI
-              </button>
-              <a className="btn" href={adminUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!adminUrl}>
-                Відкрити web panel
-              </a>
-              <a className="btn" href={healthUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!healthUrl}>
-                Відкрити /health
-              </a>
-              {ipWebUrl ? (
-                <a className="btn" href={ipWebUrl} target="_blank" rel="noreferrer">
-                  Відкрити по IP
+            <div className="qr-toolbelt no-print">
+              <div className="qr-tool-actions">
+                <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void checkWebInterface()}>
+                  Перевірити web UI
+                </button>
+                <a className="btn" href={adminUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!adminUrl}>
+                  Відкрити web panel
                 </a>
-              ) : null}
-              <div className={`status-pill ${isApModeIp ? "warn" : ""}`}>{webCheckStatus}</div>
+                <a className="btn" href={healthUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!healthUrl}>
+                  Відкрити /health
+                </a>
+                {ipWebUrl ? (
+                  <a className="btn" href={ipWebUrl} target="_blank" rel="noreferrer">
+                    Відкрити по IP
+                  </a>
+                ) : null}
+              </div>
+              <div className={`qr-status ${isApModeIp ? "warn" : ""}`}>{webCheckStatus}</div>
             </div>
 
             <div className="qr-label-grid compact">
               <article className="qr-label-card">
                 <div className="label-copy">
                   <span>Admin</span>
-                <h3>{isApModeIp ? "Wi‑Fi setup" : "Web panel"}</h3>
-                <p>URL: {deviceBaseUrl || "-"}</p>
-                <p>{isApModeIp ? "Setup portal" : `Password: ${info.adminPassword}`}</p>
+                  <h3>{isApModeIp ? "Wi‑Fi setup" : "Web panel"}</h3>
+                  <p className="label-note">Адмін-доступ для власника карти</p>
+                  <dl>
+                    <div><dt>URL</dt><dd>{deviceBaseUrl || "-"}</dd></div>
+                    <div><dt>Password</dt><dd>{isApModeIp ? "Setup portal" : info.adminPassword}</dd></div>
+                  </dl>
                 </div>
-                {adminQrSrc ? <img src={adminQrSrc} alt="QR web panel" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
-                <div className="row gap no-print">
+                <div className="qr-visual">
+                  {adminQrSrc ? <img src={adminQrSrc} alt="QR web panel" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
                   <button className="btn" disabled={!adminQrSrc} onClick={() => downloadQrPng(adminQrSrc, `${info.hostname || "alarmmini"}-admin.png`)}>
                     PNG
                   </button>
@@ -1594,11 +1599,14 @@ export default function Page() {
                 <div className="label-copy">
                   <span>AP</span>
                   <h3>Access point</h3>
-                  <p>SSID: {info.apSsid}</p>
-                  <p>Password: {info.apPassword || "Без пароля"}</p>
+                  <p className="label-note">Швидке підключення до режиму налаштування</p>
+                  <dl>
+                    <div><dt>SSID</dt><dd>{info.apSsid}</dd></div>
+                    <div><dt>Password</dt><dd>{info.apPassword || "Без пароля"}</dd></div>
+                  </dl>
                 </div>
-                {apQrSrc ? <img src={apQrSrc} alt="QR access point" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
-                <div className="row gap no-print">
+                <div className="qr-visual">
+                  {apQrSrc ? <img src={apQrSrc} alt="QR access point" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
                   <button className="btn" disabled={!apQrSrc} onClick={() => downloadQrPng(apQrSrc, `${info.hostname || "alarmmini"}-ap.png`)}>
                     PNG
                   </button>
