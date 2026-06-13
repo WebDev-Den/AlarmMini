@@ -14,6 +14,7 @@ The project includes:
 - LittleFS web interface served directly from the board;
 - UART service protocol for factory setup and recovery;
 - Vercel web installer for flashing, config backup/restore, and QR label printing;
+- end-user user manual in PDF/DOCX format for setup and onboarding;
 - GitHub Actions CI/CD for firmware builds, release binaries, and Vercel deployment;
 - STL/manual production assets for enclosure and assembly.
 
@@ -46,7 +47,27 @@ The firmware was optimized for small embedded boards: low RAM usage, non-blockin
 
 - `firmware/` - embedded firmware, PlatformIO project, LittleFS web assets, scripts, config schema, STL files.
 - `vercel/` - Next.js/Vercel installer for flashing boards and managing full config JSON.
+- `docs/` - customer-facing user manual sources and exported PDF/DOCX files.
 - `.github/workflows/` - CI/CD pipelines for firmware, release assets, security scan, and Vercel deploy.
+
+## User Manual
+
+The repository includes a ready-to-share end-user manual for customers who need
+clear setup instructions without reading technical documentation first.
+
+Available files:
+
+- `docs/AlarmMini_User_Manual_uk.pdf` - polished Ukrainian PDF manual for end users.
+- `docs/AlarmMini_User_Manual_uk.docx` - editable source version of the same manual.
+- `docs/build_user_manual.py` - generator script used to rebuild the manual.
+
+The manual currently covers:
+
+- first Wi-Fi setup via provisioning AP `AlarmMap-Setup-XXXXXX`;
+- opening the setup page at `http://192.168.4.1`;
+- firmware flashing through `https://alarmmini.vercel.app`;
+- basic MQTT, web-panel, QR-label, and LED calibration steps;
+- Telegram contact path for writing to the author if the user needs help.
 
 Generated folders are ignored:
 
