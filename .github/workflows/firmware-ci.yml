@@ -38,6 +38,24 @@ jobs:
       - name: Build ESP8266 filesystem image
         run: pio run -t buildfs -e esp8266
 
+      - name: Install 32-bit host test compiler
+        run: sudo apt-get update && sudo apt-get install -y g++-multilib
+
+      - name: Test power-loss recovery and runtime regressions
+        run: |
+          python tests/storage_fault_injection.py
+          python tests/runtime_regressions.py
+          python tests/wifi_runtime_test.py
+          python tests/optimization_test.py
+
+      - name: Setup Node for embedded portal tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Test embedded setup portal
+        run: node tests/provision_ui_test.js
+
       - name: Upload firmware CI binaries
         uses: actions/upload-artifact@v4
         with:

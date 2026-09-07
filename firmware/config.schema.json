@@ -106,7 +106,7 @@
       "type": "object",
       "required": ["s", "p"],
       "properties": {
-        "s": { "type": "string", "maxLength": 63 },
+        "s": { "type": "string", "maxLength": 32, "description": "Wi-Fi SSID: at most 32 UTF-8 bytes; whitespace is significant" },
         "p": { "type": "string", "maxLength": 63 }
       }
     },

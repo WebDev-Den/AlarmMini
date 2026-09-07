@@ -1,4 +1,5 @@
 #pragma once
+#include "buffered_writer.h"
 #include "platform_compat.h"
 #include <ArduinoJson.h>
 #include "config.h"
@@ -199,10 +200,17 @@ bool ensureAuthorized()
 void sendJson(JsonDocument &doc, int status = 200)
 {
     addCors();
-    gServer.setContentLength(measureJson(doc));
+    if (doc.capacity() == 0 || doc.overflowed()) {
+        gServer.send(503, "application/json", "{\"ok\":false,\"reason\":\"json_capacity\"}");
+        return;
+    }
+    const size_t expectedBytes = measureJson(doc);
+    gServer.setContentLength(expectedBytes);
     gServer.send(status, "application/json", "");
     WiFiClient client = gServer.client();
-    serializeJson(doc, client);
+    BufferedWriter<WiFiClient> writer(client);
+    const size_t bytes = serializeJson(doc, writer);
+    if (!writer.flush() || bytes != expectedBytes) client.stop();
 }
 
 void mergeMissingRecursive(JsonVariant dst, JsonVariantConst src)
@@ -324,6 +332,10 @@ bool persistConfigFromRequestJson(const String &body,
     }
 
     constexpr size_t SAVE_DOC_CAPACITY = CONFIG_JSON_CAPACITY + 512;
+    if (body.length() > SAVE_DOC_CAPACITY) {
+        if (error && errorSize) snprintf(error, errorSize, "body_too_large");
+        return false;
+    }
 
     DynamicJsonDocument requestDoc(SAVE_DOC_CAPACITY);
     const DeserializationError parseErr = deserializeJson(requestDoc, body);
@@ -608,7 +620,7 @@ void handleCalibrateDone()
     gCalibrationActive = false;
     gCalibrationIndex = -1;
     strip.clear();
-    strip.show();
+    ledsShowIfChanged();
     LOG_INFO(LOG_CAT_CALIBRATION, "Calibration mode finished");
     addCors();
     gServer.send(200, "text/plain", "OK");
@@ -636,6 +648,8 @@ void handleSaveCalibrationLite()
         return;
     }
 
+    int8_t previousRegions[MAX_LEDS];
+    memcpy(previousRegions, gConfig.ledRegion, sizeof(previousRegions));
     for (int i = 0; i < MAX_LEDS; i++)
     {
         int value = -1;
@@ -646,6 +660,7 @@ void handleSaveCalibrationLite()
 
     if (!storageSaveCurrentConfig(true))
     {
+        memcpy(gConfig.ledRegion, previousRegions, sizeof(previousRegions));
         addCors();
         gServer.send(500, "application/json", "{\"ok\":false,\"reason\":\"save_failed\"}");
         return;
@@ -819,9 +834,11 @@ void webserverInit()
 {
     collectCookieHeader(gServer);
     checkWebAssets();
+    startupProvisioningRegisterRoutes(gServer);
 
     gServer.on("/", HTTP_GET, []()
                {
+                   if (startupServeProvisioningPage(gServer)) return;
                    gServer.sendHeader("Location", "/index.html");
                    gServer.send(302, "text/plain", "");
                });
@@ -854,6 +871,7 @@ void webserverInit()
 
     gServer.onNotFound([]()
                        {
+                           if (startupServeProvisioningPage(gServer)) return;
                            if (tryServeStaticWithGzipFallback(gServer.uri()))
                                return;
                            gServer.send(404, "text/plain", "Not found");

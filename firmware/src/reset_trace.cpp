@@ -15,6 +15,7 @@ constexpr size_t TRACE_REASON_MAX = 96;
 constexpr size_t TRACE_INFO_MAX = 224;
 constexpr size_t TRACE_STAGE_MAX = 40;
 constexpr size_t TRACE_LOG_MAX_BYTES = 8192;
+constexpr uint32_t TRACE_WRITE_INTERVAL_MS = 30000UL;
 
 struct TraceState
 {
@@ -26,6 +27,9 @@ struct TraceState
 };
 
 TraceState gTrace{};
+bool gTraceDirty = false;
+bool gBootLogPending = false;
+uint32_t gLastTraceWriteMs = 0;
 
 void copyBounded(char *dst, size_t size, const char *value)
 {
@@ -49,16 +53,19 @@ bool saveTraceFile()
     if (!tmp)
         return false;
 
-    if (serializeJson(doc, tmp) == 0 || tmp.getWriteError())
+    const size_t expected = measureJson(doc);
+    const size_t written = serializeJson(doc, tmp);
+    tmp.flush();
+    if (doc.overflowed() || written != expected || tmp.getWriteError())
     {
         tmp.close();
         LittleFS.remove(TRACE_TMP_PATH);
         return false;
     }
 
-    tmp.flush();
     tmp.close();
-    LittleFS.remove(TRACE_PATH);
+    // LittleFS rename replaces an existing file atomically. Unlinking first
+    // loses the previous trace if power drops between these operations.
     return LittleFS.rename(TRACE_TMP_PATH, TRACE_PATH);
 }
 
@@ -78,19 +85,34 @@ void appendTraceLogLine(const char *line)
         {
             File in = LittleFS.open(TRACE_LOG_PATH, "r");
             File out = LittleFS.open("/reset_trace.cut", "w");
+            bool copied = false;
             if (in && out)
             {
                 const size_t skip = currentSize / 2;
-                in.seek(skip, SeekSet);
-                while (in.available())
-                    out.write((uint8_t)in.read());
+                if (in.seek(skip, SeekSet))
+                {
+                    size_t remaining = currentSize - skip;
+                    uint8_t buffer[128];
+                    while (remaining)
+                    {
+                        const size_t count = in.read(buffer, min(remaining, sizeof(buffer)));
+                        if (!count || out.write(buffer, count) != count)
+                            break;
+                        remaining -= count;
+                        yield();
+                    }
+                    out.flush();
+                    copied = remaining == 0 && !out.getWriteError();
+                }
             }
             if (in)
                 in.close();
             if (out)
                 out.close();
-            LittleFS.remove(TRACE_LOG_PATH);
-            LittleFS.rename("/reset_trace.cut", TRACE_LOG_PATH);
+            if (copied)
+                LittleFS.rename("/reset_trace.cut", TRACE_LOG_PATH);
+            else
+                LittleFS.remove("/reset_trace.cut");
         }
     }
 
@@ -141,22 +163,38 @@ void resetTraceInit()
     }
 
     gTrace.bootCount += 1UL;
-
-    if (!saveTraceFile())
-    {
-        LOG_WARN(LOG_CAT_SYSTEM, "reset_trace: cannot persist initial trace");
-    }
-    logBootRecord();
+    // Power can bounce repeatedly at startup. Diagnostics must not add flash
+    // writes to each short-lived boot before the supply has had time to settle.
+    gTraceDirty = true;
+    gBootLogPending = true;
+    gLastTraceWriteMs = millis();
 }
 
 void resetTraceSetStage(const char *stage, bool persist)
 {
     copyBounded(gTrace.stage, sizeof(gTrace.stage), stage ? stage : "unknown");
     gTrace.stageAtMs = millis();
-    if (persist)
+    gTraceDirty = gTraceDirty || persist;
+}
+
+void resetTraceHandle()
+{
+    const uint32_t now = millis();
+    if (!gTraceDirty || (uint32_t)(now - gLastTraceWriteMs) < TRACE_WRITE_INTERVAL_MS)
+        return;
+
+    // Limit retries as well as successful writes if the filesystem is failing.
+    gLastTraceWriteMs = now;
+    if (!saveTraceFile())
     {
-        if (!saveTraceFile())
-            LOG_WARN(LOG_CAT_SYSTEM, "reset_trace: cannot persist stage '%s'", gTrace.stage);
+        LOG_WARN(LOG_CAT_SYSTEM, "reset_trace: cannot persist stage '%s'", gTrace.stage);
+        return;
+    }
+    gTraceDirty = false;
+    if (gBootLogPending)
+    {
+        logBootRecord();
+        gBootLogPending = false;
     }
 }
 

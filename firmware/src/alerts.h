@@ -2,6 +2,11 @@
 #include "platform_compat.h"
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
+#include <atomic>
+#include <lwip/dns.h>
+#if defined(ESP32)
+#include <lwip/tcpip.h>
+#endif
 #include "config.h"
 #include "storage.h"
 #include "logger.h"
@@ -31,7 +36,32 @@ uint32_t gWifiRecoveryAttempts = 0;
 uint32_t gInternetStateChanges = 0;
 unsigned long gLastMqttMessageAt = 0;
 
-static WiFiClient    _mqttWifi;
+// PubSubClient's timeout applies to each byte, not to a whole packet. Bound
+// total packet processing too, so a stalled/slow broker cannot monopolize loop().
+class MqttWiFiClient : public WiFiClient {
+public:
+    void beginOperation() { _startedAt = millis(); _bounded = true; }
+    void endOperation() { _bounded = false; }
+    int available() override {
+        if (_bounded && millis() - _startedAt >= 1500UL) {
+            WiFiClient::stop();
+            return 0;
+        }
+        const int count = WiFiClient::available();
+        if (!count) yield();
+        return count;
+    }
+#if defined(ESP32)
+    int connect(IPAddress ip, uint16_t port) override {
+        return WiFiClient::connect(ip, port, 1000);
+    }
+#endif
+private:
+    unsigned long _startedAt = 0;
+    bool _bounded = false;
+};
+
+static MqttWiFiClient _mqttWifi;
 static PubSubClient  _mqtt(_mqttWifi);
 static unsigned long _mqttLastReconnect = 0;
 static int           _mqttReconnectDelay = 2000;
@@ -42,10 +72,8 @@ static constexpr unsigned long INTERNET_CHECK_INTERVAL_MS = 60000UL;
 static constexpr unsigned long AUTONOMOUS_HEALTH_INTERVAL_MS = 60000UL;
 static constexpr unsigned long MQTT_STATUS_REFRESH_INTERVAL_MS = 60000UL;
 static constexpr unsigned long MQTT_STALE_RECONNECT_MS = 10UL * 60UL * 1000UL;
-static constexpr unsigned long WIFI_RECOVERY_INTERVAL_MS = 60000UL;
 static constexpr unsigned long STARTUP_FAST_CHECK_WINDOW_MS = 60000UL;
 static constexpr unsigned long STARTUP_INTERNET_CHECK_INTERVAL_MS = 15000UL;
-static constexpr unsigned long STARTUP_WIFI_RECOVERY_INTERVAL_MS = 15000UL;
 static constexpr unsigned long TRANSPORT_DROP_DEBOUNCE_MS = 5000UL;
 static constexpr unsigned long TRANSPORT_STABLE_BEFORE_MQTT_MS = 8000UL;
 static constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 1;
@@ -64,9 +92,65 @@ static bool _mqttHasResolvedIp = false;
 static unsigned long _autonomousLastHealthAt = 0;
 static unsigned long _mqttLastStatusRefreshAt = 0;
 static unsigned long _mqttLastStaleReconnectAt = 0;
-static unsigned long _wifiLastRecoveryAt = 0;
 static constexpr char MQTT_SNAPSHOT_PATH[] = "/mqtt_snapshot.json";
 static bool _mqttSnapshotLoadedOnce = false;
+static bool _mqttSnapshotDirty = false;
+static bool _mqttSnapshotSaved = false;
+static unsigned long _mqttSnapshotLastAttemptAt = 0;
+static bool _mqttSnapshotAttempted = false;
+static constexpr unsigned long MQTT_SNAPSHOT_WRITE_INTERVAL_MS = 60000UL;
+static constexpr size_t MQTT_SNAPSHOT_DOC_CAPACITY = JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(REGIONS_COUNT) + 32;
+
+// Persistent callback storage is required: DNS can finish after a broker setting
+// changes or the network goes down. ESP32 runs these callbacks on the TCP/IP task.
+struct MqttDnsQuery {
+    char host[MQTT_HOST_MAXLEN] = {0};
+    std::atomic<uint8_t> state{0}; // idle, pending, success, failure
+    uint32_t address = 0;
+};
+static MqttDnsQuery _mqttDnsQuery;
+static bool _mqttDnsAttempted = false;
+
+static void _mqttDnsFound(const char *, const ip_addr_t *address, void *) {
+    _mqttDnsQuery.address = address && IP_IS_V4(address)
+        ? ip4_addr_get_u32(ip_2_ip4(address)) : 0;
+    _mqttDnsQuery.state.store(_mqttDnsQuery.address ? 2 : 3, std::memory_order_release);
+}
+
+static void _mqttStartDnsResolve(void *) {
+    ip_addr_t address;
+    const err_t result = dns_gethostbyname(_mqttDnsQuery.host, &address, _mqttDnsFound, nullptr);
+    if (result == ERR_OK) _mqttDnsFound(nullptr, &address, nullptr);
+    else if (result != ERR_INPROGRESS) _mqttDnsFound(nullptr, nullptr, nullptr);
+}
+
+static void _mqttResolveHost(unsigned long now) {
+    const uint8_t state = _mqttDnsQuery.state.load(std::memory_order_acquire);
+    if (state == 1) return;
+    if (state >= 2) {
+        if (strcmp(_mqttDnsQuery.host, gConfig.mqttHost) == 0) {
+            if (state == 2) {
+                _mqttResolvedIp = IPAddress(_mqttDnsQuery.address);
+                _mqttHasResolvedIp = true;
+            } else if (now - _mqttLastDnsLogAt > 10000UL) {
+                _mqttLastDnsLogAt = now;
+                LOG_WARN(LOG_CAT_MQTT, "DNS resolve failed for '%s'", gConfig.mqttHost);
+            }
+        }
+        _mqttDnsQuery.state.store(0, std::memory_order_release);
+    }
+    if (_mqttDnsAttempted && now - _mqttLastDnsResolveAt < MQTT_DNS_REFRESH_MS) return;
+    _mqttLastDnsResolveAt = now;
+    _mqttDnsAttempted = true;
+    snprintf(_mqttDnsQuery.host, sizeof(_mqttDnsQuery.host), "%s", gConfig.mqttHost);
+    _mqttDnsQuery.state.store(1, std::memory_order_release);
+#if defined(ESP32)
+    if (tcpip_try_callback(_mqttStartDnsResolve, nullptr) != ERR_OK)
+        _mqttDnsQuery.state.store(3, std::memory_order_release);
+#else
+    _mqttStartDnsResolve(nullptr);
+#endif
+}
 static void _rebuildEffectiveAlerts();
 
 inline const char *mqttPlatformTag()
@@ -93,23 +177,25 @@ inline void mqttBuildClientId(char *out, size_t outSize)
 
 static bool _saveMqttSnapshot()
 {
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<MQTT_SNAPSHOT_DOC_CAPACITY> doc;
     JsonArray states = doc.createNestedArray("states");
     for (int i = 0; i < REGIONS_COUNT; i++) {
         states.add(gMqttAlerts[i]);
     }
     doc["ts"] = millis();
+    if (doc.overflowed()) return false;
 
     File tmp = LittleFS.open("/mqtt_snapshot.tmp", "w");
     if (!tmp) return false;
-    if (serializeJson(doc, tmp) == 0 || tmp.getWriteError()) {
+    const size_t written = serializeJson(doc, tmp);
+    tmp.flush();
+    if (written != measureJson(doc) || tmp.getWriteError()) {
         tmp.close();
         LittleFS.remove("/mqtt_snapshot.tmp");
         return false;
     }
-    tmp.flush();
     tmp.close();
-    LittleFS.remove(MQTT_SNAPSHOT_PATH);
+    // LittleFS replaces the existing name atomically. Never remove the good copy.
     if (!LittleFS.rename("/mqtt_snapshot.tmp", MQTT_SNAPSHOT_PATH)) {
         LittleFS.remove("/mqtt_snapshot.tmp");
         return false;
@@ -124,13 +210,16 @@ static bool _loadMqttSnapshot()
     File f = LittleFS.open(MQTT_SNAPSHOT_PATH, "r");
     if (!f) return false;
 
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<MQTT_SNAPSHOT_DOC_CAPACITY> doc;
     const auto err = deserializeJson(doc, f);
     f.close();
     if (err) return false;
 
     JsonArrayConst arr = doc["states"].as<JsonArrayConst>();
-    if (arr.isNull()) return false;
+    if (arr.isNull() || arr.size() != REGIONS_COUNT) return false;
+    for (JsonVariantConst value : arr) {
+        if (!value.is<bool>()) return false;
+    }
 
     bool anyChanged = false;
     for (int i = 0; i < REGIONS_COUNT; i++) {
@@ -142,10 +231,24 @@ static bool _loadMqttSnapshot()
     gFetchOk = true;
     gMqttDataStale = true;
     gUsingFallbackSnapshot = true;
+    _mqttSnapshotSaved = true;
     if (anyChanged) {
         LOG_WARN(LOG_CAT_MQTT, "Applied fallback MQTT snapshot from LittleFS");
     }
     return true;
+}
+
+static void _mqttSnapshotTick(unsigned long now) {
+    if (!_mqttSnapshotDirty) return;
+    if (_mqttSnapshotAttempted && now - _mqttSnapshotLastAttemptAt < MQTT_SNAPSHOT_WRITE_INTERVAL_MS) return;
+    _mqttSnapshotAttempted = true;
+    _mqttSnapshotLastAttemptAt = now;
+    if (_saveMqttSnapshot()) {
+        _mqttSnapshotDirty = false;
+        _mqttSnapshotSaved = true;
+    } else {
+        LOG_WARN(LOG_CAT_MQTT, "Could not persist MQTT snapshot; keeping RAM state");
+    }
 }
 
 static void _formatLogClock(char* buffer, size_t size)
@@ -166,8 +269,13 @@ static void _formatLogClock(char* buffer, size_t size)
 }
 
 static void _applyEffectiveAlerts(const bool* nextStates) {
-    gAlertsChanged = false;
     unsigned long now = millis();
+
+    // Preserve the state before the first unconsumed change. Test updates and
+    // MQTT callbacks can both run before buzzerHandle in one loop iteration.
+    if (!gAlertsChanged) {
+        memcpy(gPrevAlerts, gAlerts, sizeof(gPrevAlerts));
+    }
 
     for (int i = 0; i < REGIONS_COUNT; i++) {
         bool next = nextStates[i];
@@ -175,7 +283,6 @@ static void _applyEffectiveAlerts(const bool* nextStates) {
             gAlertsChanged = true;
             gRegionStateChangedAt[i] = now;
         }
-        gPrevAlerts[i] = gAlerts[i];
         gAlerts[i] = next;
     }
 }
@@ -228,7 +335,6 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (length == 0 || length > MQTT_MAX_PAYLOAD_BYTES) {
         gMqttPayloadErrors++;
         LOG_WARN(LOG_CAT_MQTT, "Payload size %u is out of safe bounds", length);
-        gFetchOk = false;
         return;
     }
 
@@ -236,17 +342,29 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (deserializeJson(doc, payload, length) || !doc.is<JsonArray>()) {
         gMqttPayloadErrors++;
         LOG_WARN(LOG_CAT_MQTT, "Invalid payload, expected [0,1,0,...]");
-        gFetchOk = false;
         return;
     }
 
     JsonArray arr = doc.as<JsonArray>();
+    if (arr.size() != REGIONS_COUNT) {
+        gMqttPayloadErrors++;
+        LOG_WARN(LOG_CAT_MQTT, "Incomplete state array: %u regions", (unsigned)arr.size());
+        return;
+    }
+    for (JsonVariantConst value : arr) {
+        if (!value.is<bool>() && !(value.is<int>() && (value.as<int>() == 0 || value.as<int>() == 1))) {
+            gMqttPayloadErrors++;
+            LOG_WARN(LOG_CAT_MQTT, "Invalid region state; retaining previous states");
+            return;
+        }
+    }
     char eventTime[24];
     _formatLogClock(eventTime, sizeof(eventTime));
 
     for (int i = 0; i < REGIONS_COUNT; i++) {
         bool v = (i < (int)arr.size()) && arr[i].as<bool>();
         if (v != gMqttAlerts[i]) {
+            _mqttSnapshotDirty = true;
             LOG_INFO(LOG_CAT_MQTT, "Region '%s' -> %s at %s",
                      REGIONS[i],
                      v ? "ALERT" : "CLEAR",
@@ -261,12 +379,13 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     gUsingFallbackSnapshot = false;
     gMqttMessagesReceived++;
     gLastMqttMessageAt = millis();
-    _saveMqttSnapshot();
+    _mqttSnapshotDirty = _mqttSnapshotDirty || !_mqttSnapshotSaved;
     LOG_INFO(LOG_CAT_MQTT, "Received %d states%s",
              (int)arr.size(), gAlertsChanged ? " (changed)" : "");
 }
 
 bool _mqttConnect() {
+    if (WiFi.status() != WL_CONNECTED || WiFi.localIP()[0] == 0) return false;
     gMqttReconnectAttempts++;
     if (!strlen(gConfig.mqttHost)) {
         LOG_WARN(LOG_CAT_MQTT, "Broker is not configured");
@@ -291,19 +410,7 @@ bool _mqttConnect() {
         useResolvedIp = true;
     } else {
         const unsigned long now = millis();
-        if (!_mqttHasResolvedIp || (now - _mqttLastDnsResolveAt) > MQTT_DNS_REFRESH_MS) {
-            _mqttLastDnsResolveAt = now;
-            IPAddress resolved;
-            if (WiFi.hostByName(gConfig.mqttHost, resolved)) {
-                _mqttResolvedIp = resolved;
-                _mqttHasResolvedIp = true;
-            } else {
-                if ((now - _mqttLastDnsLogAt) > 10000UL) {
-                    _mqttLastDnsLogAt = now;
-                    LOG_WARN(LOG_CAT_MQTT, "DNS resolve failed for '%s'", gConfig.mqttHost);
-                }
-            }
-        }
+        _mqttResolveHost(now);
         if (_mqttHasResolvedIp) {
             hostIp = _mqttResolvedIp;
             useResolvedIp = true;
@@ -313,20 +420,24 @@ bool _mqttConnect() {
     if (useResolvedIp) {
         _mqtt.setServer(hostIp, gConfig.mqttPort);
     } else {
-        _mqtt.setServer(gConfig.mqttHost, gConfig.mqttPort);
+        return false; // DNS is pending/failed; never fall back to blocking lookup.
     }
     _mqtt.setCallback(_mqttCallback);
     _mqtt.setKeepAlive(60);
     _mqtt.setSocketTimeout(MQTT_SOCKET_TIMEOUT_S);
     _mqttWifi.setTimeout(1000);
     _mqttWifi.stop();
+    constexpr uint16_t packetCapacity = MQTT_MAX_PAYLOAD_BYTES + MQTT_TOPIC_MAXLEN + 9;
+    if (_mqtt.getBufferSize() != packetCapacity && !_mqtt.setBufferSize(packetCapacity)) return false;
 
     char clientId[32];
     mqttBuildClientId(clientId, sizeof(clientId));
 
+    _mqttWifi.beginOperation();
     bool ok = strlen(gConfig.mqttUser)
         ? _mqtt.connect(clientId, gConfig.mqttUser, gConfig.mqttPass)
         : _mqtt.connect(clientId);
+    _mqttWifi.endOperation();
 
     if (ok) {
         const char* t = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : "alerts/status";
@@ -370,9 +481,7 @@ static bool _mqttRefreshStatusSubscription(unsigned long now) {
     _mqttLastStatusRefreshAt = now;
 
     const char* t = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : "alerts/status";
-    _mqtt.unsubscribe(t);
-    yield();
-
+    // Re-subscribing delivers retained state without an unsubscribe delivery gap.
     if (_mqtt.subscribe(t, 1)) {
         gMqttSubscriptionRefreshes++;
         LOG_INFO(LOG_CAT_MQTT, "Subscription refreshed: '%s'", t);
@@ -389,29 +498,9 @@ static bool _mqttRefreshStatusSubscription(unsigned long now) {
     return false;
 }
 
-static void _wifiRecoveryTick(unsigned long now) {
-    if (WiFi.status() == WL_CONNECTED || !strlen(gConfig.wifiSsid)) {
-        return;
-    }
-    const unsigned long interval = now < STARTUP_FAST_CHECK_WINDOW_MS
-        ? STARTUP_WIFI_RECOVERY_INTERVAL_MS
-        : WIFI_RECOVERY_INTERVAL_MS;
-    if (now - _wifiLastRecoveryAt < interval) {
-        return;
-    }
-
-    _wifiLastRecoveryAt = now;
-    gWifiRecoveryAttempts++;
-    LOG_INFO(LOG_CAT_WIFI, "WiFi recovery attempt #%lu", (unsigned long)gWifiRecoveryAttempts);
-
-    // AP_STA keeps the setup portal reachable while STA retries the saved network.
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.begin(gConfig.wifiSsid, gConfig.wifiPass);
-}
-
 static void _mqttStaleWatchdogTick(unsigned long now) {
     if (!_mqtt.connected() || !gFetchOk || gLastMqttMessageAt == 0) {
-        gMqttDataStale = false;
+        gMqttDataStale = gUsingFallbackSnapshot || (gFetchOk && !_mqtt.connected());
         return;
     }
 
@@ -442,8 +531,11 @@ bool _checkInternetConnection() {
 }
 
 void alertsFetch() {
+    if (!_mqttSnapshotLoadedOnce) {
+        _mqttSnapshotLoadedOnce = true;
+        _loadMqttSnapshot();
+    }
     gInternetConnected = _checkInternetConnection();
-    _mqttConnect();
     _rebuildEffectiveAlerts();
 }
 
@@ -456,6 +548,9 @@ void alertsReloadClientConfig() {
     _mqttLastReconnect = 0;
     _mqttReconnectDelay = 2000;
     _transportStableSince = 0;
+    _mqttHasResolvedIp = false;
+    _mqttDnsAttempted = false;
+    _mqttLastDnsResolveAt = 0;
 }
 
 void alertsHandle() {
@@ -465,7 +560,11 @@ void alertsHandle() {
         _rebuildEffectiveAlerts();
     }
 
-    _wifiRecoveryTick(now);
+    if (!_mqttSnapshotLoadedOnce) {
+        _mqttSnapshotLoadedOnce = true;
+        _loadMqttSnapshot();
+    }
+    _mqttSnapshotTick(now);
 
     const unsigned long internetInterval = now < STARTUP_FAST_CHECK_WINDOW_MS
         ? STARTUP_INTERNET_CHECK_INTERVAL_MS
@@ -520,7 +619,9 @@ void alertsHandle() {
     if (_mqtt.connected()) {
         gMqttConnected = true;
         const unsigned long loopStartedAt = millis();
+        _mqttWifi.beginOperation();
         _mqtt.loop();
+        _mqttWifi.endOperation();
         const unsigned long loopElapsed = millis() - loopStartedAt;
         if (loopElapsed > MQTT_LOOP_GUARD_MS) {
             LOG_WARN(LOG_CAT_MQTT, "MQTT loop took %lums", loopElapsed);
@@ -563,9 +664,6 @@ void alertsHandle() {
     _mqttLastReconnect = now;
     LOG_INFO(LOG_CAT_MQTT, "Reconnecting...");
     _mqttConnect();
-    if (!_mqttSnapshotLoadedOnce) {
-        _mqttSnapshotLoadedOnce = _loadMqttSnapshot();
-    }
     yield();
 }
 
@@ -600,13 +698,6 @@ void alertsAutonomousHealthTick()
         return;
     }
 
-    // Link is back but MQTT still down: trigger reconnect path immediately.
-    if (!mqttOk && strlen(gConfig.mqttHost)) {
-        _transportDownSince = 0;
-        _transportStableSince = now;
-        _mqttLastReconnect = 0;
-        _mqttReconnectDelay = min(_mqttReconnectDelay, 5000);
-        LOG_INFO(LOG_CAT_MQTT, "Autonomous health: forcing MQTT reconnect attempt");
-        _mqttConnect();
-    }
+    // alertsHandle owns reconnect timing; a health/LED tick must not initiate a
+    // second blocking connection attempt in the same loop iteration.
 }

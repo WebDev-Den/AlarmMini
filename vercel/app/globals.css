@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg: #06101f;
   --card: rgba(10, 25, 44, 0.92);
   --card-2: rgba(8, 20, 36, 0.96);
@@ -808,3 +808,77 @@ input, .select, .config-area {
     box-shadow: none !important;
   }
 }
+
+/* Guided installer */
+:root { color-scheme: dark; }
+body { line-height: 1.5; }
+:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 4px; }
+button, a, input, select, summary { touch-action: manipulation; }
+.btn { min-height: 44px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.skip-link { position: fixed; top: -100px; left: 16px; z-index: 100; padding: 12px; background: #06101f; }
+.skip-link:focus { top: 12px; }
+.simple-shell { max-width: 1160px; gap: 24px; padding: 24px; }
+.brand-name { font-size: 22px; font-weight: 750; }
+.help-link { font-size: 14px; }
+.installer-intro { padding: 24px 4px 8px; }
+.eyebrow { color: var(--brand-2); font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+.installer-intro h1 { font-size: clamp(32px, 4.5vw, 50px); line-height: 1.12; letter-spacing: -.035em; margin: 16px 0; }
+.installer-intro h1 span { color: var(--muted); }
+.intro-copy { max-width: 680px; color: var(--muted); font-size: 17px; }
+.journey { display: flex; flex-wrap: wrap; gap: 14px 28px; padding: 0; margin: 26px 0 0; list-style: none; }
+.journey li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.journey b { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; width: 28px; height: 28px; color: var(--brand-2); }
+.installer-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: flex-start; }
+.installer-steps { display: grid; gap: 20px; min-width: 0; }
+.step-card { padding: 26px; background: linear-gradient(145deg, #0d2038, #081525); }
+.step-heading { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 20px; }
+.step-heading h2 { margin: 0; font-size: 22px; }
+.step-heading p { margin-bottom: 0; }
+.step-number { display: grid; place-items: center; flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; background: #173d69; color: #cce2ff; font-weight: 750; }
+.choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0; border: 0; margin: 0 0 24px; min-width: 0; }
+.choice-card { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); padding: 16px 12px; border-radius: 12px; cursor: pointer; }
+.choice-card.selected { border-color: #6babff; background: #123359; }
+.choice-card span, .mode-option span { display: grid; gap: 4px; }
+.choice-card small, .mode-option small { color: var(--muted); font-size: 12px; }
+.choice-card input, .mode-option input, .erase-confirm input { width: 18px; height: 18px; flex-shrink: 0; margin: 3px 0 0; accent-color: #6babff; }
+.install-options { border: 0; padding: 0; margin: 0; min-width: 0; }
+.install-options legend { font-weight: 650; margin-bottom: 12px; }
+.mode-option { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; cursor: pointer; }
+.erase-confirm { display: flex; gap: 10px; padding: 14px; border-radius: 10px; background: #3c2a16; border: 1px solid #9e6a26; }
+.release-summary { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--line); padding-top: 18px; margin-top: 20px; }
+.inline-details { margin-top: 12px; }
+.inline-details select { width: 100%; min-width: 0; margin-top: 12px; }
+.connection-status { display: flex; align-items: center; gap: 10px; margin: 16px 0; }
+.connection-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.connection-dot.connected { background: var(--ok); }
+.flash-primary { width: 100%; min-height: 54px; font-size: 16px; white-space: normal; }
+.notice { background: #122a47; border: 1px solid #335677; border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
+.notice p { margin: 8px 0 0; }
+.notice.warning { background: #302719; border-color: #94692f; color: #ffdfa4; }
+.notice.success { background: #12372a; border-color: #397b54; color: #b8f2cc; }
+.pipeline-grid { padding: 0; list-style: none; grid-template-columns: repeat(3, 1fr); }
+progress { width: 100%; height: 9px; margin: 12px 0; accent-color: #75b5ff; }
+.backup-actions { display: grid; gap: 6px; margin-top: 18px; }
+.backup-actions small { color: var(--muted); }
+.text-button { border: 0; background: none; color: #a8cfff; padding: 6px 0; text-decoration: underline; text-underline-offset: 4px; text-align: left; cursor: pointer; min-height: 44px; }
+.installer-help { padding: 24px; background: #0a192b; }
+.installer-help h2 { font-size: 20px; margin: 12px 0; }
+.checklist { padding-left: 20px; color: var(--muted); }
+.checklist li { margin: 12px 0; }
+.help-note { font-size: 14px; padding: 14px; border-left: 2px solid var(--brand-2); background: #16283b; margin: 20px 0; }
+.installer-help details { padding: 14px 0; border-top: 1px solid var(--line); font-size: 14px; }
+summary { cursor: pointer; }
+.installer-help details p { color: var(--muted); }
+.installer-help > a { display: block; margin-top: 18px; font-size: 14px; }
+.advanced-settings { padding: 22px; }
+.advanced-settings > summary { font-weight: 650; }
+.advanced-settings > summary span { display: block; color: var(--muted); font-size: 13px; font-weight: 400; margin: 8px 0 0 18px; }
+.advanced-content { display: grid; gap: 20px; margin-top: 24px; min-width: 0; }
+.completion form { display: grid; gap: 16px; margin: 20px 0; }
+.installer-footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 8px 4px 24px; font-size: 13px; color: var(--muted); }
+.assets, dd { overflow-wrap: anywhere; }
+.modal-card { overscroll-behavior: contain; }
+@media (max-width: 850px) { .installer-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .simple-shell { padding: 14px; } .step-card, .installer-help { padding: 18px; } .choice-grid { grid-template-columns: 1fr; } .pipeline-grid { grid-template-columns: repeat(2, 1fr); } .journey { gap: 12px; } .journey li { font-size: 12px; } .installer-intro { padding-top: 12px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

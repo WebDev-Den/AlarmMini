@@ -136,8 +136,21 @@ void loggerWrite(uint8_t level, uint16_t category, const char *message)
     doc["category"] = loggerCategoryKey(category);
     doc["label"] = logLevelLabel(level);
     doc["message"] = cleanMessage;
+#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32C3
+    // HWCDC defaults to a 100ms wait per write when a host stops draining USB.
+    // Keep the RAM log authoritative and send only complete lines that fit now.
+    // This also avoids hundreds of per-byte USB lock/buffer operations per log.
+    if (CONSOLE_PORT) {
+        char packet[LOG_MESSAGE_LEN * 2 + 160];
+        const size_t length = serializeJson(doc, packet, sizeof(packet) - 1);
+        packet[length] = '\n';
+        if (CONSOLE_PORT.availableForWrite() >= (int)(length + 1))
+            CONSOLE_PORT.write((const uint8_t *)packet, length + 1);
+    }
+#else
     serializeJson(doc, CONSOLE_PORT);
     CONSOLE_PORT.println();
+#endif
 
     LogEntry &entry = gLogEntries[gLogHead];
     entry.seq = ++gLogSequence;

@@ -36,9 +36,11 @@ inline uint32_t animHash(uint32_t x) {
 
 inline uint32_t mixColor(Color a, Color b, float t) {
     t = constrain(t, 0.0f, 1.0f);
-    return ((uint8_t)(a.r + (b.r - a.r) * t) << 16) |
-           ((uint8_t)(a.g + (b.g - a.g) * t) << 8) |
-           ((uint8_t)(a.b + (b.b - a.b) * t));
+    const float weightA = (1.0f - t) * (a.a / 255.0f);
+    const float weightB = t * (b.a / 255.0f);
+    return ((uint32_t)(uint8_t)(a.r * weightA + b.r * weightB) << 16) |
+           ((uint32_t)(uint8_t)(a.g * weightA + b.g * weightB) << 8) |
+           (uint8_t)(a.b * weightA + b.b * weightB);
 }
 
 inline uint32_t applyColorBrightness(const Color& c, float brightness) {
@@ -121,6 +123,7 @@ inline float animationBrightness(const AnimationConfig& cfg, int ledIndex, int l
 }
 
 inline uint32_t animationColor(const AnimationConfig& cfg, int ledIndex, int ledCount, unsigned long nowMs, const Color& primary, const Color& secondary) {
+    if (!cfg.enabled) return applyColorBrightness(primary, 1.0f);
     if (cfg.effect == ANIM_FLAG) {
         float pos = ledCount > 1 ? (float)ledIndex / (float)(ledCount - 1) : 0.0f;
         float wave = 0.5f + 0.5f * sinf((pos * animSizeFactor(cfg) - (nowMs / 1000.0f) * animSpeedFactor(cfg) * 0.6f) * 2.0f * M_PI);

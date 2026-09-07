@@ -131,8 +131,12 @@ def validate_compact_config(cfg: Any) -> list[str]:
     else:
         if not _is_str(w.get("s")):
             errors.append("w.s must be string")
+        elif len(w["s"].encode("utf-8")) > 32:
+            errors.append("w.s must be at most 32 UTF-8 bytes")
         if not _is_str(w.get("p")):
             errors.append("w.p must be string")
+        elif len(w["p"].encode("utf-8")) > 63:
+            errors.append("w.p must be at most 63 UTF-8 bytes")
 
     t = cfg.get("t")
     if not (isinstance(t, list) and len(t) == 3 and all(_is_str(x) for x in t)):

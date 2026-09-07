@@ -10,6 +10,7 @@
 #include "reset_trace.h"
 
 void scheduleRestart(unsigned long delayMs);
+void startupRequestWifiConnect();
 extern char gHostname[];
 extern unsigned long gLoopMaxDurationMs;
 extern unsigned long gLoopSlowCount;
@@ -31,6 +32,7 @@ struct RxState
     size_t lineLen;
     uint32_t lineStartAt;
     uint32_t lastByteAt;
+    bool discardingLine;
 
     bool receivingConfig;
     char payload[UART_PAYLOAD_MAX + 1];
@@ -199,6 +201,7 @@ inline void resetLineBuffer()
     gState.lineLen = 0;
     gState.line[0] = '\0';
     gState.lineStartAt = 0;
+    gState.discardingLine = false;
 }
 
 inline void resetSession()
@@ -232,6 +235,51 @@ inline bool decodeHexAppend(const char *hex, size_t hexLen)
     return true;
 }
 
+// Serialize twice from the same document: first count/checksum, then send
+// bounded HEX packets. This preserves the wire format without a full JSON copy.
+class ConfigCrcWriter {
+public:
+    size_t write(uint8_t byte) { crc_ = crc32Step(crc_, byte); return 1; }
+    size_t write(const uint8_t *data, size_t size) {
+        for (size_t i = 0; i < size; ++i) write(data[i]);
+        return size;
+    }
+    uint32_t checksum() const { return crc_ ^ 0xFFFFFFFFUL; }
+private:
+    uint32_t crc_ = 0xFFFFFFFFUL;
+};
+
+class ConfigChunkWriter {
+public:
+    size_t write(uint8_t byte) {
+        static const char hex[] = "0123456789ABCDEF";
+        chunk_[used_ * 2U] = hex[byte >> 4];
+        chunk_[used_ * 2U + 1U] = hex[byte & 15U];
+        if (++used_ == UART_CHUNK_BYTES) flush();
+        return 1;
+    }
+    size_t write(const uint8_t *data, size_t size) {
+        for (size_t i = 0; i < size; ++i) write(data[i]);
+        return size;
+    }
+    void flush() {
+        if (!used_) return;
+        chunk_[used_ * 2U] = '\0';
+        StaticJsonDocument<256> packet;
+        packet["event"] = "config_data";
+        packet["seq"] = seq_++;
+        packet["data"] = chunk_;
+        serializeJson(packet, CONSOLE_PORT);
+        CONSOLE_PORT.println();
+        used_ = 0;
+        yield();
+    }
+private:
+    char chunk_[UART_CHUNK_BYTES * 2U + 1U];
+    size_t used_ = 0;
+    size_t seq_ = 0;
+};
+
 inline void sendCurrentConfig()
 {
     DynamicJsonDocument cfg(CONFIG_JSON_CAPACITY);
@@ -247,9 +295,9 @@ inline void sendCurrentConfig()
         return;
     }
 
-    static char jsonBuf[CONFIG_JSON_CAPACITY + 1];
-    const size_t jsonLen = serializeJson(cfg, jsonBuf, sizeof(jsonBuf));
-    if (jsonLen == 0 || jsonLen >= sizeof(jsonBuf))
+    ConfigCrcWriter checksum;
+    const size_t jsonLen = serializeJson(cfg, checksum);
+    if (jsonLen == 0 || jsonLen > CONFIG_JSON_CAPACITY)
     {
         sendNack("get_config", "serialize_failed");
         return;
@@ -258,33 +306,13 @@ inline void sendCurrentConfig()
     StaticJsonDocument<128> beginDoc;
     beginDoc["event"] = "config_begin";
     beginDoc["bytes"] = jsonLen;
-    beginDoc["crc"] = calcCrc((const uint8_t *)jsonBuf, jsonLen);
+    beginDoc["crc"] = checksum.checksum();
     serializeJson(beginDoc, CONSOLE_PORT);
     CONSOLE_PORT.println();
 
-    static const char HEX_CHARS[] = "0123456789ABCDEF";
-    static char chunk[(UART_CHUNK_BYTES * 2U) + 1U];
-
-    size_t seq = 0;
-    for (size_t offset = 0; offset < jsonLen; offset += UART_CHUNK_BYTES)
-    {
-        const size_t count = min((size_t)UART_CHUNK_BYTES, jsonLen - offset);
-        for (size_t i = 0; i < count; i++)
-        {
-            const uint8_t b = (uint8_t)jsonBuf[offset + i];
-            chunk[i * 2U] = HEX_CHARS[(b >> 4) & 0x0F];
-            chunk[i * 2U + 1U] = HEX_CHARS[b & 0x0F];
-        }
-        chunk[count * 2U] = '\0';
-
-        StaticJsonDocument<256> packet;
-        packet["event"] = "config_data";
-        packet["seq"] = seq++;
-        packet["data"] = chunk;
-        serializeJson(packet, CONSOLE_PORT);
-        CONSOLE_PORT.println();
-        yield();
-    }
+    ConfigChunkWriter chunks;
+    serializeJson(cfg, chunks);
+    chunks.flush();
 
     StaticJsonDocument<64> endDoc;
     endDoc["event"] = "config_end";
@@ -454,23 +482,28 @@ inline void handleSimpleProtocol(const char *line)
             return;
         }
 
-        if (strlen(ssid) >= WIFI_SSID_MAXLEN || strlen(pass) >= WIFI_PASS_MAXLEN)
+        if (strlen(ssid) > 32 || strlen(pass) >= WIFI_PASS_MAXLEN)
         {
             sendNack("set:wifi", "wifi_value_too_long");
             return;
         }
 
+        char previousSsid[WIFI_SSID_MAXLEN];
+        char previousPass[WIFI_PASS_MAXLEN];
+        copyBounded(previousSsid, sizeof(previousSsid), gConfig.wifiSsid);
+        copyBounded(previousPass, sizeof(previousPass), gConfig.wifiPass);
         copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, ssid);
         copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, pass);
 
         if (!storageSaveCurrentConfig(true))
         {
+            copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, previousSsid);
+            copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, previousPass);
             sendNack("set:wifi", "save_failed");
             return;
         }
 
-        WiFi.mode(WIFI_STA);
-        WiFi.begin(gConfig.wifiSsid, gConfig.wifiPass);
+        startupRequestWifiConnect();
         sendAck("set:wifi");
         sendDeviceInfo();
         return;
@@ -554,23 +587,28 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
             return;
         }
 
-        if (strlen(ssid) >= WIFI_SSID_MAXLEN || strlen(pass ? pass : "") >= WIFI_PASS_MAXLEN)
+        if (strlen(ssid) > 32 || strlen(pass ? pass : "") >= WIFI_PASS_MAXLEN)
         {
             sendNack(cmd, "wifi_value_too_long");
             return;
         }
 
+        char previousSsid[WIFI_SSID_MAXLEN];
+        char previousPass[WIFI_PASS_MAXLEN];
+        copyBounded(previousSsid, sizeof(previousSsid), gConfig.wifiSsid);
+        copyBounded(previousPass, sizeof(previousPass), gConfig.wifiPass);
         copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, ssid);
         copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, pass ? pass : "");
 
         if (!storageSaveCurrentConfig(true))
         {
+            copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, previousSsid);
+            copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, previousPass);
             sendNack(cmd, "save_failed");
             return;
         }
 
-        WiFi.mode(WIFI_STA);
-        WiFi.begin(gConfig.wifiSsid, gConfig.wifiPass);
+        startupRequestWifiConnect();
         sendAck(cmd);
         sendDeviceInfo();
         return;
@@ -583,8 +621,7 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
             sendNack(cmd, "ssid_not_configured");
             return;
         }
-        WiFi.mode(WIFI_STA);
-        WiFi.begin(gConfig.wifiSsid, gConfig.wifiPass);
+        startupRequestWifiConnect();
         sendAck(cmd);
         sendDeviceInfo();
         return;
@@ -602,7 +639,7 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
         const char *topic = root["topic"] | "";
         const char *user = root["user"] | "";
         const char *pass = root["pass"] | "";
-        const uint16_t port = root.containsKey("port") ? (uint16_t)(root["port"].as<unsigned int>()) : 1883U;
+        const unsigned long port = root.containsKey("port") ? root["port"].as<unsigned long>() : 1883UL;
 
         if (strlen(host) >= MQTT_HOST_MAXLEN || strlen(topic) >= MQTT_TOPIC_MAXLEN ||
             strlen(user) >= MQTT_USER_MAXLEN || strlen(pass) >= MQTT_PASS_MAXLEN)
@@ -611,12 +648,13 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
             return;
         }
 
-        if (port == 0)
+        if (port == 0 || port > 65535UL || (root.containsKey("port") && !root["port"].is<unsigned long>()))
         {
             sendNack(cmd, "bad_port");
             return;
         }
 
+        const AppConfig previousConfig = gConfig;
         copyBounded(gConfig.mqttHost, MQTT_HOST_MAXLEN, host);
         copyBounded(gConfig.mqttTopic, MQTT_TOPIC_MAXLEN, topic);
         copyBounded(gConfig.mqttUser, MQTT_USER_MAXLEN, user);
@@ -625,6 +663,7 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
 
         if (!storageSaveCurrentConfig(true))
         {
+            gConfig = previousConfig;
             sendNack(cmd, "save_failed");
             return;
         }
@@ -832,20 +871,20 @@ inline void handle()
 {
     const uint32_t now = millis();
 
-    if (gState.lineLen > 0 && gState.lineStartAt > 0 && now - gState.lastByteAt > UART_LINE_TIMEOUT_MS)
+    if ((gState.lineLen > 0 || gState.discardingLine) && now - gState.lastByteAt > UART_LINE_TIMEOUT_MS)
     {
         resetLineBuffer();
         sendNack("line", "line_timeout");
     }
 
-    if (gState.receivingConfig && gState.lastChunkAt > 0 && now - gState.lastChunkAt > UART_SESSION_TIMEOUT_MS)
+    if (gState.receivingConfig && now - gState.lastChunkAt > UART_SESSION_TIMEOUT_MS)
     {
         resetSession();
         sendNack("set", "session_timeout");
     }
 
     size_t consumedBytes = 0;
-    while (CONSOLE_PORT.available() > 0)
+    while (consumedBytes < UART_READ_BUDGET_PER_TICK && millis() - now < 4UL && CONSOLE_PORT.available() > 0)
     {
         const char ch = (char)CONSOLE_PORT.read();
         consumedBytes++;
@@ -859,26 +898,26 @@ inline void handle()
 
         if (ch == '\n')
         {
-            gState.line[gState.lineLen] = '\0';
-            processLine(gState.line);
+            if (!gState.discardingLine) {
+                gState.line[gState.lineLen] = '\0';
+                processLine(gState.line);
+            }
             resetLineBuffer();
-            continue;
+            break; // At most one potentially expensive command per loop tick.
         }
 
-        if (gState.lineLen >= UART_LINE_MAX)
+        if (gState.discardingLine) continue;
+
+        if (gState.lineLen >= UART_LINE_MAX || ch == '\0')
         {
             resetLineBuffer();
+            gState.discardingLine = true;
             sendNack("line", "line_overflow");
             continue;
         }
 
         gState.line[gState.lineLen++] = ch;
 
-        if (consumedBytes >= UART_READ_BUDGET_PER_TICK)
-        {
-            // Avoid starving the main loop under noisy CONSOLE_PORT input.
-            break;
-        }
     }
 }
 

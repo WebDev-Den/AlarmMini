@@ -86,6 +86,10 @@ void setup()
     LOG_INFO(LOG_CAT_SYSTEM, "Reset reason: %s", platformResetReason().c_str());
     LOG_INFO(LOG_CAT_SYSTEM, "Reset info: %s", platformResetInfo().c_str());
 
+#if defined(ESP8266)
+    // A transient mount failure must never erase credentials and web assets.
+    LittleFS.setConfig(LittleFSConfig(false));
+#endif
     if (!LittleFS.begin())
     {
         LOG_ERROR(LOG_CAT_CONFIG, "FS init error. Try: pio run -t uploadfs");
@@ -100,7 +104,8 @@ void setup()
     storageInit();
     loggerSetMask(gConfig.logMask);
     WiFi.persistent(false);
-    WiFi.setAutoReconnect(true);
+    // startupProvisioningHandle owns bounded retries, including during setup.
+    WiFi.setAutoReconnect(false);
 
     platformDeviceHostname(gHostname, sizeof(gHostname));
     platformSetHostname(gHostname);
@@ -128,8 +133,8 @@ void setup()
 
     LOG_INFO(LOG_CAT_SYSTEM, "NTP sync started: %s | %s | %s", ntp1, ntp2, ntp3);
 
-    alertsFetch();
     webserverInit();
+    alertsFetch();
     resetTraceSetStage("runtime");
     uartcfg::sendDeviceInfo();
 
@@ -143,9 +148,14 @@ void loop()
     uartcfg::handle();
     startupProvisioningHandle();
     webserverHandle();
+    resetTraceHandle();
+#if defined(ESP8266)
+    MDNS.update();
+#endif
     alertsHandle();
     buzzerHandle();
-    ledsHandle();
+    if (!startupShowProvisioningEffect(gConfig.ledCount))
+        ledsHandle();
     yield();
     const unsigned long loopElapsed = millis() - loopStartedAt;
     gLoopIterationCount++;

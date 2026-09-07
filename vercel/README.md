@@ -6,6 +6,12 @@ Production URL: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
 ## What it does
 
+The main flow has three steps: select the board and installation mode, connect USB, and start writing. Updating with configuration preservation is the default. A first installation requires a separate acknowledgement that settings will be erased. Unsupported browsers receive desktop Chrome/Edge instructions and cannot start writing.
+
+An update reads a fresh configuration from the selected board before writing. A read failure stops the operation; a previous browser backup is never substituted automatically. ESP Web Tools' low-level `flash()` terminal event confirms completion before reconnecting, restoring the full configuration in one transaction, and comparing the result. Recovery after an interrupted update checks the board hostname against the current attempt. Backup downloads contain credentials and stay local to the browser.
+
+MQTT, JSON editing, QR labels, and logs are under the collapsed additional settings. Stable GitHub releases are fetched through a cached server endpoint with retry controls.
+
 - fetches public GitHub Releases
 - shows firmware versions
 - shows attached `.bin` assets
@@ -57,9 +63,24 @@ npm run dev
 
 ## Deploy to Vercel
 
-1. Create a new Vercel project from this `vercel/` folder
-2. Add the same environment variables in Vercel
-3. Deploy
+Use the existing project linked by `.vercel/project.json`, from this directory:
+
+```powershell
+npx vercel deploy --prod --yes
+```
+
+If the CLI reports an invalid token, run `npx vercel login` with the account that owns the existing project, then retry. Deploying this site does not publish local firmware binaries; the installer continues using published GitHub release assets.
+
+## Verification
+
+```powershell
+npm ci
+npm test
+npm run typecheck
+npm run build
+```
+
+With the app running locally, use `npm run test:browser`. Windows tests use installed Edge; CI uses Chromium (`npx playwright install --with-deps chromium`). `TEST_BASE_URL` selects a different server. Browser tests mock USB where needed and never write to a physical board. The flasher tests exercise the actual completion/error gate with an injected transport implementation. Physical Web Serial flashing still requires a separate hardware check.
 
 ## GitHub Actions deployment
 

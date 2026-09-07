@@ -73,8 +73,8 @@ void buzzerHandle() {
         }
         if (!wasAlert && nowAlert)  buzzerPlay(true);
         if (wasAlert  && !nowAlert) buzzerPlay(false);
-        gAlertsChanged = false;
     }
+    gAlertsChanged = false;
 
     if (!gPlaying) return;
 
@@ -84,15 +84,15 @@ void buzzerHandle() {
 
     unsigned long now = millis();
 
-    if (gNoteIndex < total) {
-        if (gNoteStart == 0 || now - gNoteStart >= (unsigned long)durations[gNoteIndex]) {
+    if (gNoteIndex == 0 || now - gNoteStart >= (unsigned long)durations[gNoteIndex - 1]) {
+        if (gNoteIndex < total) {
             platform_audio::playTone((uint16_t)melody[gNoteIndex]);
             gNoteStart = now;
             gNoteIndex++;
+        } else {
+            platform_audio::stopTone();
+            gPlaying = false;
         }
-    } else {
-        platform_audio::stopTone();
-        gPlaying = false;
     }
 }
 
@@ -109,6 +109,7 @@ void buzzerTest(bool) {
 }
 
 void buzzerHandle() {
+    gAlertsChanged = false;
 }
 
 #endif

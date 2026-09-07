@@ -12,12 +12,44 @@
 #include "animations.h"
 #include "logger.h"
 #include "reset_trace.h"
+#include "wifi_recovery.h"
 
 void serialProtocolHandle();
 
 static DNSServer gProvisioningDns;
 static bool gProvisioningDnsActive = false;
 static unsigned long gProvisioningApLastEnsureAt = 0;
+static bool gProvisioningRequired = false;
+static bool gProvisioningApActive = false;
+static WifiRecoverySchedule gWifiRecovery;
+static bool gWifiConnectRequested = false;
+static bool gWifiDisconnectPending = false;
+static bool gProvisionScanStarted = false;
+static unsigned long gProvisionScanStartedAt = 0;
+#if ALARMMINI_FEATURE_WIFI_SCAN_PORTAL
+static unsigned long gProvisionScanLastAt = 0;
+static bool gProvisionScanHasRun = false;
+#endif
+enum class ProvisionWifiState { Idle, Queued, Connecting, Saved, Failed };
+static ProvisionWifiState gProvisionWifiState = ProvisionWifiState::Idle;
+static char gProvisionWifiSsid[WIFI_SSID_MAXLEN] = {};
+static char gProvisionWifiPass[WIFI_PASS_MAXLEN] = {};
+static const char *gProvisionWifiError = "";
+static unsigned long gProvisionWifiQueuedAt = 0;
+
+static bool _wifiReady()
+{
+    return WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0);
+}
+
+void startupRequestWifiConnect()
+{
+    // Shared by UART and the portal: never tear down the AP from a request handler.
+    gWifiConnectRequested = true;
+    gProvisionWifiState = ProvisionWifiState::Idle;
+    memset(gProvisionWifiPass, 0, sizeof(gProvisionWifiPass));
+    gProvisionWifiError = "";
+}
 
 static String _provisioningApSsid()
 {
@@ -38,7 +70,7 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
     if (ledCount == 0)
     {
         strip.clear();
-        strip.show();
+        ledsShowIfChanged();
         return;
     }
 
@@ -79,7 +111,7 @@ static void _showStartupBounceFlagAnimation(uint8_t ledCount,
     for (uint8_t i = ledCount; i < MAX_LEDS; i++)
         strip.setPixelColor(i, 0);
 
-    strip.show();
+    ledsShowIfChanged();
 }
 
 static void _showApFlagBlendAnimation(uint8_t ledCount,
@@ -96,7 +128,7 @@ static void _showApFlagBlendAnimation(uint8_t ledCount,
     if (ledCount == 0)
     {
         strip.clear();
-        strip.show();
+        ledsShowIfChanged();
         return;
     }
 
@@ -120,23 +152,7 @@ static void _showApFlagBlendAnimation(uint8_t ledCount,
     for (uint8_t i = ledCount; i < MAX_LEDS; i++)
         strip.setPixelColor(i, 0);
 
-    strip.show();
-}
-
-static void _showSolidFor(uint8_t ledCount, uint32_t color, unsigned long durationMs)
-{
-    for (uint8_t i = 0; i < ledCount; i++)
-        strip.setPixelColor(i, color);
-    for (uint8_t i = ledCount; i < MAX_LEDS; i++)
-        strip.setPixelColor(i, 0);
-    strip.show();
-
-    const unsigned long startMs = millis();
-    while (millis() - startMs < durationMs)
-    {
-        serialProtocolHandle();
-        yield();
-    }
+    ledsShowIfChanged();
 }
 
 static String _htmlEscape(const String& value)
@@ -178,13 +194,12 @@ static bool _readWifiProvisionPayload(AlarmWebServer& server, String& ssid, Stri
         pass = server.arg("password");
     }
 
-    ssid.trim();
     if (ssid.length() == 0)
     {
         error = F("ssid_required");
         return false;
     }
-    if (ssid.length() >= WIFI_SSID_MAXLEN)
+    if (ssid.length() > 32)
     {
         error = F("ssid_too_long");
         return false;
@@ -209,14 +224,17 @@ static void _sendProvisionJson(AlarmWebServer& server, JsonDocument& doc, int st
 
 static void _sendProvisionStatus(AlarmWebServer& server, bool portalActive)
 {
-    StaticJsonDocument<384> doc;
+    StaticJsonDocument<768> doc;
     doc["ok"] = true;
     doc["portal"] = portalActive;
-    doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
+    doc["wifiConnected"] = _wifiReady();
     doc["ssid"] = WiFi.SSID();
     doc["ip"] = WiFi.localIP().toString();
     doc["apSsid"] = _provisioningApSsid();
     doc["apIp"] = WiFi.softAPIP().toString();
+    doc["connecting"] = gWifiRecovery.attempting || gProvisionWifiState == ProvisionWifiState::Queued;
+    doc["saved"] = gProvisionWifiState == ProvisionWifiState::Saved;
+    doc["error"] = gProvisionWifiError;
     _sendProvisionJson(server, doc);
 }
 
@@ -280,12 +298,51 @@ static void _sendProvisionNetworks(AlarmWebServer& server)
     _sendProvisionJson(server, doc);
     return;
 #else
+    // Only one async scan at a time; an association and a scan must not compete.
+    if (gWifiRecovery.attempting || gWifiConnectRequested ||
+        gProvisionWifiState == ProvisionWifiState::Queued)
+    {
+        StaticJsonDocument<128> busy;
+        busy["ok"] = false;
+        busy["error"] = "wifi_connecting";
+        _sendProvisionJson(server, busy, 409);
+        return;
+    }
+    int found = WiFi.scanComplete();
+    if (!gProvisionScanStarted)
+    {
+        if (gProvisionScanHasRun && millis() - gProvisionScanLastAt < 15000UL)
+        {
+            StaticJsonDocument<128> busy;
+            busy["ok"] = false;
+            busy["error"] = "scan_rate_limited";
+            _sendProvisionJson(server, busy, 429);
+            return;
+        }
+        WiFi.scanDelete();
+        found = WiFi.scanNetworks(true, false);
+        gProvisionScanStarted = true;
+        gProvisionScanHasRun = true;
+        gProvisionScanStartedAt = gProvisionScanLastAt = millis();
+    }
+    if (found == WIFI_SCAN_RUNNING)
+    {
+        StaticJsonDocument<128> busy;
+        busy["ok"] = true;
+        busy["scanning"] = true;
+        _sendProvisionJson(server, busy, 202);
+        return;
+    }
     DynamicJsonDocument doc(4096);
     doc["ok"] = true;
     JsonArray networks = doc.createNestedArray("networks");
 
-    LOG_INFO(LOG_CAT_WIFI, "Provisioning WiFi scan started");
-    const int found = WiFi.scanNetworks(false, true);
+    doc["scanning"] = false;
+    if (found < 0)
+    {
+        doc["ok"] = false;
+        doc["error"] = "scan_failed";
+    }
     doc["count"] = max(found, 0);
 
     if (found > 0)
@@ -320,9 +377,28 @@ static void _sendProvisionNetworks(AlarmWebServer& server)
     }
 
     WiFi.scanDelete();
-    _sendProvisionJson(server, doc);
+    gProvisionScanStarted = false;
+    if (doc.overflowed())
+    {
+        server.send(503, "application/json", "{\"ok\":false,\"error\":\"low_memory\"}");
+        return;
+    }
+    _sendProvisionJson(server, doc, found < 0 ? 503 : 200);
 #endif
 }
+
+static const char PROVISION_SCRIPT[] PROGMEM = R"portaljs(<script>
+const s=document.getElementById('s'),f=document.getElementById('f'),ssid=document.getElementById('ssid'),pass=document.getElementById('password'),nets=document.getElementById('nets');
+let lastIp='',submitting=false,scanBusy=false;
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function status(kind,text){s.className='status '+kind;s.textContent=text}
+function esc(v){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+async function request(url,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6000);try{const r=await fetch(url,{...options,cache:'no-store',signal:controller.signal});const j=await r.json();if(!r.ok||j.ok===false)throw new Error(j.error||('HTTP '+r.status));return j}finally{clearTimeout(timer)}}
+async function poll(){try{const j=await request('/api/provision/status');const info='AP: '+j.apSsid+'\nIP налаштування: '+j.apIp;if(j.error){const errors={connect_timeout_or_bad_password:'Не вдалося підключитися. Перевір SSID і пароль.',config_save_failed:'Не вдалося зберегти налаштування. Попередні дані збережено.'};status('err',errors[j.error]||j.error)}else if(j.wifiConnected&&!j.connecting&&j.ip&&j.ip!=='0.0.0.0'){lastIp=j.ip;status('ok','Підключено. Відкрий: http://'+lastIp+'/\nТочка налаштування вимкнеться після 30 секунд стабільного зʼєднання.')}else{status('busy',info+'\n\n'+(j.connecting?'Підключення до Wi-Fi…':'Вибери або введи Wi-Fi мережу.'))}}catch(e){if(!lastIp)status('busy','Очікую звʼязок із платою. За потреби підключись знову до точки налаштування.')}finally{setTimeout(poll,2000)}}
+f.onsubmit=async e=>{e.preventDefault();if(submitting)return;const body={ssid:ssid.value,password:pass.value};if(!body.ssid){status('err','Введи SSID.');return}submitting=true;lastIp='';status('busy','Перевіряю Wi-Fi…');try{await request('/api/provision/wifi',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});status('busy','Підключаю плату. Налаштування збережуться після успішного зʼєднання.')}catch(e){status('err','Запит не підтверджено: '+e.message+'. Перевіряю стан плати…')}finally{submitting=false}};
+async function scan(){if(!nets||scanBusy)return;scanBusy=true;const button=document.getElementById('scan');button.disabled=true;nets.textContent='Сканую Wi-Fi…';const deadline=Date.now()+35000;try{let j;do{try{j=await request('/api/provision/networks')}catch(e){if(e.message==='wifi_connecting'&&Date.now()<deadline){await pause(1500);continue}throw e}if(!j.scanning)break;await pause(700)}while(Date.now()<deadline);if(!j||j.scanning)throw new Error('Час сканування вичерпано');nets.innerHTML=(j.networks||[]).map(n=>`<button class="net" type="button" data-ssid="${esc(n.ssid)}"><b>${esc(n.ssid)}</b><span>${n.rssi} dBm · ${esc(n.auth)}</span></button>`).join('');if(!nets.children.length)nets.textContent='Мережі не знайдено. Введи SSID вручну.';nets.querySelectorAll('.net').forEach(b=>b.onclick=()=>{ssid.value=b.dataset.ssid;pass.focus()})}catch(e){nets.textContent='Сканування: '+e.message+'. Можна ввести SSID вручну.'}finally{scanBusy=false;button.disabled=false}}
+if(nets){document.getElementById('scan').onclick=scan;document.getElementById('manual').onclick=()=>ssid.focus();scan()}poll();
+</script>)portaljs";
 
 static void _sendProvisionPage(AlarmWebServer& server)
 {
@@ -352,19 +428,10 @@ static void _sendProvisionPage(AlarmWebServer& server)
     server.sendContent(savedSsid);
     server.sendContent(F("\" autocomplete='off'><label>Password</label><input id='password' name='password' type='password'>"
                          "<button>Save Wi-Fi</button></form><div class='status' id='s'>Ready</div>"
-                         "<script>"
-                         "const s=document.getElementById('s'),f=document.getElementById('f');"
-                         "function st(c,t){s.className='status '+(c||'');s.textContent=t}"
-                         "async function poll(){try{let r=await fetch('/api/provision/status',{cache:'no-store'});let j=await r.json();"
-                         "let text='AP: '+(j.apSsid||'')+'\\nSetup IP: '+(j.apIp||'192.168.4.1');"
-                         "if(j.wifiConnected&&j.ip&&j.ip!='0.0.0.0'){text+='\\n\\nConnected: http://'+j.ip+'/';st('ok',text)}"
-                         "else if(!s.classList.contains('err'))st('',text+'\\n\\nWaiting for Wi-Fi settings.')}catch(e){st('err','Status error: '+e.message)}}"
-                         "f.onsubmit=async e=>{e.preventDefault();let body={ssid:document.getElementById('ssid').value.trim(),password:document.getElementById('password').value};"
-                         "if(!body.ssid){st('err','SSID is required');return}st('', 'Saving Wi-Fi...');"
-                         "try{let r=await fetch('/api/provision/wifi',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});let text=await r.text();let j={};try{j=JSON.parse(text)}catch(_){}"
-                         "if(!r.ok||j.ok===false)throw new Error(j.error||text||('HTTP '+r.status));st('ok','Wi-Fi saved. Connecting to '+body.ssid+'...');setTimeout(poll,1200)}catch(e){st('err','Save failed: '+e.message)}};"
-                         "setInterval(poll,2000);poll();"
-                         "</script></main></body></html>"));
+                         "</main>"));
+    server.sendContent(FPSTR(PROVISION_SCRIPT));
+    server.sendContent(F("</body></html>"));
+    server.sendContent(""); // Finish the chunked response so fetch/navigation completes.
     return;
 #else
 
@@ -389,293 +456,322 @@ label{display:block;margin:14px 0 7px;color:var(--muted);font-size:13px}input{wi
     page += R"rawliteral(</b></div><section class='grid'><div class='row'><button class='btn ghost' id='scan' type='button'>Оновити список Wi-Fi</button><button class='btn ghost' id='manual' type='button'>Ввести SSID вручну</button></div><div class='nets' id='nets'><div class='status'>Сканую мережі...</div></div><form id='f'><label>SSID</label><input id='ssid' name='ssid' value=")rawliteral";
     page += savedSsid;
     page += R"rawliteral(" autocomplete='off' required><label>Пароль Wi-Fi <span style='color:var(--muted)'>(залиш порожнім для відкритої мережі)</span></label><input id='password' name='password' type='password' autocomplete='current-password'><button class='btn'>Підключити плату</button></form><div class='status' id='s'>Очікування...</div></section>
-<script>
-const s=document.getElementById('s'),nets=document.getElementById('nets'),ssid=document.getElementById('ssid'),pass=document.getElementById('password');
-function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function sig(r){return r>-55?'відмінний':r>-67?'добрий':r>-75?'середній':'слабкий'}
-function setStatus(kind,msg){s.className='status '+(kind||'');s.textContent=msg}
-function box(kind,msg){return '<div class="status '+kind+'">'+esc(msg)+'</div>'}
-async function scan(){nets.innerHTML=box('busy','Сканую Wi-Fi мережі...');setStatus('busy','Оновлюю список доступних мереж...');try{const r=await fetch('/api/provision/networks',{cache:'no-store'});const j=await r.json();if(!r.ok||j.ok===false)throw new Error(j.error||('HTTP '+r.status));if(!j.networks||!j.networks.length){nets.innerHTML=box('err','Мережі не знайдено. Натисни оновити або введи SSID вручну.');setStatus('err','Не знайшов Wi-Fi мережі поруч. Перевір роутер або введи SSID вручну.');return}nets.innerHTML=j.networks.map(n=>`<button class="net" type="button" data-ssid="${esc(n.ssid)}"><span><b>${esc(n.ssid)}</b><br><span class="meta">${esc(n.auth)} · ${sig(n.rssi)} · ch ${n.channel}</span></span><span class="meta">${n.rssi} dBm</span></button>`).join('');nets.querySelectorAll('.net').forEach(b=>b.onclick=()=>{nets.querySelectorAll('.net').forEach(x=>x.classList.remove('active'));b.classList.add('active');ssid.value=b.dataset.ssid;pass.focus();setStatus('busy','Вибрано мережу: '+b.dataset.ssid+'\\nВведи пароль або залиш поле порожнім, якщо мережа відкрита.')});setStatus('ok','Список Wi-Fi оновлено. Знайдено мереж: '+j.networks.length)}catch(e){nets.innerHTML=box('err','Помилка сканування: '+e.message);setStatus('err','Помилка сканування Wi-Fi: '+e.message)}}
-async function st(){try{const r=await fetch('/api/provision/status',{cache:'no-store'});const j=await r.json();let text='AP: '+(j.apSsid||'')+'\nIP налаштування: '+(j.apIp||'192.168.4.1');if(j.wifiConnected&&j.ip&&j.ip!='0.0.0.0'){text+='\n\nПідключено. Відкрий: http://'+j.ip+'/';setStatus('ok',text)}else if(!s.classList.contains('ok')&&!s.classList.contains('err')){setStatus('busy',text+'\n\nОчікую вибір Wi-Fi мережі.')}}catch(e){setStatus('err','Помилка читання статусу: '+e.message)}}
-setInterval(st,1500);document.getElementById('scan').onclick=scan;document.getElementById('manual').onclick=()=>{ssid.focus();setStatus('busy','Введи SSID вручну, пароль можна залишити порожнім для відкритої мережі.')};document.getElementById('f').onsubmit=async e=>{e.preventDefault();const body={ssid:ssid.value.trim(),password:pass.value};if(!body.ssid){setStatus('err','Вибери мережу зі списку або введи SSID вручну.');return}setStatus('busy','Зберігаю Wi-Fi \"'+body.ssid+'\" і підключаю плату...');try{const r=await fetch('/api/provision/wifi',{method:'POST',body:JSON.stringify(body),headers:{'content-type':'application/json'}});const text=await r.text();let j=null;try{j=JSON.parse(text)}catch(_){ }if(!r.ok||!j||j.ok===false)throw new Error((j&&j.error)||text||('HTTP '+r.status));setStatus('ok','Wi-Fi збережено. Плата підключається до \"'+body.ssid+'\"...\\nЯкщо підключення успішне, нижче зʼявиться IP адреса основного інтерфейсу.');setTimeout(st,1200)}catch(e){setStatus('err','Не вдалося зберегти або застосувати Wi-Fi: '+e.message)}};st();scan();
-</script></main></body></html>)rawliteral";
+)rawliteral";
+    page += FPSTR(PROVISION_SCRIPT);
+    page += R"rawliteral(</main></body></html>)rawliteral";
 
     server.sendHeader("Cache-Control", "no-store");
     server.send(200, "text/html; charset=utf-8", page);
 #endif
 }
-static void _redirectProvisionHome(AlarmWebServer& server)
-{
-    server.sendHeader("Cache-Control", "no-store");
-    server.sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/");
-    server.send(302, "text/plain", "");
-}
-
-static void _sendCaptiveProbePage(AlarmWebServer& server)
-{
-    // Captive portal probes must not look like a successful internet check.
-    _sendProvisionPage(server);
-}
-
 static void _startProvisioningDns()
 {
-    if (!gProvisioningDnsActive)
+    if (!gProvisioningDnsActive && gProvisioningApActive)
     {
-        gProvisioningDns.start(53, "*", WiFi.softAPIP());
-        gProvisioningDnsActive = true;
+        gProvisioningDns.setErrorReplyCode(DNSReplyCode::NoError);
+        gProvisioningDnsActive = gProvisioningDns.start(53, "*", WiFi.softAPIP());
+        if (!gProvisioningDnsActive)
+            LOG_WARN(LOG_CAT_WIFI, "Setup DNS start failed; will retry");
     }
 }
 
 static void _stopProvisioningDns()
 {
-    if (gProvisioningDnsActive)
-    {
-        gProvisioningDns.stop();
-        gProvisioningDnsActive = false;
-    }
-}
-
-void startupProvisioningHandle()
-{
-    if (!gProvisioningDnsActive)
-        return;
-
-    if (WiFi.status() == WL_CONNECTED)
-    {
-        _stopProvisioningDns();
-        return;
-    }
-
-    gProvisioningDns.processNextRequest();
+    gProvisioningDns.stop();
+    gProvisioningDnsActive = false;
 }
 
 static void _startProvisioningAp()
 {
-    WiFi.softAPdisconnect(true);
-    platformWifiDisconnect();
-    platformWifiDisableSleep();
-    platformWifiSetMaxTxPower();
-    delay(120);
-
-    // AP+STA keeps the setup network visible while allowing Wi-Fi scans.
-    WiFi.mode(WIFI_AP_STA);
-    delay(120);
-
-    platformWifiConfigureApRadio();
-
-    IPAddress apIp(192, 168, 4, 1);
-    IPAddress apGateway(192, 168, 4, 1);
-    IPAddress apSubnet(255, 255, 255, 0);
-    WiFi.softAPConfig(apIp, apGateway, apSubnet);
-
-    // Channel 1 + HT20 is the most compatible setup for phones/Windows scans.
-    const uint8_t apChannel = 1;
-    const uint8_t maxClients = 4;
-    const String apSsid = _provisioningApSsid();
-    bool ok = false;
-    if (strlen(AP_PASSWORD) == 0)
-        ok = WiFi.softAP(apSsid.c_str(), nullptr, apChannel, 0, maxClients);
-    else
-        ok = WiFi.softAP(apSsid.c_str(), AP_PASSWORD, apChannel, 0, maxClients);
-
-    LOG_INFO(LOG_CAT_WIFI, "Setup AP %s SSID='%s' IP=%s MAC=%s channel=%u open=%s",
-             ok ? "started" : "failed",
-             apSsid.c_str(),
-             WiFi.softAPIP().toString().c_str(),
-             WiFi.softAPmacAddress().c_str(),
-             apChannel,
-             strlen(AP_PASSWORD) == 0 ? "yes" : "no");
-    _startProvisioningDns();
+    gProvisioningRequired = true;
     gProvisioningApLastEnsureAt = millis();
+    _stopProvisioningDns();
+    // Preserve a running STA attempt. Reinitializing the whole radio here can
+    // cancel DHCP, change channel repeatedly and drop the phone from the AP.
+    const bool modeOk = WiFi.mode(WIFI_AP_STA);
+    platformWifiDisableSleep();
+    platformWifiConfigureApRadio();
+    const IPAddress apIp(192, 168, 4, 1);
+    const bool configOk = modeOk && WiFi.softAPConfig(apIp, apIp, IPAddress(255, 255, 255, 0));
+    const String apSsid = _provisioningApSsid();
+    gProvisioningApActive = configOk && WiFi.softAP(apSsid.c_str(),
+        strlen(AP_PASSWORD) ? AP_PASSWORD : nullptr, 1, 0, 4);
+    LOG_INFO(LOG_CAT_WIFI, "Setup AP %s SSID='%s' IP=%s",
+             gProvisioningApActive ? "started" : "failed", apSsid.c_str(),
+             WiFi.softAPIP().toString().c_str());
+    _startProvisioningDns();
 }
 
 static void _ensureProvisioningApRunning()
 {
-    const unsigned long now = millis();
-    if (now - gProvisioningApLastEnsureAt < 10000UL)
+    if (!gProvisioningRequired || millis() - gProvisioningApLastEnsureAt < 10000UL)
         return;
-    gProvisioningApLastEnsureAt = now;
-
-    const String expectedSsid = _provisioningApSsid();
-    const IPAddress expectedIp(192, 168, 4, 1);
-    const bool ssidOk = WiFi.softAPSSID() == expectedSsid;
-    const bool ipOk = WiFi.softAPIP() == expectedIp;
-    const bool modeOk = (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA);
-
-    if (ssidOk && ipOk && modeOk)
-        return;
-
-    LOG_WARN(LOG_CAT_WIFI, "Provisioning AP watchdog restart: ssidOk=%d ipOk=%d mode=%d",
-             ssidOk ? 1 : 0,
-             ipOk ? 1 : 0,
-             (int)WiFi.getMode());
-    _startProvisioningAp();
+    gProvisioningApLastEnsureAt = millis();
+    const bool modeOk = WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA;
+    if (!gProvisioningApActive || !modeOk ||
+        WiFi.softAPSSID() != _provisioningApSsid() || WiFi.softAPIP() != IPAddress(192, 168, 4, 1))
+    {
+        LOG_WARN(LOG_CAT_WIFI, "Restarting unavailable setup AP");
+        _startProvisioningAp();
+    }
+    else
+        _startProvisioningDns();
 }
 
-static void _stopProvisioningServices(AlarmWebServer& portalServer, bool stopDns)
+static void _beginWifiAttempt()
 {
-    portalServer.close();
-    if (stopDns)
-        _stopProvisioningDns();
+    // On ESP32 disconnect is asynchronous. Do not begin/accept a candidate
+    // until the old connection has visibly ended (same-SSID password changes).
+    gWifiDisconnectPending = true;
+    platformWifiDisconnect();
+    gWifiRecovery.observe(false, millis());
+    gWifiRecovery.start(millis());
+    gWifiRecoveryAttempts++;
+    LOG_INFO(LOG_CAT_WIFI, "WiFi connection attempt #%lu", (unsigned long)gWifiRecoveryAttempts);
 }
 
-// ===== MAIN WIFI + EFFECT =====
+static void _finishFailedProvision(const char *error)
+{
+    gProvisionWifiState = ProvisionWifiState::Failed;
+    gProvisionWifiError = error;
+    gWifiDisconnectPending = false;
+    memset(gProvisionWifiPass, 0, sizeof(gProvisionWifiPass));
+    platformWifiDisconnect();
+    gWifiRecovery.observe(false, millis());
+    gWifiRecovery.finish(millis());
+    LOG_WARN(LOG_CAT_WIFI, "Provisioning failed: %s; keeping saved credentials", error);
+}
+
+void startupProvisioningHandle()
+{
+    uint32_t now = millis();
+    if (gProvisioningDnsActive)
+        gProvisioningDns.processNextRequest();
+    _ensureProvisioningApRunning();
+
+    // Release abandoned scan results and recover a scan which never completes.
+    if (gProvisionScanStarted && now - gProvisionScanStartedAt >= 15000UL)
+    {
+#if defined(ESP32)
+        esp_wifi_scan_stop();
+#endif
+        WiFi.scanDelete();
+        gProvisionScanStarted = false;
+    }
+    const bool scanning = gProvisionScanStarted && WiFi.scanComplete() == WIFI_SCAN_RUNNING;
+    const bool queued = gProvisionWifiState == ProvisionWifiState::Queued;
+    if (!scanning && (gWifiConnectRequested || (queued && now - gProvisionWifiQueuedAt >= 250UL)))
+    {
+        WiFi.scanDelete();
+        gProvisionScanStarted = false;
+        if (gWifiConnectRequested)
+        {
+            gWifiConnectRequested = false;
+            if (gConfig.wifiSsid[0])
+                _beginWifiAttempt();
+            else
+            {
+                platformWifiDisconnect();
+                gWifiDisconnectPending = false;
+                gWifiRecovery.observe(false, now);
+                gWifiRecovery.finish(now);
+                if (!gProvisioningRequired)
+                    _startProvisioningAp();
+            }
+        }
+        else
+        {
+            gProvisionWifiState = ProvisionWifiState::Connecting;
+            _beginWifiAttempt();
+        }
+    }
+
+    if (gWifiDisconnectPending && WiFi.status() != WL_CONNECTED)
+    {
+        WiFi.mode(gProvisioningRequired ? WIFI_AP_STA : WIFI_STA);
+        platformWifiDisableSleep();
+        const bool candidate = gProvisionWifiState == ProvisionWifiState::Connecting;
+        WiFi.begin(candidate ? gProvisionWifiSsid : gConfig.wifiSsid,
+                   candidate ? gProvisionWifiPass : gConfig.wifiPass);
+        gWifiDisconnectPending = false;
+        gWifiRecovery.start(millis());
+    }
+    now = millis(); // WiFi.begin/disconnect may yield; don't compare with an older tick.
+    const bool ready = _wifiReady();
+    if (!gWifiDisconnectPending && gProvisionWifiState == ProvisionWifiState::Connecting && ready &&
+        WiFi.SSID() == String(gProvisionWifiSsid))
+    {
+        char previousSsid[WIFI_SSID_MAXLEN];
+        char previousPass[WIFI_PASS_MAXLEN];
+        memcpy(previousSsid, gConfig.wifiSsid, sizeof(previousSsid));
+        memcpy(previousPass, gConfig.wifiPass, sizeof(previousPass));
+        snprintf(gConfig.wifiSsid, sizeof(gConfig.wifiSsid), "%s", gProvisionWifiSsid);
+        snprintf(gConfig.wifiPass, sizeof(gConfig.wifiPass), "%s", gProvisionWifiPass);
+        if (!storageSaveCurrentConfig())
+        {
+            memcpy(gConfig.wifiSsid, previousSsid, sizeof(previousSsid));
+            memcpy(gConfig.wifiPass, previousPass, sizeof(previousPass));
+            _finishFailedProvision("config_save_failed");
+            return;
+        }
+        memset(gProvisionWifiPass, 0, sizeof(gProvisionWifiPass));
+        gProvisionWifiState = ProvisionWifiState::Saved;
+        gProvisionWifiError = "";
+        LOG_INFO(LOG_CAT_WIFI, "Provisioned WiFi connected and saved");
+    }
+    const bool wasConnected = gWifiRecovery.connected;
+    // A new candidate is not accepted until it has connected AND been saved.
+    const bool usable = ready && !gWifiDisconnectPending && gProvisionWifiState != ProvisionWifiState::Connecting;
+    gWifiRecovery.observe(usable, now);
+    if (usable)
+    {
+        if (!wasConnected)
+            LOG_INFO(LOG_CAT_WIFI, "WiFi connected IP=%s", WiFi.localIP().toString().c_str());
+        // Keep DNS/AP for a grace period so the phone receives status and the LAN IP.
+        if (gProvisioningRequired && !queued && !gWifiConnectRequested && gWifiRecovery.closeApDue(now))
+        {
+            _stopProvisioningDns();
+            WiFi.softAPdisconnect(true);
+            WiFi.mode(WIFI_STA);
+            gProvisioningApActive = false;
+            gProvisioningRequired = false;
+            LOG_INFO(LOG_CAT_WIFI, "Setup AP closed after stable WiFi connection");
+        }
+        return;
+    }
+
+    if (gWifiRecovery.timedOut(now))
+    {
+        if (gWifiDisconnectPending)
+        {
+            LOG_WARN(LOG_CAT_WIFI, "STA disconnect stuck; restarting WiFi radio");
+            _stopProvisioningDns();
+            WiFi.mode(WIFI_OFF);
+            gProvisioningApActive = false;
+            if (gProvisioningRequired)
+                _startProvisioningAp();
+        }
+        if (gProvisionWifiState == ProvisionWifiState::Connecting)
+        {
+            _finishFailedProvision("connect_timeout_or_bad_password");
+            return;
+        }
+        else
+        {
+            platformWifiDisconnect();
+            gWifiDisconnectPending = false;
+            gWifiRecovery.finish(now);
+            LOG_WARN(LOG_CAT_WIFI, "WiFi attempt timed out; retry scheduled");
+        }
+    }
+    if (!gProvisioningRequired && (!gConfig.wifiSsid[0] || gWifiRecovery.fallbackDue(now)))
+        _startProvisioningAp();
+    if (!scanning && !queued && gConfig.wifiSsid[0] && gWifiRecovery.retryDue(now))
+        _beginWifiAttempt();
+}
+
+static bool _isProvisioningRequest(AlarmWebServer &server)
+{
+    // The unauthenticated setup endpoints are available only on the setup AP.
+    return gProvisioningRequired && gProvisioningApActive &&
+           server.client().localIP() == WiFi.softAPIP();
+}
+
+bool startupServeProvisioningPage(AlarmWebServer &server)
+{
+    if (!_isProvisioningRequest(server))
+        return false;
+    _sendProvisionPage(server);
+    return true;
+}
+
+static bool _requireProvisioningRequest(AlarmWebServer &server)
+{
+    if (_isProvisioningRequest(server))
+        return true;
+    server.send(403, "application/json", "{\"ok\":false,\"error\":\"setup_ap_required\"}");
+    return false;
+}
+
+void startupProvisioningRegisterRoutes(AlarmWebServer &server)
+{
+    server.on("/api/provision/status", HTTP_GET, [&server]() {
+        if (_requireProvisioningRequest(server)) _sendProvisionStatus(server, true);
+    });
+    server.on("/api/provision/networks", HTTP_GET, [&server]() {
+        if (_requireProvisioningRequest(server)) _sendProvisionNetworks(server);
+    });
+    server.on("/api/provision/wifi", HTTP_POST, [&server]() {
+        if (!_requireProvisioningRequest(server)) return;
+        if (gProvisionWifiState == ProvisionWifiState::Queued ||
+            gProvisionWifiState == ProvisionWifiState::Connecting)
+        {
+            server.send(409, "application/json", "{\"ok\":false,\"error\":\"wifi_connecting\"}");
+            return;
+        }
+        String ssid, pass, error;
+        StaticJsonDocument<256> doc;
+        if (!_readWifiProvisionPayload(server, ssid, pass, error))
+        {
+            doc["ok"] = false;
+            doc["error"] = error;
+            _sendProvisionJson(server, doc, 400);
+            return;
+        }
+        snprintf(gProvisionWifiSsid, sizeof(gProvisionWifiSsid), "%s", ssid.c_str());
+        snprintf(gProvisionWifiPass, sizeof(gProvisionWifiPass), "%s", pass.c_str());
+        gProvisionWifiError = "";
+        gProvisionWifiState = ProvisionWifiState::Queued;
+        gProvisionWifiQueuedAt = millis();
+        gWifiConnectRequested = false;
+        doc["ok"] = true;
+        doc["event"] = "wifi_connecting";
+        doc["saved"] = false;
+        doc["connecting"] = true;
+        // Send before changing the shared AP/STA channel; poll status for result.
+        _sendProvisionJson(server, doc, 202);
+    });
+}
+
+bool startupShowProvisioningEffect(uint8_t ledCount)
+{
+    if (!gProvisioningRequired || _wifiReady() || gFetchOk || gCalibrationActive)
+        return false;
+    const AnimationConfig cfg = animationForState(MAP_STATE_AP_MODE);
+    const bool night = isNightMode();
+    _showApFlagBlendAnimation(ledCount,
+        capColorForAnimation(ukraineBlueColor(cfg.maxBrightness), cfg, night),
+        capColorForAnimation(ukraineYellowColor(cfg.maxBrightness), cfg, night), AP_ANIMATION_FRAME_MS);
+    return true;
+}
+
+// Setup is bounded even if the router starts several minutes after the device.
 bool startupWifiWithEffect(uint8_t ledCount)
 {
-    LOG_INFO(LOG_CAT_WIFI, "WiFi connecting...");
-
-    const bool night = isNightMode();
-    const AnimationConfig startupCfg = animationForState(MAP_STATE_STARTUP);
-    const AnimationConfig apCfg = animationForState(MAP_STATE_AP_MODE);
-    const Color startupPrimary = capColorForAnimation(ukraineBlueColor(startupCfg.maxBrightness), startupCfg, night);
-    const Color startupSecondary = capColorForAnimation(ukraineYellowColor(startupCfg.maxBrightness), startupCfg, night);
-    const Color apPrimary = capColorForAnimation(ukraineBlueColor(apCfg.maxBrightness), apCfg, night);
-    const Color apSecondary = capColorForAnimation(ukraineYellowColor(apCfg.maxBrightness), apCfg, night);
-
     WiFi.mode(WIFI_STA);
-    if (strlen(gConfig.wifiSsid))
-        WiFi.begin(gConfig.wifiSsid, gConfig.wifiPass);
-    else
-        LOG_WARN(LOG_CAT_WIFI, "No saved WiFi credentials, provisioning portal will start");
-
-    unsigned long t0 = millis();
-    while (strlen(gConfig.wifiSsid) && millis() - t0 < 15000)
+    platformWifiDisableSleep();
+    platformWifiConfigureApRadio();
+    gWifiRecovery.offlineSince = millis();
+    if (!gConfig.wifiSsid[0])
     {
-        serialProtocolHandle();
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            storageSyncWifiCredentials();
-            LOG_INFO(LOG_CAT_WIFI, "OK IP: %s", WiFi.localIP().toString().c_str());
-            return true;
-        }
-        _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, STARTUP_ANIMATION_FRAME_MS);
-        yield();
+        _startProvisioningAp();
+        return false;
     }
-
-    LOG_WARN(LOG_CAT_WIFI, "Saved network unavailable, switching to AP");
-    const unsigned long startupTailStart = millis();
-    while (millis() - startupTailStart < STARTUP_ANIMATION_TAIL_EXTRA_MS)
-    {
-        serialProtocolHandle();
-        _showStartupBounceFlagAnimation(ledCount, startupPrimary, startupSecondary, STARTUP_ANIMATION_FRAME_MS);
-        yield();
-    }
-    strip.clear();
-    strip.show();
-
-    _startProvisioningAp();
-    AlarmWebServer portalServer(80);
-
-    portalServer.on("/", HTTP_GET, [&portalServer]() { _sendProvisionPage(portalServer); });
-    portalServer.on("/index.html", HTTP_GET, [&portalServer]() { _sendProvisionPage(portalServer); });
-    portalServer.on("/generate_204", HTTP_GET, [&portalServer]() { _redirectProvisionHome(portalServer); });
-    portalServer.on("/gen_204", HTTP_GET, [&portalServer]() { _redirectProvisionHome(portalServer); });
-    portalServer.on("/mobile/status.php", HTTP_GET, [&portalServer]() { _redirectProvisionHome(portalServer); });
-    portalServer.on("/hotspot-detect.html", HTTP_GET, [&portalServer]() { _sendCaptiveProbePage(portalServer); });
-    portalServer.on("/library/test/success.html", HTTP_GET, [&portalServer]() { _sendCaptiveProbePage(portalServer); });
-    portalServer.on("/connecttest.txt", HTTP_GET, [&portalServer]() { _redirectProvisionHome(portalServer); });
-    portalServer.on("/redirect", HTTP_GET, [&portalServer]() { _sendProvisionPage(portalServer); });
-    portalServer.on("/ncsi.txt", HTTP_GET, [&portalServer]() { _redirectProvisionHome(portalServer); });
-    portalServer.on("/canonical.html", HTTP_GET, [&portalServer]() { _sendCaptiveProbePage(portalServer); });
-    portalServer.on("/api/provision/status", HTTP_GET, [&portalServer]() { _sendProvisionStatus(portalServer, true); });
-    portalServer.on("/api/provision/networks", HTTP_GET, [&portalServer]() { _sendProvisionNetworks(portalServer); });
-    portalServer.on("/api/provision/wifi", HTTP_OPTIONS, [&portalServer]()
-                    {
-                        portalServer.sendHeader("Access-Control-Allow-Origin", "*");
-                        portalServer.sendHeader("Access-Control-Allow-Headers", "content-type");
-                        portalServer.send(204, "text/plain", "");
-                    });
-    portalServer.on("/api/provision/wifi", HTTP_POST, [&portalServer]()
-                    {
-                        String ssid;
-                        String pass;
-                        String error;
-                        StaticJsonDocument<384> doc;
-                        if (!_readWifiProvisionPayload(portalServer, ssid, pass, error))
-                        {
-                            doc["ok"] = false;
-                            doc["error"] = error;
-                            _sendProvisionJson(portalServer, doc, 400);
-                            return;
-                        }
-
-                        char prevSsid[WIFI_SSID_MAXLEN];
-                        char prevPass[WIFI_PASS_MAXLEN];
-                        snprintf(prevSsid, sizeof(prevSsid), "%s", gConfig.wifiSsid);
-                        snprintf(prevPass, sizeof(prevPass), "%s", gConfig.wifiPass);
-
-                        resetTraceSetStage("provision_wifi_test");
-                        LOG_INFO(LOG_CAT_WIFI, "Provisioning test connect to SSID='%s'", ssid.c_str());
-                        WiFi.mode(WIFI_AP_STA);
-                        WiFi.begin(ssid.c_str(), pass.c_str());
-
-                        const unsigned long connectStart = millis();
-                        while (WiFi.status() != WL_CONNECTED && millis() - connectStart < 15000UL)
-                        {
-                            serialProtocolHandle();
-                            startupProvisioningHandle();
-                            delay(50);
-                            yield();
-                        }
-
-                        const bool connected = WiFi.status() == WL_CONNECTED;
-                        bool saved = false;
-                        if (connected)
-                        {
-                            snprintf(gConfig.wifiSsid, WIFI_SSID_MAXLEN, "%s", ssid.c_str());
-                            snprintf(gConfig.wifiPass, WIFI_PASS_MAXLEN, "%s", pass.c_str());
-                            saved = storageSaveCurrentConfig(true);
-                        }
-                        else
-                        {
-                            platformWifiDisconnect();
-                            snprintf(gConfig.wifiSsid, WIFI_SSID_MAXLEN, "%s", prevSsid);
-                            snprintf(gConfig.wifiPass, WIFI_PASS_MAXLEN, "%s", prevPass);
-                            WiFi.mode(WIFI_AP_STA);
-                        }
-
-                        doc["ok"] = connected && saved;
-                        doc["event"] = "wifi_saved";
-                        doc["ssid"] = ssid;
-                        doc["connected"] = connected;
-                        doc["saved"] = saved;
-                        doc["ip"] = connected ? WiFi.localIP().toString() : "";
-                        doc["message"] = connected
-                                             ? (saved ? "connected_and_saved" : "connected_but_save_failed")
-                                             : "connect_timeout_or_bad_password";
-                        _sendProvisionJson(portalServer, doc, (connected && saved) ? 200 : 422);
-                    });
-    portalServer.onNotFound([&portalServer]()
-                            {
-                                _redirectProvisionHome(portalServer);
-                            });
-    portalServer.begin();
-
-    LOG_INFO(LOG_CAT_WIFI, "AP mode SSID='%s' IP=%s",
-             _provisioningApSsid().c_str(), WiFi.softAPIP().toString().c_str());
-
-    // WiFiManager-style provisioning: keep the setup portal alive until Wi-Fi connects.
-    while (true)
+    _beginWifiAttempt();
+    const AnimationConfig cfg = animationForState(MAP_STATE_STARTUP);
+    const bool night = isNightMode();
+    const Color primary = capColorForAnimation(ukraineBlueColor(cfg.maxBrightness), cfg, night);
+    const Color secondary = capColorForAnimation(ukraineYellowColor(cfg.maxBrightness), cfg, night);
+    const uint32_t startedAt = millis();
+    while (millis() - startedAt < 15000UL)
     {
         serialProtocolHandle();
         startupProvisioningHandle();
-        portalServer.handleClient();
-        _ensureProvisioningApRunning();
-
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            storageSyncWifiCredentials();
-            LOG_INFO(LOG_CAT_WIFI, "Connected via portal. IP: %s", WiFi.localIP().toString().c_str());
-            const uint8_t modeCap = modeBrightnessLimit(night);
-            _showSolidFor(ledCount, strip.Color(0, min<uint8_t>(startupCfg.maxBrightness, modeCap), 0), 800);
-            _stopProvisioningServices(portalServer, true);
-            WiFi.mode(WIFI_STA);
+        if (_wifiReady() && !gWifiDisconnectPending)
             return true;
-        }
-
-        _showApFlagBlendAnimation(ledCount, apPrimary, apSecondary, AP_ANIMATION_FRAME_MS);
-        yield();
+        _showStartupBounceFlagAnimation(ledCount, primary, secondary, STARTUP_ANIMATION_FRAME_MS);
+        delay(1);
     }
-
+    _startProvisioningAp();
     return false;
 }

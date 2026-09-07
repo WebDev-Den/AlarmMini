@@ -10,7 +10,8 @@
 namespace platform_audio
 {
 #if defined(ESP32)
-static constexpr uint8_t BUZZER_LEDC_CHANNEL = 6;
+// ESP32-C3 has six channels, numbered 0..5.
+static constexpr uint8_t BUZZER_LEDC_CHANNEL = 0;
 #endif
 
 inline void initBuzzerPin()

@@ -11,11 +11,15 @@ constexpr char CONFIG_TMP_PATH[] = "/amcfg.tmp";
 constexpr char CONFIG_BAK_PATH[] = "/amcfg.bak";
 constexpr int DEFAULT_BUZZER_REGION_INDEX = 20;
 constexpr uint32_t CONFIG_MAGIC = 0x414D4346UL; // AMCF
+constexpr size_t WIFI_SSID_MAX_BYTES = 32;
 constexpr uint16_t LOG_MASK_DEFAULT_RUNTIME =
     LOG_CAT_SYSTEM | LOG_CAT_WIFI | LOG_CAT_INTERNET |
     LOG_CAT_MQTT | LOG_CAT_WEB | LOG_CAT_CONFIG;
 
 uint32_t gLastSavedCrc = 0;
+// Only rotate a file that was successfully validated. A corrupt main file must
+// never replace the backup from which this boot recovered.
+const char *gConfigSource = nullptr;
 bool loadEnvelopeFromPath(const char *path, DynamicJsonDocument &root);
 
 bool isNumber(JsonVariantConst v)
@@ -152,7 +156,7 @@ bool validateFullConfigJson(JsonVariantConst cfg, char *error, size_t errorSize)
 
     JsonObjectConst w;
     if (!readObject(cfg, "w", w) ||
-        !isStringWithin(w["s"], WIFI_SSID_MAXLEN) ||
+        !isStringWithin(w["s"], WIFI_SSID_MAX_BYTES + 1) ||
         !isStringWithin(w["p"], WIFI_PASS_MAXLEN))
     {
         setErr("bad_w");
@@ -240,12 +244,12 @@ int regionIndexFromVariant(JsonVariantConst value)
 
 uint8_t readU8(JsonVariantConst value, uint8_t fallback = 0)
 {
-    return value.isNull() ? fallback : (uint8_t)value.as<int>();
+    return value.isNull() ? fallback : clampU8(value.as<int>(), 0, 255);
 }
 
 uint16_t readU16(JsonVariantConst value, uint16_t fallback = 0)
 {
-    return value.isNull() ? fallback : (uint16_t)value.as<unsigned int>();
+    return value.isNull() ? fallback : clampU16(value.as<int>(), 0, 65535);
 }
 
 bool readBool(JsonVariantConst value, bool fallback = false)
@@ -344,6 +348,7 @@ class Crc32Writer : public Print
 {
 public:
     explicit Crc32Writer(uint32_t &target) : _target(target) {}
+    using Print::write;
 
     size_t write(uint8_t ch) override
     {
@@ -363,9 +368,62 @@ uint32_t computeConfigCrc(JsonVariantConst cfg)
     return crc ^ 0xFFFFFFFFUL;
 }
 
+class ConfigFileVerifier : public Print
+{
+public:
+    explicit ConfigFileVerifier(File &file) : _file(file) {}
+    using Print::write;
+
+    size_t write(uint8_t byte) override
+    {
+        if (_file.read() != byte)
+            _matches = false;
+        return 1;
+    }
+
+    size_t write(const uint8_t *data, size_t size) override
+    {
+        uint8_t buffer[64];
+        size_t offset = 0;
+        while (offset < size)
+        {
+            const size_t count = min(size - offset, sizeof(buffer));
+            if (_file.read(buffer, count) != count ||
+                memcmp(buffer, data + offset, count) != 0)
+                _matches = false;
+            offset += count;
+        }
+        return size;
+    }
+
+    bool matches() const { return _matches; }
+
+private:
+    File &_file;
+    bool _matches = true;
+};
+
+bool recoverPendingConfig()
+{
+    if (gConfigSource != CONFIG_TMP_PATH)
+        return true;
+    // The temporary file may be the only valid copy after a power cut. Preserve
+    // it before opening this same path with "w" for another save.
+    if (!LittleFS.rename(CONFIG_TMP_PATH, CONFIG_PATH))
+    {
+        LOG_ERROR(LOG_CAT_CONFIG, "Cannot recover pending config");
+        return false;
+    }
+    gConfigSource = CONFIG_PATH;
+    return true;
+}
+
 bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
 {
-    resetTraceSetStage("cfg_write_begin");
+    if (!recoverPendingConfig())
+        return false;
+
+    resetTraceSetStage("cfg_write_begin", false);
     File tmp = LittleFS.open(CONFIG_TMP_PATH, "w");
     if (!tmp)
     {
@@ -379,13 +437,16 @@ bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
                                    (unsigned long)CONFIG_MAGIC,
                                    (unsigned int)CONFIG_SCHEMA_VERSION,
                                    (unsigned long)crc);
+    const size_t expectedCfgBytes = measureJson(config);
     const size_t b0 = (headerLen > 0 && (size_t)headerLen < sizeof(header))
                           ? tmp.write((const uint8_t *)header, (size_t)headerLen)
                           : 0;
     const size_t cfgBytes = serializeJson(config, tmp);
     const size_t b1 = tmp.write((const uint8_t *)"}", 1);
 
-    if (b0 == 0 || cfgBytes == 0 || b1 == 0 || tmp.getWriteError())
+    tmp.flush();
+    if (headerLen <= 0 || b0 != (size_t)headerLen ||
+        cfgBytes != expectedCfgBytes || b1 != 1 || tmp.getWriteError())
     {
         tmp.close();
         LittleFS.remove(CONFIG_TMP_PATH);
@@ -393,47 +454,57 @@ bool writeEnvelopeAtomically(JsonVariantConst config, uint32_t crc)
         return false;
     }
 
-    tmp.flush();
     tmp.close();
 
-#if !defined(ESP8266)
-    DynamicJsonDocument writtenRoot(CONFIG_JSON_CAPACITY + 2048);
-    if (!loadEnvelopeFromPath(CONFIG_TMP_PATH, writtenRoot))
+    // Verify the exact bytes after flushing on both chips. Streaming comparison
+    // avoids a second JSON allocation on the memory-constrained ESP8266.
+    File written = LittleFS.open(CONFIG_TMP_PATH, "r");
+    if (!written || written.size() != b0 + expectedCfgBytes + 1)
     {
+        if (written)
+            written.close();
         LittleFS.remove(CONFIG_TMP_PATH);
         LOG_ERROR(LOG_CAT_CONFIG, "Written config verification failed: tmp unreadable");
         return false;
     }
-
-    JsonVariantConst writtenCfg = writtenRoot["cfg"].as<JsonVariantConst>();
-    const uint32_t writtenMagic = writtenRoot["magic"] | 0U;
-    const uint32_t writtenCrc = writtenRoot["crc"] | 0U;
-    char verifyError[24] = {0};
-    if (writtenMagic != CONFIG_MAGIC ||
-        writtenCfg.isNull() ||
-        computeConfigCrc(writtenCfg) != writtenCrc ||
-        !validateFullConfigJson(writtenCfg, verifyError, sizeof(verifyError)))
+    ConfigFileVerifier verifier(written);
+    verifier.write((const uint8_t *)header, b0);
+    serializeJson(config, verifier);
+    verifier.write((uint8_t)'}');
+    written.close();
+    if (!verifier.matches())
     {
         LittleFS.remove(CONFIG_TMP_PATH);
-        LOG_ERROR(LOG_CAT_CONFIG, "Written config verification failed: %s", verifyError[0] ? verifyError : "bad_crc");
+        LOG_ERROR(LOG_CAT_CONFIG, "Written config verification failed: byte mismatch");
         return false;
     }
-#endif
 
-    LittleFS.remove(CONFIG_BAK_PATH);
-    if (LittleFS.exists(CONFIG_PATH))
-        LittleFS.rename(CONFIG_PATH, CONFIG_BAK_PATH);
+    if (gConfigSource == CONFIG_PATH)
+    {
+        // LittleFS rename atomically replaces the destination: do not unlink the
+        // old backup first, and do not proceed if rotation failed.
+        if (!LittleFS.rename(CONFIG_PATH, CONFIG_BAK_PATH))
+        {
+            LOG_ERROR(LOG_CAT_CONFIG, "Config backup rotation failed");
+            LittleFS.remove(CONFIG_TMP_PATH);
+            return false;
+        }
+        gConfigSource = CONFIG_BAK_PATH;
+    }
 
     if (!LittleFS.rename(CONFIG_TMP_PATH, CONFIG_PATH))
     {
         LOG_ERROR(LOG_CAT_CONFIG, "Atomic rename failed");
-        if (LittleFS.exists(CONFIG_BAK_PATH))
-            LittleFS.rename(CONFIG_BAK_PATH, CONFIG_PATH);
-        LittleFS.remove(CONFIG_TMP_PATH);
+        // Leave both validated files available to the next boot, including the
+        // temporary file if restoration also fails.
+        if (gConfigSource == CONFIG_BAK_PATH &&
+            LittleFS.rename(CONFIG_BAK_PATH, CONFIG_PATH))
+            gConfigSource = CONFIG_PATH;
         return false;
     }
 
-    resetTraceSetStage("cfg_write_done");
+    gConfigSource = CONFIG_PATH;
+    resetTraceSetStage("cfg_write_done", false);
     return true;
 }
 
@@ -697,16 +768,24 @@ bool storageLoadConfigFromJson(JsonVariantConst configJson, char *error, size_t 
 
 bool storageSaveConfigFromJson(JsonVariantConst configJson, bool forceWrite, char *error, size_t errorSize)
 {
-    if (!storageLoadConfigFromJson(configJson, error, errorSize))
+    if (!validateFullConfigJson(configJson, error, errorSize))
         return false;
 
     const uint32_t crc = computeConfigCrc(configJson);
-    if (!forceWrite && crc == gLastSavedCrc)
+    if (!forceWrite && gConfigSource && crc == gLastSavedCrc)
+    {
+        storageApplyJson(configJson);
         return true;
+    }
 
     if (!writeEnvelopeAtomically(configJson, crc))
+    {
+        if (error && errorSize)
+            snprintf(error, errorSize, "save_failed");
         return false;
+    }
 
+    storageApplyJson(configJson);
     gLastSavedCrc = crc;
     return true;
 }
@@ -727,7 +806,7 @@ bool storageSaveCurrentConfig(bool forceWrite)
     }
 
     const uint32_t crc = computeConfigCrc(cfgDoc.as<JsonVariantConst>());
-    if (!forceWrite && crc == gLastSavedCrc)
+    if (!forceWrite && gConfigSource && crc == gLastSavedCrc)
         return true;
 
     if (!writeEnvelopeAtomically(cfgDoc.as<JsonVariantConst>(), crc))
@@ -739,19 +818,36 @@ bool storageSaveCurrentConfig(bool forceWrite)
 
 bool storageSyncWifiCredentials()
 {
+    if (WiFi.status() != WL_CONNECTED)
+        return false;
+
     const String currentSsid = WiFi.SSID();
     const String currentPass = WiFi.psk();
+    if (!currentSsid.length() || currentSsid.length() > WIFI_SSID_MAX_BYTES ||
+        currentPass.length() >= WIFI_PASS_MAXLEN || WiFi.status() != WL_CONNECTED)
+        return false;
 
     const bool ssidChanged = strncmp(gConfig.wifiSsid, currentSsid.c_str(), WIFI_SSID_MAXLEN) != 0;
     const bool passChanged = strncmp(gConfig.wifiPass, currentPass.c_str(), WIFI_PASS_MAXLEN) != 0;
     if (!ssidChanged && !passChanged)
         return false;
 
+    // An SDK query during a radio transition can return an empty key. Explicit
+    // provisioning is responsible for changing a protected network to an open one.
+    if (!ssidChanged && gConfig.wifiPass[0] && !currentPass.length())
+        return false;
+
+    char previousSsid[WIFI_SSID_MAXLEN];
+    char previousPass[WIFI_PASS_MAXLEN];
+    copyBounded(previousSsid, sizeof(previousSsid), gConfig.wifiSsid);
+    copyBounded(previousPass, sizeof(previousPass), gConfig.wifiPass);
     copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, currentSsid.c_str());
     copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, currentPass.c_str());
 
     if (!storageSaveCurrentConfig())
     {
+        copyBounded(gConfig.wifiSsid, WIFI_SSID_MAXLEN, previousSsid);
+        copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, previousPass);
         LOG_ERROR(LOG_CAT_CONFIG, "Failed to persist synced WiFi credentials");
         return false;
     }
@@ -763,6 +859,8 @@ bool storageSyncWifiCredentials()
 bool storageInit()
 {
     applyDefaults();
+    gLastSavedCrc = 0;
+    gConfigSource = nullptr;
 
     bool loadedConfig = false;
     bool needsRewrite = false;
@@ -783,7 +881,9 @@ bool storageInit()
         if (magic == CONFIG_MAGIC && !cfg.isNull())
         {
             const uint32_t actualCrc = computeConfigCrc(cfg);
-            if (storedCrc != 0U && actualCrc != storedCrc)
+            const bool hasCrc = root["crc"].is<uint32_t>();
+            if ((!hasCrc && (version >= CONFIG_SCHEMA_VERSION || root.containsKey("crc"))) ||
+                (hasCrc && actualCrc != storedCrc))
             {
                 LOG_ERROR(LOG_CAT_CONFIG, "Config CRC mismatch in %s", path);
                 return false;
@@ -799,9 +899,10 @@ bool storageInit()
             gLastSavedCrc = actualCrc;
             loadedConfig = true;
             loadedFrom = path;
+            gConfigSource = path;
             const uint8_t cfgVersion = cfg["cv"].isNull() ? 0 : readU8(cfg["cv"], 0);
             needsRewrite = (version != CONFIG_SCHEMA_VERSION) ||
-                           (storedCrc == 0U) ||
+                           !hasCrc ||
                            (cfgVersion != CONFIG_DOCUMENT_VERSION);
             LOG_INFO(LOG_CAT_CONFIG, "Config loaded from %s (v%d%s)", path, version,
                      needsRewrite ? ", migration pending" : "");
@@ -818,11 +919,15 @@ bool storageInit()
                 return false;
             }
 
-            DynamicJsonDocument cfgDoc(CONFIG_JSON_CAPACITY);
-            storagePopulateJson(cfgDoc);
-            gLastSavedCrc = computeConfigCrc(cfgDoc.as<JsonVariantConst>());
+            // storageLoadConfigFromJson copied all fields into gConfig. Reuse
+            // the parsing pool instead of allocating another full document.
+            root.clear();
+            storagePopulateJson(root);
+            if (root.overflowed()) return false;
+            gLastSavedCrc = computeConfigCrc(root.as<JsonVariantConst>());
             loadedConfig = true;
             loadedFrom = path;
+            gConfigSource = path;
             needsRewrite = true;
             LOG_WARN(LOG_CAT_CONFIG, "Legacy config loaded from %s, migration pending", path);
             return true;
@@ -834,11 +939,14 @@ bool storageInit()
 
     if (!tryLoadFromPath(CONFIG_PATH, true))
     {
-        tryLoadFromPath(CONFIG_BAK_PATH, true);
+        if (!tryLoadFromPath(CONFIG_TMP_PATH, false))
+            tryLoadFromPath(CONFIG_BAK_PATH, true);
     }
 
     if (loadedConfig)
     {
+        if (!recoverPendingConfig())
+            return false;
         if (needsRewrite)
         {
             if (!storageSaveCurrentConfig(true))
@@ -851,7 +959,17 @@ bool storageInit()
         return true;
     }
 
-    LOG_WARN(LOG_CAT_CONFIG, "Config not found or invalid, creating defaults");
+    // A parse/allocation/mount problem must never turn into a destructive save
+    // of blank WiFi credentials. Keep the existing bytes for recovery or an
+    // explicit configuration update.
+    if (LittleFS.exists(CONFIG_PATH) || LittleFS.exists(CONFIG_TMP_PATH) ||
+        LittleFS.exists(CONFIG_BAK_PATH))
+    {
+        LOG_ERROR(LOG_CAT_CONFIG, "No valid config; preserving files, using RAM defaults");
+        return false;
+    }
+
+    LOG_WARN(LOG_CAT_CONFIG, "Config not found, creating defaults");
 
     if (!storageSaveCurrentConfig(true))
     {

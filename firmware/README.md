@@ -2,7 +2,7 @@
 
 AlarmMini is firmware + web tooling for a physical WS2812 Ukraine alarm map.
 
-Current firmware version: **2.0.5**
+Current firmware version: **2.0.6**
 
 Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
@@ -133,6 +133,35 @@ Checks:
 - `work_data/config.example.json` (always)
 - `work_data/config.json` (if exists locally)
 
+## Stability regression tests
+
+After installing/building the PlatformIO dependencies, run:
+
+```powershell
+python tests/storage_fault_injection.py
+python tests/runtime_regressions.py
+python tests/wifi_runtime_test.py
+node tests/provision_ui_test.js
+```
+
+The native tests need MSVC C++ Build Tools (x86) on Windows, or `g++-multilib`
+on Linux. They execute production code with simulated flash, radio, serial and
+time; they do not replace tests on physical boards. Run them after PlatformIO
+finishes installing dependencies.
+
+The [stability audit](../docs/firmware-stability-audit.md) documents the fixes and
+the hardware acceptance checklist. Setup remains available while saved Wi-Fi is
+retried, including when a router starts after the device. After a runtime outage
+of 30 seconds, the setup AP opens again; it closes after 30 seconds of stable
+Wi-Fi. Connection attempts have a 20-second deadline and a 30-second retry pause.
+The setup API returns HTTP 202 while connecting; `/api/provision/status` reports
+completion or failure. Credentials entered through the portal are committed only
+after a successful connection. Diagnostic flash writes start after 30 seconds,
+so very short boots may be absent from the persistent boot counter.
+
+Build dependencies are pinned to the versions used for this audit. Update them
+explicitly and repeat both platform builds and regression tests.
+
 ## Vercel installer
 
 Project root for installer: `../vercel/`
@@ -165,6 +194,10 @@ vercel alias set <deployment-url> alarmmini.vercel.app
 `secret-scan.yml` runs Gitleaks on push/PR and daily schedule.
 
 ## Notes
+
+### Optimization regression checks
+
+Run `python tests/optimization_test.py` after installing PlatformIO dependencies. It exercises the production UART serializer, HTTP writer, legacy config migration, and LED frame cache for both chip configurations. See `../docs/firmware-optimization.md` for measured RAM/flash changes and hardware verification limits.
 
 - `server.json` is intentionally not part of this firmware/release flow.
 - Keep private tokens and MQTT credentials only in root `.env` or GitHub secrets.

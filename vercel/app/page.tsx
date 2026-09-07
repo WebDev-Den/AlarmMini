@@ -1,9 +1,11 @@
-﻿"use client";
+"use client";
 
-import { createElement, useEffect, useMemo, useRef, useState } from "react";
-import { connect as startEspInstall } from "esp-web-tools/dist/connect.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import type { Manifest } from "esp-web-tools/dist/const";
+import { writeFirmware } from "./installer";
 import QRCode from "qrcode";
-import CodeMirror from "@uiw/react-codemirror";
+const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
 import { json as jsonLang } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 
@@ -21,6 +23,8 @@ type GithubRelease = {
   published_at: string;
   body: string;
   assets: ReleaseAsset[];
+  prerelease?: boolean;
+  draft?: boolean;
 };
 
 type DeviceInfo = {
@@ -68,11 +72,11 @@ type PipelineStepId = "backup" | "flash" | "reconnect" | "restoreWifi" | "restor
 
 const BACKUP_STORAGE_KEY = "alarmmini.backup.config";
 const PIPELINE_STEPS: Array<{ id: PipelineStepId; label: string }> = [
-  { id: "backup", label: "Backup конфігу" },
+  { id: "backup", label: "Копія налаштувань" },
   { id: "flash", label: "Прошивка" },
   { id: "reconnect", label: "Перепідключення" },
   { id: "restoreWifi", label: "Відновлення Wi‑Fi" },
-  { id: "restoreConfig", label: "Відновлення JSON" },
+  { id: "restoreConfig", label: "Усі налаштування" },
   { id: "verify", label: "Перевірка" },
 ];
 
@@ -87,7 +91,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.6";
+const SITE_VERSION = "2.0.7";
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -106,24 +110,6 @@ const BOARD_TARGETS: BoardTarget[] = [
     requiresEsp32BootAssets: false,
   },
 ];
-
-function buildStandardNewDeviceConfig() {
-  return {
-    c: {
-      d: { a: [255, 0, 0, 255], c: [0, 80, 0, 80] },
-      n: { a: [25, 0, 0, 24], c: [0, 0, 0, 0] },
-    },
-    n: { e: true, s: [22, 0], x: [8, 0], b: 150, p: [false, false] },
-    z: { e: false, v: [80, 30], r: [20] },
-    k: { e: true, i: [75, 30] },
-    o: { a: 60, p: 60, d: 2400, s: 100, c: 60 },
-    l: [24, 19, 6, 3, 10, 18, 2, 2, 14, 16, 23, 8, 4, 15, 1, 11, 5, 7, 22, 17, 20, 0, 21, 9, 12, 13, 13],
-    m: { h: "", p: 1883, t: "", u: "", s: "" },
-    w: { s: "", p: "" },
-    t: ["", "", ""],
-    g: 0,
-  };
-}
 
 const EMPTY_INFO: DeviceInfo = {
   fw: "-",
@@ -247,20 +233,9 @@ function configLooksEmpty(cfg: any) {
   return !hasLedMapping && !hasNetworkData;
 }
 
-function hasRestorableNetworkConfig(cfg: any) {
-  if (!cfg || typeof cfg !== "object") return false;
-  const wifi = extractWifi(cfg);
-  const mqtt = extractMqtt(cfg);
-  return Boolean(
-    wifi.ssid?.trim() ||
-      mqtt.host?.trim() ||
-      mqtt.topic?.trim() ||
-      mqtt.user?.trim(),
-  );
-}
 
 function isSafeBackupConfig(cfg: any) {
-  return Boolean(cfg && typeof cfg === "object" && !Array.isArray(cfg) && !configLooksEmpty(cfg) && hasRestorableNetworkConfig(cfg));
+  return Boolean(cfg && typeof cfg === "object" && !Array.isArray(cfg) && buildConfigValidationErrors(cfg).length === 0);
 }
 
 function sanitizeLogLine(raw: string) {
@@ -442,7 +417,7 @@ function collectDiffPaths(expected: any, actual: any, path = ""): string[] {
 export default function Page() {
   const [serialSupported, setSerialSupported] = useState(false);
   const [portState, setPortState] = useState<PortState>("idle");
-  const [status, setStatus] = useState("Готово");
+  const [status, setStatus] = useState("Плата ще не підключена");
 
   const [info, setInfo] = useState<DeviceInfo>(EMPTY_INFO);
   const [wifiSsid, setWifiSsid] = useState("");
@@ -464,14 +439,19 @@ export default function Page() {
   const [selectedBoardId, setSelectedBoardId] = useState<BoardTargetId>("esp32c3");
   const [flashBusy, setFlashBusy] = useState(false);
   const [flashStatus, setFlashStatus] = useState("");
-  const [supportQrSrc, setSupportQrSrc] = useState("");
+  const [flashProgress, setFlashProgress] = useState<number | null>(null);
+  const [flashOutcome, setFlashOutcome] = useState<"idle" | "success" | "error">("idle");
+  const [freshInstallConfirmed, setFreshInstallConfirmed] = useState(false);
+  const [releasesAttempt, setReleasesAttempt] = useState(0);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const flashBusyRef = useRef(false);
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const [adminQrSrc, setAdminQrSrc] = useState("");
   const [apQrSrc, setApQrSrc] = useState("");
   const [webCheckStatus, setWebCheckStatus] = useState("Очікує підключення плати");
   const [isFlashingFlow, setIsFlashingFlow] = useState(false);
   const [waitActive, setWaitActive] = useState(false);
   const [waitLabel, setWaitLabel] = useState("");
-  const [waitProgress, setWaitProgress] = useState(0);
   const [dangerousWriteArmed, setDangerousWriteArmed] = useState(false);
   const [configValidationErrors, setConfigValidationErrors] = useState<string[]>([]);
   const [configModalOpen, setConfigModalOpen] = useState(false);
@@ -487,23 +467,11 @@ export default function Page() {
   const readerRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
   const readLoopRef = useRef<Promise<void> | null>(null);
   const pendingRef = useRef<PendingRequest | null>(null);
-  const installButtonRef = useRef<HTMLElement | null>(null);
-  const manifestUrlRef = useRef<string>("");
   const backupConfigRef = useRef<any | null>(null);
+  const backupHostnameRef = useRef("");
 
   useEffect(() => {
-    setSerialSupported(typeof navigator !== "undefined" && "serial" in navigator);
-    void import("esp-web-tools/dist/web/install-button.js");
-  }, []);
-
-  useEffect(() => {
-    QRCode.toDataURL(SUPPORT_AUTHOR_URL, {
-      width: 172,
-      margin: 1,
-      color: { dark: "#0b2a4f", light: "#ffffff" },
-    })
-      .then(setSupportQrSrc)
-      .catch(() => setSupportQrSrc(""));
+    setSerialSupported(window.isSecureContext && "serial" in navigator);
   }, []);
 
   const deviceBaseUrl = useMemo(() => buildDeviceBaseUrl(info), [info]);
@@ -546,27 +514,29 @@ export default function Page() {
       return;
     }
 
-    fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, { cache: "no-store" })
+    const controller = new AbortController();
+    setReleasesLoading(true);
+    setReleasesError("");
+    fetch("/api/releases", { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`GitHub API ${res.status}`);
         return res.json();
       })
       .then((data: GithubRelease[]) => {
-        setReleases(data);
-        setSelectedReleaseId(data[0]?.id ?? null);
+        const stable = data.filter((release) => !release.draft && !release.prerelease);
+        setReleases(stable);
+        setSelectedReleaseId(stable[0]?.id ?? null);
       })
       .catch((error: unknown) => {
-        setReleasesError(error instanceof Error ? error.message : "Не вдалося отримати релізи");
+        if (!controller.signal.aborted) setReleasesError("Не вдалося завантажити версії. Перевір інтернет і спробуй ще раз.");
       })
-      .finally(() => setReleasesLoading(false));
-  }, []);
+      .finally(() => { if (!controller.signal.aborted) setReleasesLoading(false); });
+    return () => controller.abort();
+  }, [releasesAttempt]);
 
   useEffect(() => {
     return () => {
       void disconnectPort();
-      if (manifestUrlRef.current) {
-        URL.revokeObjectURL(manifestUrlRef.current);
-      }
     };
   }, []);
 
@@ -574,17 +544,34 @@ export default function Page() {
     if (typeof document === "undefined") return;
     if (!configModalOpen) return;
 
+    const previousFocus = document.activeElement as HTMLElement | null;
+    modalRef.current?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setConfigModalOpen(false);
+      if (event.key === "Tab") {
+        const items = modalRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea, select, a[href], [tabindex="0"], [contenteditable="true"]');
+        if (!items?.length) { event.preventDefault(); return; }
+        const first = items[0], last = items[items.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === modalRef.current)) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [configModalOpen]);
+
+  useEffect(() => {
+    if (!flashBusy) return;
+    const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [flashBusy]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -642,8 +629,8 @@ export default function Page() {
     return Boolean(boardAssets.bootloader && boardAssets.partitions && boardAssets.bootApp0);
   }, [selectedRelease, selectedBoard, boardAssets]);
 
-  const manifestUrl = useMemo(() => {
-    if (!canFlash || !selectedRelease || !boardAssets.firmware || !boardAssets.littlefs) return "";
+  const manifest = useMemo<Manifest | null>(() => {
+    if (!canFlash || !selectedRelease || !boardAssets.firmware || !boardAssets.littlefs) return null;
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const firmwarePath = `${origin}/api/release-asset?source=${encodeURIComponent(boardAssets.firmware.browser_download_url)}`;
@@ -671,7 +658,7 @@ export default function Page() {
           { path: littlefsPath, offset: selectedBoard.fsOffset },
         ];
 
-    const manifest = {
+    const manifest: Manifest = {
       name: "AlarmMini",
       version: selectedRelease.tag_name || selectedRelease.name || "unversioned",
       new_install_prompt_erase: false,
@@ -683,9 +670,7 @@ export default function Page() {
       ],
     };
 
-    if (manifestUrlRef.current) URL.revokeObjectURL(manifestUrlRef.current);
-    manifestUrlRef.current = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/json" }));
-    return manifestUrlRef.current;
+    return manifest;
   }, [canFlash, selectedRelease, selectedBoard, boardAssets]);
 
   function appendLog(line: string) {
@@ -709,16 +694,12 @@ export default function Page() {
     const startedAt = Date.now();
     let lastError: unknown = null;
     setWaitLabel(label);
-    setWaitProgress(0);
     setWaitActive(true);
 
     try {
       while (Date.now() - startedAt < timeoutMs) {
-        const elapsed = Date.now() - startedAt;
-        setWaitProgress(Math.min(98, Math.round((elapsed / timeoutMs) * 100)));
         try {
           const result = await action();
-          setWaitProgress(100);
           return result;
         } catch (error) {
           lastError = error;
@@ -730,7 +711,6 @@ export default function Page() {
       setTimeout(() => {
         setWaitActive(false);
         setWaitLabel("");
-        setWaitProgress(0);
       }, 250);
     }
   }
@@ -752,7 +732,7 @@ export default function Page() {
 
   function persistBackupConfig(cfg: any) {
     if (!isSafeBackupConfig(cfg)) {
-      appendLog("[backup] Пропущено: config без Wi‑Fi/MQTT не замінює збережений backup");
+      appendLog("[backup] Конфігурація неповна або не пройшла перевірку");
       return;
     }
     backupConfigRef.current = cfg;
@@ -790,20 +770,19 @@ export default function Page() {
   }
 
   function updateInfoFromPayload(payload: any) {
-    const mapped: DeviceInfo = {
-      fw: String(payload?.fw ?? info.fw ?? "-"),
-      ip: String(payload?.ip ?? info.ip ?? "-"),
-      mdns: String(payload?.mdns ?? info.mdns ?? "-"),
-      hostname: String(payload?.hostname ?? info.hostname ?? "-"),
-      mqttClientId: String(payload?.mqttClientId ?? info.mqttClientId ?? "-"),
-      adminPassword: String(payload?.adminPassword ?? info.adminPassword ?? "-"),
-      apSsid: String(payload?.apSsid ?? info.apSsid ?? "AlarmMap-Setup"),
-      apPassword: String(payload?.apPassword ?? info.apPassword ?? ""),
-      resetReason: String(payload?.resetReason ?? info.resetReason ?? "-"),
-      lastStage: String(payload?.lastStage ?? info.lastStage ?? "-"),
-      bootCount: String(payload?.bootCount ?? info.bootCount ?? "-"),
-    };
-    setInfo(mapped);
+    setInfo((previous) => ({
+      fw: String(payload?.fw ?? previous.fw ?? "-"),
+      ip: String(payload?.ip ?? previous.ip ?? "-"),
+      mdns: String(payload?.mdns ?? previous.mdns ?? "-"),
+      hostname: String(payload?.hostname ?? previous.hostname ?? "-"),
+      mqttClientId: String(payload?.mqttClientId ?? previous.mqttClientId ?? "-"),
+      adminPassword: String(payload?.adminPassword ?? previous.adminPassword ?? "-"),
+      apSsid: String(payload?.apSsid ?? previous.apSsid ?? "AlarmMap-Setup"),
+      apPassword: String(payload?.apPassword ?? previous.apPassword ?? ""),
+      resetReason: String(payload?.resetReason ?? previous.resetReason ?? "-"),
+      lastStage: String(payload?.lastStage ?? previous.lastStage ?? "-"),
+      bootCount: String(payload?.bootCount ?? previous.bootCount ?? "-"),
+    }));
   }
 
   function processJsonLine(obj: any) {
@@ -844,6 +823,11 @@ export default function Page() {
         const { value, done } = await reader.read();
         if (done) break;
         buffer += value ?? "";
+        if (buffer.length > 32768) {
+          buffer = "";
+          appendLog("Надто довгий рядок від плати пропущено.");
+          continue;
+        }
         const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() ?? "";
 
@@ -871,7 +855,11 @@ export default function Page() {
         try {
           reader.releaseLock();
         } catch {}
-        if (readerRef.current === reader) readerRef.current = null;
+        if (readerRef.current === reader) {
+          readerRef.current = null;
+          setPortState("idle");
+          clearPending("USB відключено. Перепідключи плату.");
+        }
         await readableClosed;
       });
   }
@@ -882,7 +870,7 @@ export default function Page() {
 
   async function ensureConnected(requestUser: boolean) {
     if (!serialSupported) throw new Error("Web Serial не підтримується");
-    if (isPortOpen(portRef.current ?? rememberedPortRef.current) && portState === "connected") return;
+    if (isPortOpen(portRef.current) && readerRef.current) return;
 
     setPortState("connecting");
     let port = rememberedPortRef.current;
@@ -892,9 +880,7 @@ export default function Page() {
       if (requestUser) {
         port = await serialApi.requestPort();
       } else {
-        const ports = await serialApi.getPorts();
-        if (!ports?.length) throw new Error("Порт недоступний");
-        port = ports[0];
+        throw new Error("Вибери свою плату кнопкою «Підключити через USB».");
       }
     }
 
@@ -909,7 +895,7 @@ export default function Page() {
     setStatus("Порт підключено");
   }
 
-  async function disconnectPort() {
+  async function disconnectPort(forget = false) {
     try {
       await readerRef.current?.cancel();
     } catch {}
@@ -931,7 +917,12 @@ export default function Page() {
     readLoopRef.current = null;
     portRef.current = null;
     setPortState("idle");
-    setStatus("Порт відключено");
+    setStatus("USB відключено. Підключи плату, щоб продовжити.");
+    if (forget) {
+      rememberedPortRef.current = null;
+      setInfo(EMPTY_INFO);
+      setDownloadedConfig(null);
+    }
   }
 
   async function writeSerialLine(line: string) {
@@ -992,10 +983,13 @@ export default function Page() {
       pendingRef.current = { matcher, resolve, reject, timeoutId };
     });
 
+    // A write failure must not leave a pending timeout/unhandled rejection.
+    responsePromise.catch(() => {});
     try {
       await writeSerialLine(line);
       return await responsePromise;
     } catch (error) {
+      clearPending("command_failed");
       const msg = error instanceof Error ? error.message : String(error);
       if (allowWatchdogRetry && msg.includes("timeout")) {
         appendLog("[watchdog] timeout -> reconnect port and retry command");
@@ -1125,14 +1119,17 @@ export default function Page() {
 
   async function cmdSetWifi() {
     await ensureConnected(true);
-    if (!wifiSsid.trim()) throw new Error("SSID порожній");
+    if (!wifiSsid) throw new Error("Введи назву Wi-Fi мережі.");
+    if (new TextEncoder().encode(wifiSsid).length > 32 || new TextEncoder().encode(wifiPassword).length > 63) {
+      throw new Error("Назва Wi-Fi має вміщуватися у 32 байти, пароль — у 63 байти.");
+    }
     setStatus("Записуємо set:wifi...");
     await sendAndWait(
-      `set:wifi ${JSON.stringify({ ssid: wifiSsid.trim(), password: wifiPassword })}`,
+      `set:wifi ${JSON.stringify({ ssid: wifiSsid, password: wifiPassword })}`,
       (j) => j?.status === "ACK" && (j?.cmd === "set:wifi" || j?.cmd === "wifi_set"),
       9000,
     );
-    setStatus("Wi‑Fi налаштовано");
+    setStatus("Дані Wi-Fi збережено. Пристрій підключається до мережі…");
     setNewDeviceMode(false);
     await cmdGetInfo();
   }
@@ -1273,36 +1270,28 @@ export default function Page() {
   }
 
   async function onConnectClick() {
+    setFlashOutcome("idle");
     try {
       await ensureConnected(true);
-      setStatus("Порт підключено. Очікуємо ініціалізацію плати...");
-      await withBoardWait("Очікуємо відповідь плати (до 1 хв)...", async () => {
-        const infoObj = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
-        updateInfoFromPayload(infoObj);
-        const cfgObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 9000);
-        const cfg = cfgObj?.config;
-        applyConfigToUi(cfg);
-        if (cfg && !configLooksEmpty(cfg)) {
-          if (isSafeBackupConfig(cfg)) {
-            persistBackupConfig(cfg);
-          }
-        }
-      });
-      setNewDeviceMode(false);
-      setStatus("Плата готова. Конфіг зчитано");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const isTimeoutLike =
-        message.toLowerCase().includes("timeout") ||
-        message.toLowerCase().includes("timed out");
-      if (isTimeoutLike) {
-        const fallbackCfg = buildStandardNewDeviceConfig();
-        applyConfigToUi(fallbackCfg);
-        setNewDeviceMode(true);
-        setStatus("Плата не відповіла за 1 хв. Увімкнено режим нової плати (стандартний конфіг без Wi‑Fi/MQTT).");
-      } else {
-        setStatus(`Помилка підключення: ${message}`);
+      if (newDeviceMode) {
+        setStatus("USB підключено. Можна встановлювати AlarmMini.");
+        return;
       }
+      setStatus("Читаємо налаштування. Це може тривати до 20 секунд…");
+      await withBoardWait("Очікуємо відповідь плати…", async () => {
+        const infoObj = await sendAndWaitInternal("get:info", (j) => j?.event === "device_info", 4000, false);
+        updateInfoFromPayload(infoObj);
+        const cfgObj = await sendAndWaitInternal("get:config", (j) => j?.event === "config" && j?.config, 6000, false);
+        applyConfigToUi(cfgObj.config);
+        if (isSafeBackupConfig(cfgObj.config)) persistBackupConfig(cfgObj.config);
+      }, 20000);
+      setStatus("Плату підключено, налаштування прочитано. Можна оновлювати.");
+    } catch (error) {
+      setPortState(isPortOpen(portRef.current) ? "connected" : "idle");
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(message.includes("No port selected") || (error as DOMException)?.name === "NotFoundError"
+        ? "Порт не вибрано. Натисни «Підключити через USB» і вибери свою плату."
+        : "Не вдалося прочитати плату. Закрий інші програми з COM-портом і повтори підключення. Для порожньої плати вибери «Перше встановлення».");
     }
   }
 
@@ -1314,217 +1303,203 @@ export default function Page() {
   }
 
   async function runFlashFlow(restoreSettings: boolean) {
-    if (!canFlash || !manifestUrl || !installButtonRef.current) {
-      throw new Error("Немає валідних файлів прошивки для обраної плати");
-    }
-
+    if (!serialSupported || !canFlash || !manifest) throw new Error("Спочатку вибери плату та доступну версію прошивки.");
+    if (!restoreSettings && !freshInstallConfirmed) throw new Error("Підтвердь перше встановлення: поточні налаштування буде видалено.");
+    if (!rememberedPortRef.current) throw new Error("Спочатку підключи плату через USB у кроці 2.");
     setFlashBusy(true);
     setIsFlashingFlow(true);
+    setFlashOutcome("idle");
+    setFlashProgress(null);
     resetPipeline(restoreSettings);
-    setFlashStatus(
-      restoreSettings
-        ? "Починаємо підготовку до прошивки..."
-        : "Починаємо прошивку нового пристрою...",
-    );
-
-    let backup: any | null = null;
+    let backup: any = null;
+    let expectedHostname = "";
     if (restoreSettings) {
       setPipelineStep("backup", "active");
+      setFlashStatus("Зберігаємо налаштування саме підключеної плати…");
       try {
-        await ensureConnected(true);
-        setFlashStatus("Перед прошивкою зчитуємо config з плати...");
+        await ensureConnected(false);
+        const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+        expectedHostname = String(device.hostname || "");
         const obj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
         backup = obj.config;
-        if (!isSafeBackupConfig(backup)) {
-          throw new Error("Config з плати не містить Wi‑Fi/MQTT, backup для відновлення небезпечний");
-        }
+        if (!isSafeBackupConfig(backup)) throw new Error("Конфігурація неповна або несумісна.");
         persistBackupConfig(backup);
+        backupHostnameRef.current = expectedHostname;
         applyConfigToUi(backup);
-        setFlashStatus("Backup config збережено. Запускаємо прошивку...");
         setPipelineStep("backup", "done");
       } catch {
-        const fallbackBackup = backupConfigRef.current;
-        if (isSafeBackupConfig(fallbackBackup)) {
-          backup = fallbackBackup;
-          setFlashStatus("Поточний config недоступний. Використовуємо останній збережений backup.");
-          setPipelineStep("backup", "done");
-        } else {
-          setFlashStatus("Backup config недоступний. Прошивку з відновленням зупинено.");
-          setPipelineStep("backup", "error");
-          throw new Error("Backup config недоступний. Щоб не втратити Wi‑Fi/MQTT/налаштування, прошивку з відновленням зупинено. Використай режим 'новий пристрій' лише якщо це справді чиста плата.");
-        }
+        setPipelineStep("backup", "error");
+        throw new Error("Не вдалося зберегти поточні налаштування. Запис не розпочато. Перепідключи USB та спробуй ще раз; режим оновлення залишився увімкненим.");
       }
     }
-
-    try {
-      await disconnectPort();
-    } catch {}
-
+    const flashPort = rememberedPortRef.current;
+    await disconnectPort();
     setPipelineStep("flash", "active");
-    await startEspInstall(installButtonRef.current);
+    setFlashStatus("Визначаємо плату й готуємо запис. Не відключай USB…");
+    try {
+      await writeFirmware(flashPort, manifest, window.location.href, !restoreSettings, (event) => {
+        if (event.state === "initializing") setFlashStatus("Підключаємося до завантажувача. За потреби затисни BOOT…");
+        if (event.state === "preparing") setFlashStatus("Завантажуємо файли прошивки…");
+        if (event.state === "erasing") setFlashStatus("Готуємо пам’ять для першого встановлення…");
+        if (event.state === "writing") {
+          setFlashProgress(event.details.percentage);
+          setFlashStatus(`Записуємо прошивку: ${event.details.percentage}%. Не відключай USB.`);
+        }
+      });
+    } catch (error) {
+      setPipelineStep("flash", "error");
+      throw error;
+    }
     setPipelineStep("flash", "done");
-
-    setFlashStatus("Прошивка завершена. Перепідключаємо плату...");
+    setFlashProgress(null);
     setPipelineStep("reconnect", "active");
+    setFlashStatus("Запис завершено. Чекаємо перезапуску плати…");
     await reconnectAfterFlash();
     await waitDeviceInfoAfterReconnect(6);
+    const rebooted = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+    if (expectedHostname && rebooted.hostname !== expectedHostname) throw new Error("Підключено іншу плату. Налаштування не записано; підключи початковий пристрій.");
     setPipelineStep("reconnect", "done");
-
     if (restoreSettings && backup) {
-      const wifi = extractWifi(backup);
-      if (wifi.ssid) {
-        setPipelineStep("restoreWifi", "active");
-        setFlashStatus("Відновлюємо Wi‑Fi (set:wifi)...");
-        await sendAndWait(
-          `set:wifi ${JSON.stringify({ ssid: wifi.ssid, password: wifi.password })}`,
-          (j) => j?.status === "ACK" && (j?.cmd === "set:wifi" || j?.cmd === "wifi_set"),
-          10000,
-        );
-        setPipelineStep("restoreWifi", "done");
-      }
-
+      setPipelineStep("restoreWifi", "active");
       setPipelineStep("restoreConfig", "active");
+      setFlashStatus("Повертаємо Wi-Fi та всі налаштування. Дочекайся перевірки…");
+      // One full configuration transaction restores the network too.
       await restoreBackupConfigWithRetry(backup, 3);
+      setPipelineStep("restoreWifi", "done");
       setPipelineStep("restoreConfig", "done");
-
-      setFlashStatus("Backup відновлено на платі");
       setPipelineStep("verify", "active");
-      const verifiedObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
-      const diffs = collectDiffPaths(backup, verifiedObj?.config ?? {});
-      if (diffs.length === 0) {
-        setPipelineStep("verify", "done");
-        setFlashStatus("Верифікація успішна: backup повністю відновлено");
-      } else {
-        setPipelineStep("verify", "error");
-        const preview = diffs.slice(0, 5).join(", ");
-        setFlashStatus(`Верифікація: ${diffs.length} відмінностей (${preview}${diffs.length > 5 ? ", ..." : ""})`);
-      }
-    }
-
-    await cmdGetInfo();
-    if (!restoreSettings || !backup) {
+      const verified = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
+      if (collectDiffPaths(backup, verified.config).length) throw new Error("Не всі налаштування відновилися. Резервну копію збережено; скористайся кнопкою відновлення нижче.");
+      setPipelineStep("verify", "done");
+    } else {
+      setPipelineStep("verify", "active");
       await cmdGetConfig();
+      setPipelineStep("verify", "done");
     }
-    setFlashStatus(
-      restoreSettings
-        ? "Готово: прошивка + FS + відновлення налаштувань завершені"
-        : "Готово: прошивка + FS для нового пристрою завершені",
-    );
-    setFlashBusy(false);
-    setIsFlashingFlow(false);
+    await cmdGetInfo();
+    setFlashOutcome("success");
+    setFlashStatus(restoreSettings ? "Оновлення завершено. Усі налаштування відновлено й перевірено." : "AlarmMini встановлено. Тепер підключи пристрій до Wi-Fi.");
   }
 
   async function runRecoveryWizard() {
+    if (flashBusyRef.current) return;
+    const backup = backupConfigRef.current;
+    if (!backup || !backupHostnameRef.current) throw new Error("Автоматичне відновлення доступне для копії поточної спроби оновлення. Завантаж копію для ручного відновлення у додаткових налаштуваннях.");
+    flashBusyRef.current = true;
     setFlashBusy(true);
+    setIsFlashingFlow(true);
     try {
-      setStatus("Recovery Wizard: підключення до плати...");
-      await withBoardWait("Recovery Wizard: очікуємо плату (до 1 хв)...", async () => {
-        await ensureConnected(true);
-        await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
-      });
-
-      if (!backupConfigRef.current) {
-        const cfgObj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
-        const cfg = cfgObj?.config;
-        if (isSafeBackupConfig(cfg)) {
-          persistBackupConfig(cfg);
-          applyConfigToUi(cfg);
-        }
-      }
-
-      if (!backupConfigRef.current) {
-        setStatus("Recovery Wizard: backup відсутній, збережи конфіг вручну");
-        return;
-      }
-
-      setStatus("Recovery Wizard: safe restore Wi‑Fi + MQTT...");
-      await cmdSafeRestoreNetworkFromBackup();
-      setStatus("Recovery Wizard: повне відновлення backup JSON...");
-      await restoreBackupConfigWithRetry(backupConfigRef.current, 3);
-      setStatus("Recovery Wizard: завершено");
+      await ensureConnected(true);
+      const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+      if (device.hostname !== backupHostnameRef.current) throw new Error("Підключено іншу плату. Відновлення зупинено; підключи початковий пристрій.");
+      setFlashStatus("Відновлюємо налаштування з копії поточної спроби…");
+      await restoreBackupConfigWithRetry(backup, 3);
+      const verified = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
+      if (collectDiffPaths(backup, verified.config).length) throw new Error("Не всі налаштування відновлено. Резервну копію збережено.");
+      setFlashStatus("Налаштування відновлено й перевірено. За потреби повтори оновлення прошивки.");
+    } catch (error) {
+      setFlashStatus(error instanceof Error ? error.message : "Не вдалося відновити налаштування.");
     } finally {
+      flashBusyRef.current = false;
       setFlashBusy(false);
+      setIsFlashingFlow(false);
     }
   }
 
   async function onFlashClick(restoreSettings: boolean) {
+    if (flashBusyRef.current) return;
+    flashBusyRef.current = true;
     try {
-      if (restoreSettings && newDeviceMode) {
-        setFlashStatus("Режим нової плати активний: запускаємо прошивку як нового пристрою (без відновлення backup).");
-        await runFlashFlow(false);
-        return;
-      }
       await runFlashFlow(restoreSettings);
     } catch (error) {
+      setFlashOutcome("error");
+      setPipelineState((previous) => Object.fromEntries(Object.entries(previous).map(([key, state]) => [key, state === "active" ? "error" : state])) as Record<PipelineStepId, PipelineState>);
+      setFlashStatus(error instanceof Error ? error.message : "Не вдалося завершити прошивання. Перевір USB та повтори спробу.");
+    } finally {
+      flashBusyRef.current = false;
       setFlashBusy(false);
       setIsFlashingFlow(false);
-      const message = error instanceof Error ? error.message : String(error);
-      setFlashStatus(`Помилка прошивки: ${message}`);
+      setFlashProgress(null);
     }
   }
 
+  function showActionError(error: unknown) {
+    setStatus(error instanceof Error ? error.message : "Не вдалося виконати дію. Спробуй ще раз.");
+  }
+
   return (
-    <main className="simple-shell">
+    <main className="simple-shell" id="installer">
       <header className="topbar card">
         <div className="brand">
-          <img src="/icon.svg" alt="AlarmMini" className="brand-logo" />
-          <div>
-            <div className="title-row">
-              <h1>AlarmMini Installer</h1>
-              <span className="version-badge">Site v{SITE_VERSION}</span>
-            </div>
-            <p>Підключення, читання/запис налаштувань, безпечна прошивка з автоматичним відновленням</p>
-          </div>
+          <img src="/icon.svg" alt="" width={48} height={48} className="brand-logo" />
+          <div><div className="title-row"><span className="brand-name">AlarmMini</span><span className="version-badge">Інсталятор {SITE_VERSION}</span></div><p>Карта повітряних тривог · ESP32-C3 та ESP8266</p></div>
         </div>
-        <div className="support-box">
-          {supportQrSrc ? <img src={supportQrSrc} alt="QR підтримки" className="qr-image" /> : null}
-          <a className="btn" href={GITHUB_REPO_URL} target="_blank" rel="noreferrer">
-            GitHub репозиторій
-          </a>
-          <a className="btn" href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">
-            Telegram спільнота
-          </a>
-        </div>
+        <a className="help-link" href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">Допомога у Telegram ↗</a>
       </header>
 
-      <section className="card">
-        <h2>1. Підключення плати</h2>
-        <div className="row gap">
-          <button
-            className="btn primary"
-            disabled={!serialSupported || portState === "connecting" || flashBusy}
-            onClick={() => void onConnectClick()}
-          >
-            {portState === "connected" ? "Порт підключено" : portState === "connecting" ? "Підключення..." : "Підключити плату"}
-          </button>
-          <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void disconnectPort()}>
-            Відключити
-          </button>
-          <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void cmdGetConfig()}>
-            Зчитати конфігурацію
-          </button>
-          <div className="status-pill">{serialSupported ? "Сумісний браузер" : "Потрібен Chrome/Edge"}</div>
-          <div className="status-pill">{newDeviceMode ? "Режим: нова плата" : "Режим: стандартний"}</div>
-          <div className="status-pill">Стан: {status}</div>
-        </div>
-        {waitActive ? (
-          <div className="wait-mini">
-            <div className="wait-mini-head">
-              <span>{waitLabel || "Очікуємо плату..."}</span>
-              <strong>{waitProgress}%</strong>
-            </div>
-            <div className="wait-mini-bar">
-              <div className="wait-mini-fill" style={{ width: `${waitProgress}%` }} />
-            </div>
-          </div>
-        ) : null}
+      <section className="installer-intro">
+        <p className="eyebrow">ПРОШИВАННЯ ЧЕРЕЗ USB</p>
+        <h1>Онови свою карту.<br /><span>Налаштування залишаться.</span></h1>
+        <p className="intro-copy">Вибери плату, підключи її до комп’ютера й запусти оновлення. Сайт збереже налаштування та перевірить їх після запису.</p>
+        <ol className="journey" aria-label="Кроки встановлення"><li><b>1</b> Вибери плату</li><li><b>2</b> Підключи USB</li><li><b>3</b> Запусти запис</li></ol>
       </section>
 
+      {!serialSupported ? <div className="notice warning" role="status"><strong>Для прошивання відкрий сайт на комп’ютері в Chrome або Edge.</strong><p>Цей браузер не надає доступу до USB-порту. На телефоні можна переглянути інструкцію, а прошити плату — з комп’ютера.</p></div> : null}
+
+      <div className="installer-layout">
+        <div className="installer-steps">
+          <section className="card step-card" aria-labelledby="choose-title">
+            <div className="step-heading"><span className="step-number">1</span><div><h2 id="choose-title">Яка в тебе плата?</h2><p className="hint">Подивись на напис на платі. ESP32-C3 та ESP8266 мають різні прошивки.</p></div></div>
+            <fieldset className="choice-grid" disabled={flashBusy || waitActive}><legend className="sr-only">Тип плати</legend>
+              {BOARD_TARGETS.map((board) => <label key={board.id} className={`choice-card ${selectedBoardId === board.id ? "selected" : ""}`}>
+                <input type="radio" name="board" value={board.id} checked={selectedBoardId === board.id} onChange={() => {setSelectedBoardId(board.id);setFlashOutcome("idle");}} />
+                <span><strong>{board.id === "esp32c3" ? "ESP32-C3" : "ESP8266"}</strong><small>{board.id === "esp32c3" ? "SuperMini · зазвичай USB-C" : "Wemos D1 mini · зазвичай micro-USB"}</small></span>
+              </label>)}
+            </fieldset>
+            <fieldset className="install-options" disabled={flashBusy || waitActive}><legend>Що потрібно зробити?</legend>
+              <label className="mode-option"><input type="radio" name="install-mode" checked={!newDeviceMode} onChange={() => {setNewDeviceMode(false);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Оновлення зі збереженням налаштувань</strong><small>Для карти, на якій уже працює AlarmMini. Рекомендовано.</small></span></label>
+              <label className="mode-option"><input type="radio" name="install-mode" checked={newDeviceMode} onChange={() => {setNewDeviceMode(true);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Перше встановлення</strong><small>Для порожньої плати або повного скидання налаштувань.</small></span></label>
+            </fieldset>
+            {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
+            <div className="release-summary" aria-live="polite">
+              {releasesLoading ? <span>Завантажуємо доступні версії…</span> : releasesError ? <><span>{releasesError}</span><button className="btn" onClick={() => setReleasesAttempt((v) => v + 1)}>Спробувати ще раз</button></> : !selectedRelease ? <span>Опублікованих версій поки немає.</span> : <><span>Версія <strong>{selectedRelease.tag_name}</strong>{selectedReleaseId === releases[0]?.id ? " · остання стабільна" : " · попередня версія"}</span><small>{selectedReleaseUpdatedAt}</small></>}
+            </div>
+            <details className="inline-details"><summary>Вибрати іншу версію</summary><label>Версія прошивки<select className="select" value={selectedReleaseId ?? ""} onChange={(e) => setSelectedReleaseId(Number(e.target.value))} disabled={flashBusy || releasesLoading || !releases.length}>{releases.map((release) => <option key={release.id} value={release.id}>{release.name || release.tag_name}</option>)}</select></label></details>
+          </section>
+
+          <section className="card step-card" aria-labelledby="usb-title">
+            <div className="step-heading"><span className="step-number">2</span><div><h2 id="usb-title">Підключи плату через USB</h2><p className="hint">Потрібен кабель із передаванням даних. Закрий Serial Monitor, Arduino IDE та інші програми, які використовують порт.</p></div></div>
+            <div className="row gap"><button className="btn primary" disabled={!serialSupported || portState === "connecting" || flashBusy || waitActive} onClick={() => void onConnectClick()}>{portState === "connecting" || waitActive ? "Підключаємо…" : portState === "connected" ? "Перевірити підключення" : "Підключити через USB"}</button>{portState === "connected" ? <button className="btn" disabled={flashBusy || waitActive} onClick={() => void disconnectPort(true)}>Вибрати інший пристрій</button> : null}</div>
+            <p className="hint">У вікні браузера вибери USB Serial, USB JTAG/serial, CP210x або CH340 — назва залежить від плати — і натисни «Підключити».</p>
+            <div className="connection-status" role="status" aria-live="polite"><span className={`connection-dot ${portState === "connected" ? "connected" : ""}`} aria-hidden="true" />{status}</div>
+            {waitActive ? <div className="wait-mini"><span>{waitLabel}</span><progress aria-label="Очікування відповіді плати" /></div> : null}
+          </section>
+
+          <section className="card step-card flash-card" aria-labelledby="flash-title" aria-busy={flashBusy}>
+            <div className="step-heading"><span className="step-number">3</span><div><h2 id="flash-title">{newDeviceMode ? "Встанови AlarmMini" : "Онови прошивку"}</h2><p className="hint">{newDeviceMode ? "Після встановлення підключиш карту до домашнього Wi-Fi." : "Wi-Fi, MQTT, кольори та відповідність світлодіодів збережуться. Якщо прочитати налаштування не вдасться, запис не почнеться."}</p></div></div>
+            <button className="btn primary flash-primary" disabled={!serialSupported || !canFlash || flashBusy || waitActive || portState !== "connected" || (newDeviceMode && !freshInstallConfirmed)} onClick={() => void onFlashClick(!newDeviceMode)}>{flashBusy ? "Триває прошивання…" : newDeviceMode ? "Встановити AlarmMini" : "Оновити й зберегти налаштування"}</button>
+            <p className="hint">{portState !== "connected" ? "Спочатку підключи плату в кроці 2." : !canFlash ? "Для обраної плати немає повного набору файлів. Вибери іншу версію." : newDeviceMode && !freshInstallConfirmed ? "Підтвердь скидання налаштувань у кроці 1." : "Залиш цю вкладку відкритою та не відключай USB до повідомлення про завершення."}</p>
+            {flashBusy || flashOutcome !== "idle" ? <>
+              <ol className="pipeline-grid" aria-label="Стан прошивання">{PIPELINE_STEPS.filter((step) => pipelineState[step.id] !== "skipped").map((step) => <li key={step.id} className={`pipeline-step ${pipelineState[step.id]}`} aria-current={pipelineState[step.id] === "active" ? "step" : undefined}><span aria-hidden="true">{pipelineState[step.id] === "done" ? "✓ " : pipelineState[step.id] === "error" ? "! " : ""}</span>{step.label}<span className="sr-only">: {pipelineState[step.id]}</span></li>)}</ol>
+              {flashProgress !== null ? <progress value={flashProgress} max={100} aria-label="Запис прошивки" /> : flashBusy ? <progress aria-label="Підготовка або відновлення налаштувань" /> : null}
+            </> : null}
+            {flashStatus ? <div className={`notice ${flashOutcome === "error" ? "warning" : flashOutcome === "success" ? "success" : ""}`} role={flashOutcome === "error" ? "alert" : "status"} aria-live="polite">{flashStatus}</div> : null}
+            {backupAvailable ? <div className="backup-actions"><button className="text-button" disabled={flashBusy && pipelineState.backup !== "done"} onClick={() => {try {downloadBackupConfigFile();} catch(error) {showActionError(error);}}}>Завантажити резервну копію налаштувань</button><small>Файл містить паролі. Зберігай його у себе.</small>{flashOutcome === "error" ? <button className="btn" disabled={flashBusy} onClick={() => void runRecoveryWizard().catch(showActionError)}>Відновити налаштування з копії</button> : null}</div> : null}
+          </section>
+
+          {flashOutcome === "success" ? <section className="card step-card completion" aria-labelledby="done-title"><h2 id="done-title">Готово. Підключи карту до мережі</h2><p>Якщо Wi-Fi вже був налаштований, карта спробує підключитися автоматично. Якщо роутер недоступний, з’явиться мережа <strong>{info.apSsid}</strong>.</p><p>Підключись телефоном до цієї мережі та відкрий <strong>192.168.4.1</strong>. Або введи домашній Wi-Fi тут, поки USB підключено.</p><form onSubmit={(event) => {event.preventDefault();void cmdSetWifi().catch(showActionError);}}><label>Назва домашньої Wi-Fi мережі<input name="wifi-ssid" value={wifiSsid} onChange={(event) => setWifiSsid(event.target.value)} autoComplete="off" spellCheck={false} required /></label><label>Пароль Wi-Fi<input name="wifi-password" type="password" autoComplete="new-password" value={wifiPassword} onChange={(event) => setWifiPassword(event.target.value)} /></label><button className="btn" disabled={portState !== "connected" || flashBusy}>Зберегти Wi-Fi на платі</button></form>{ipWebUrl && !isApModeIp ? <a className="btn primary" href={ipWebUrl} target="_blank" rel="noreferrer">Відкрити свою карту ↗</a> : null}</section> : null}
+        </div>
+
+        <aside className="card installer-help" aria-labelledby="help-title"><span className="eyebrow">ПЕРЕД ПОЧАТКОМ</span><h2 id="help-title">Усе потрібне — поруч</h2><ul className="checklist"><li>Chrome або Edge на комп’ютері</li><li>USB-кабель із передаванням даних</li><li>Стабільне живлення та інтернет</li></ul><div className="help-note">Оновлюєш наявну карту? Залиш обраним режим зі збереженням налаштувань.</div><details><summary>Плата не з’являється у списку</summary><p>Спробуй інший USB-кабель та порт комп’ютера. Якщо використовується CH340 або CP210x, може знадобитися драйвер від виробника плати.</p></details><details><summary>Не починається запис</summary><p>Закрий інші програми з COM-портом. На ESP32-C3 затисни BOOT, коротко натисни RESET, відпусти BOOT і повтори запис. Якщо порт змінився, вибери пристрій знову.</p></details><details><summary>Оновлення перервалося</summary><p>Не перемикайся на перше встановлення. Перепідключи плату, повтори оновлення або віднови налаштування з резервної копії.</p></details><details><summary>Карта ще не підключилася до Wi-Fi</summary><p>Дочекайся запуску роутера. Для зміни мережі підключись до точки AlarmMap-Setup та відкрий 192.168.4.1. Потрібна мережа 2,4 ГГц.</p></details><a href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">Попросити допомогу в спільноті ↗</a></aside>
+      </div>
+
+      <details className="card advanced-settings" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}><summary>Додаткові налаштування та діагностика<span>MQTT, редактор конфігурації, QR-коди, файли прошивки та журнал</span></summary>
+        {advancedOpen ? <div className="advanced-content">
       <section className="grid two">
         <div className="card">
-          <h2>2. Службова інформація</h2>
+          <h2>Інформація про пристрій</h2>
           <div className="row gap">
-            <button className="btn" disabled={flashBusy} onClick={() => void cmdGetInfo()}>
+            <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdGetInfo().catch(showActionError)}>
               Оновити інформацію
             </button>
           </div>
@@ -1547,7 +1522,7 @@ export default function Page() {
                 <p className="hint">Готові наклейки для корпусу: окремо web-доступ і окремо AP налаштування.</p>
               </div>
               <div className="qr-actions no-print">
-                <button className="btn primary" disabled={portState !== "connected" || flashBusy} onClick={() => void refreshInfoAndLabels()}>
+                <button className="btn primary" disabled={portState !== "connected" || flashBusy} onClick={() => void refreshInfoAndLabels().catch(showActionError)}>
                   Прочитати з плати
                 </button>
                 <button className="btn" disabled={!adminQrSrc} onClick={printQrLabels}>
@@ -1558,7 +1533,7 @@ export default function Page() {
 
             <div className="qr-toolbelt no-print">
               <div className="qr-tool-actions">
-                <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void checkWebInterface()}>
+                <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void checkWebInterface().catch(showActionError)}>
                   Перевірити web UI
                 </button>
                 <a className="btn" href={adminUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!adminUrl}>
@@ -1588,7 +1563,7 @@ export default function Page() {
                   </dl>
                 </div>
                 <div className="qr-visual">
-                  {adminQrSrc ? <img src={adminQrSrc} alt="QR web panel" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
+                  {adminQrSrc ? <img src={adminQrSrc} alt="QR вебпанелі" width={178} height={178} className="label-qr" /> : <div className="qr-placeholder">QR</div>}
                   <button className="btn" disabled={!adminQrSrc} onClick={() => downloadQrPng(adminQrSrc, `${info.hostname || "alarmmini"}-admin.png`)}>
                     PNG
                   </button>
@@ -1606,7 +1581,7 @@ export default function Page() {
                   </dl>
                 </div>
                 <div className="qr-visual">
-                  {apQrSrc ? <img src={apQrSrc} alt="QR access point" className="label-qr" /> : <div className="qr-placeholder">QR</div>}
+                  {apQrSrc ? <img src={apQrSrc} alt="QR точки налаштування" width={178} height={178} className="label-qr" /> : <div className="qr-placeholder">QR</div>}
                   <button className="btn" disabled={!apQrSrc} onClick={() => downloadQrPng(apQrSrc, `${info.hostname || "alarmmini"}-ap.png`)}>
                     PNG
                   </button>
@@ -1617,7 +1592,7 @@ export default function Page() {
         </div>
 
         <div className="card">
-          <h2>3. Мережа</h2>
+          <h2>Мережеві налаштування</h2>
           <div className="tabs" role="tablist" aria-label="Мережеві налаштування">
             <button
               role="tab"
@@ -1645,10 +1620,10 @@ export default function Page() {
               </label>
               <label>
                 Password
-                <input value={wifiPassword} onChange={(e) => setWifiPassword(e.target.value)} />
+                <input type="password" autoComplete="new-password" name="advanced-wifi-password" value={wifiPassword} onChange={(e) => setWifiPassword(e.target.value)} />
               </label>
               <div className="row gap">
-                <button className="btn" disabled={flashBusy} onClick={() => void cmdSetWifi()}>
+                <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetWifi().catch(showActionError)}>
                   Зберегти Wi‑Fi
                 </button>
               </div>
@@ -1673,10 +1648,10 @@ export default function Page() {
               </label>
               <label>
                 Password
-                <input value={mqttPassword} onChange={(e) => setMqttPassword(e.target.value)} />
+                <input type="password" autoComplete="new-password" name="mqtt-password" value={mqttPassword} onChange={(e) => setMqttPassword(e.target.value)} />
               </label>
               <div className="row gap">
-                <button className="btn" disabled={flashBusy} onClick={() => void cmdSetMqtt()}>
+                <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetMqtt().catch(showActionError)}>
                   Зберегти MQTT
                 </button>
               </div>
@@ -1686,15 +1661,15 @@ export default function Page() {
       </section>
 
       <section className="card">
-        <h2>4. Config JSON</h2>
+        <h2>Редактор конфігурації</h2>
         <div className="row gap">
           <button className="btn primary" onClick={() => setConfigModalOpen(true)}>
             Відкрити редактор конфігу
           </button>
-          <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void cmdGetConfig()}>
+          <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void cmdGetConfig().catch(showActionError)}>
             Зчитати конфігурацію
           </button>
-          <button className="btn" disabled={flashBusy} onClick={() => void cmdSetConfig()}>
+          <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetConfig().catch(showActionError)}>
             Зберегти конфігурацію
           </button>
           <div className="status-pill">{backupAvailable ? "Backup: знайдено" : "Backup: відсутній"}</div>
@@ -1704,9 +1679,9 @@ export default function Page() {
 
       {configModalOpen ? (
         <div className="modal-overlay" onClick={() => setConfigModalOpen(false)}>
-          <div className="modal-card card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card card" ref={modalRef} role="dialog" aria-modal="true" aria-label="Редактор конфігурації" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <h2>4. Config JSON</h2>
+              <h2>Редактор конфігурації</h2>
               <button className="btn modal-close" onClick={() => setConfigModalOpen(false)} aria-label="Закрити">
                 x
               </button>
@@ -1724,7 +1699,7 @@ export default function Page() {
               >
                 Перевірити сумісність конфігу
               </button>
-              <button className="btn" disabled={flashBusy} onClick={() => void cmdSetConfig()}>
+              <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetConfig().catch(showActionError)}>
                 Зберегти конфігурацію
               </button>
               <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void downloadBackupConfigFile()}>
@@ -1789,98 +1764,12 @@ export default function Page() {
         </div>
       ) : null}
 
-      <section className="card">
-        <h2>5. Прошивка</h2>
-        <div className="row gap">
-          <select
-            className="select board-select"
-            aria-label="Тип плати"
-            value={selectedBoardId}
-            onChange={(e) => setSelectedBoardId(e.target.value as BoardTargetId)}
-            disabled={flashBusy}
-          >
-            {BOARD_TARGETS.map((board) => (
-              <option key={board.id} value={board.id}>{board.label}</option>
-            ))}
-          </select>
-          <select
-            className="select"
-            value={selectedReleaseId ?? ""}
-            onChange={(e) => setSelectedReleaseId(Number(e.target.value))}
-            disabled={releasesLoading || !releases.length}
-          >
-            {releases.map((r) => (
-              <option key={r.id} value={r.id}>{r.name || r.tag_name}</option>
-            ))}
-          </select>
-          <button className="btn primary" disabled={!canFlash || flashBusy} onClick={() => void onFlashClick(true)}>
-            {flashBusy ? "Йде прошивка..." : "Прошити з відновленням налаштувань"}
-          </button>
-          <button className="btn" disabled={!canFlash || flashBusy} onClick={() => void onFlashClick(false)}>
-            {flashBusy ? "Йде прошивка..." : "Прошити як новий пристрій"}
-          </button>
-          <button className="btn" disabled={flashBusy} onClick={() => void runRecoveryWizard().catch((e) => {
-            const message = e instanceof Error ? e.message : String(e);
-            setFlashStatus(`Recovery Wizard помилка: ${message}`);
-          })}>
-            Recovery Wizard
-          </button>
-          {createElement("esp-web-install-button" as any, {
-            manifest: manifestUrl,
-            class: "hidden-install",
-            ref: installButtonRef,
-          })}
-        </div>
-        <div className="pipeline-grid">
-          {PIPELINE_STEPS.map((step) => (
-            <div key={step.id} className={`pipeline-step ${pipelineState[step.id]}`}>
-              <span>{step.label}</span>
-            </div>
-          ))}
-        </div>
-        {selectedReleaseUpdatedAt ? (
-          <p className="hint">Оновлено: {selectedReleaseUpdatedAt}</p>
-        ) : null}
 
-        <p className="hint">
-          {releasesError
-            ? `Помилка релізів: ${releasesError}`
-            : releasesLoading
-              ? "Завантаження релізів..."
-              : canFlash
-                ? `Файли для ${selectedBoard.label} знайдено.`
-                : `У релізі бракує файлів для ${selectedBoard.label}.`}
-        </p>
-
-        <div className="asset-block">
-          <h3>Файли прошивки для {selectedBoard.label}</h3>
-          {boardAssetList.length === 0 ? (
-            <p>Немає файлів для цієї плати в обраному релізі.</p>
-          ) : (
-            <ul>
-              {boardAssetList.map((a) => (
-                <li key={a.id}>
-                  <span>{a.name}</span>
-                  <span>{formatBytes(a.size)}</span>
-                  <a href={a.browser_download_url} target="_blank" rel="noreferrer">Відкрити</a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="flash-status">{flashStatus || "Очікування"}</div>
-        {newDeviceMode ? (
-          <p className="hint">Плата не відповіла під час підключення. Підготовлено стандартний конфіг без Wi‑Fi/MQTT, прошивка піде як для нового пристрою.</p>
-        ) : null}
-      </section>
-
-      <section className="card">
-        <h2>Serial лог</h2>
-        <div className="log-box">
-          {serialLines.length === 0 ? <div className="log-empty">Поки порожньо</div> : serialLines.map((line, i) => <div key={`${i}-${line}`}>{line}</div>)}
-        </div>
-      </section>
+          <section className="card"><h2>Файли прошивки</h2><div className="asset-block"><ul>{boardAssetList.map((asset) => <li key={asset.id}><span>{asset.name}</span><span>{formatBytes(asset.size)}</span><a href={asset.browser_download_url} target="_blank" rel="noreferrer">Завантажити</a></li>)}</ul></div></section>
+          <section className="card"><h2>Журнал пристрою</h2><div className="log-box">{serialLines.length === 0 ? <div className="log-empty">Підключи плату, щоб побачити повідомлення.</div> : serialLines.map((line, index) => <div key={`${index}-${line}`}>{line}</div>)}</div></section>
+        </div> : null}
+      </details>
+      <footer className="installer-footer"><span>AlarmMini · Зроблено для своєї карти</span><a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer">Код проєкту ↗</a><a href={SUPPORT_AUTHOR_URL} target="_blank" rel="noreferrer">Підтримати автора ↗</a></footer>
     </main>
   );
 }

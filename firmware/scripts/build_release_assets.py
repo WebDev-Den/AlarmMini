@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -50,6 +51,12 @@ def main():
             raise FileNotFoundError(f"Missing build artifact: {src}")
         shutil.copy2(src, OUTPUT_DIR / name)
         print(f"[release] copied {name} -> {OUTPUT_DIR / name}")
+
+    checksums = []
+    for name in sorted(artifacts):
+        digest = hashlib.sha256((OUTPUT_DIR / name).read_bytes()).hexdigest()
+        checksums.append(f"{digest}  {name}\n")
+    (OUTPUT_DIR / "SHA256SUMS.txt").write_text("".join(checksums), encoding="utf-8")
 
     print("[release] done")
     print(f"[release] artifacts dir: {OUTPUT_DIR}")

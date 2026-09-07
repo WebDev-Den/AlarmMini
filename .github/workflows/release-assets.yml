@@ -35,6 +35,16 @@ jobs:
       - name: Build release artifacts
         run: python scripts/build_release_assets.py
 
+      - name: Install 32-bit host test compiler
+        run: sudo apt-get update && sudo apt-get install -y g++-multilib
+
+      - name: Verify firmware regressions before publishing
+        run: |
+          python tests/storage_fault_injection.py
+          python tests/runtime_regressions.py
+          python tests/wifi_runtime_test.py
+          python tests/optimization_test.py
+
       - name: Upload release assets
         if: ${{ github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') }}
         uses: softprops/action-gh-release@v2
@@ -47,6 +57,7 @@ jobs:
             firmware/release_artifacts/alarmmini-esp32c3-boot_app0.bin
             firmware/release_artifacts/alarmmini-esp8266-firmware.bin
             firmware/release_artifacts/alarmmini-esp8266-littlefs.bin
+            firmware/release_artifacts/SHA256SUMS.txt
           fail_on_unmatched_files: true
           overwrite_files: true
 

@@ -6,8 +6,15 @@
 #include "alerts.h"
 #include "logger.h"
 #include "animations.h"
+#include "led_frame_cache.h"
 
 Adafruit_NeoPixel strip(MAX_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+static LedFrameCache<MAX_LEDS * 3U> gLedFrameCache;
+
+void ledsShowIfChanged(bool force = false) {
+    if (gLedFrameCache.shouldSend(strip.getPixels(), millis(), force)) strip.show();
+}
+
 static constexpr unsigned long LED_FRAME_INTERVAL_MS = 33UL;
 static constexpr unsigned long LED_SOFTSTART_MS = 1500UL;
 static constexpr unsigned long INTERNET_OFFLINE_AUTONOMOUS_DEFAULT_MS = 60000UL;
@@ -38,7 +45,7 @@ bool isNightMode() {
 void ledsInit() {
     strip.begin();
     strip.clear();
-    strip.show();
+    ledsShowIfChanged(true);
     LOG_INFO(LOG_CAT_SYSTEM, "LEDs initialized");
 }
 
@@ -96,7 +103,7 @@ void renderCalibrationFrame() {
     strip.clear();
     if (gCalibrationIndex >= 0 && gCalibrationIndex < MAX_LEDS)
         strip.setPixelColor(gCalibrationIndex, strip.Color(255, 255, 255));
-    strip.show();
+    ledsShowIfChanged();
 }
 
 bool hasActiveAlerts() {
@@ -132,7 +139,7 @@ void renderGlobalState(const AnimationConfig& cfg, const Color& primary, const C
     }
 
     for (int i = gConfig.ledCount; i < MAX_LEDS; i++) strip.setPixelColor(i, 0);
-    strip.show();
+    ledsShowIfChanged();
 }
 
 float smoothstep01(float x) {
@@ -206,6 +213,7 @@ uint32_t fixedAlertClearColor(
     // 2) state-specific cap from animation/profile
     // 3) explicit alpha from selected target color (UI-configured night/day color brightness)
     const uint8_t allowedMax = min<uint8_t>(min<uint8_t>(modeCap, extraMaxBrightness), target.a);
+    if (allowedMax == 0) return 0;
     const uint8_t floorAlpha = max<uint8_t>(1, (uint8_t)(allowedMax * 0.20f));
     const float effectBrightness = fixedTransitionBrightness(elapsedMs, alertState, night, logicalIndex, logicalCount);
 
@@ -300,7 +308,7 @@ void renderRetainedState(bool night, bool mqttLost) {
         strip.setPixelColor(i, 0);
     }
 
-    strip.show();
+    ledsShowIfChanged();
 }
 
 void renderRetainedStateWithPulse(bool night, bool mqttLost) {
@@ -320,7 +328,7 @@ void renderRetainedStateWithPulse(bool night, bool mqttLost) {
         strip.setPixelColor(i, 0);
     }
 
-    strip.show();
+    ledsShowIfChanged();
 }
 
 void renderAlertClearState(bool night) {
@@ -363,15 +371,10 @@ void renderAlertClearState(bool night) {
     }
 
     for (int i = gConfig.ledCount; i < MAX_LEDS; i++) strip.setPixelColor(i, 0);
-    strip.show();
+    ledsShowIfChanged();
 }
 
 void ledsHandle() {
-    if (gCalibrationActive) {
-        renderCalibrationFrame();
-        return;
-    }
-
     const unsigned long now = millis();
     if (now - gLastLedFrameAt < LED_FRAME_INTERVAL_MS) {
         return;
@@ -386,6 +389,11 @@ void ledsHandle() {
         ? 255
         : (uint8_t)max(20UL, (now * 255UL) / LED_SOFTSTART_MS);
     strip.setBrightness(night ? min<uint8_t>(startupBrightness, modeBrightnessLimit(true)) : startupBrightness);
+
+    if (gCalibrationActive) {
+        renderCalibrationFrame();
+        return;
+    }
 
     bool internetLost = (!gInternetConnected || WiFi.status() != WL_CONNECTED);
     if (internetLost) {

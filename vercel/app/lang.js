@@ -1,11 +1,11 @@
-﻿export const DEFAULT_LOCALE = "uk";
+export const DEFAULT_LOCALE = "uk";
 
 export const LANG = {
   uk: {
     meta: {
       title: "AlarmMini Installer",
       description:
-        "Вибір релізу, Web Serial і сервісна сторінка для AlarmMini.",
+        "Проший ESP32-C3 або ESP8266 через USB. Просте оновлення AlarmMini зі збереженням і перевіркою налаштувань.",
     },
     common: {
       unknown: "Невідомо",

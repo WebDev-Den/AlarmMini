@@ -45,17 +45,12 @@ inline void platformWifiDisableSleep()
     WiFi.setSleep(false);
 }
 
-inline void platformWifiSetMaxTxPower()
-{
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);
-}
-
 inline void platformWifiConfigureApRadio()
 {
     wifi_country_t country = {
         .cc = "UA",
         .schan = 1,
-        .nchan = 11,
+        .nchan = 13,
         .policy = WIFI_COUNTRY_POLICY_MANUAL,
     };
     esp_wifi_set_country(&country);
@@ -237,17 +232,12 @@ inline void collectCookieHeader(AlarmWebServer &server)
 
 inline void platformWifiDisconnect()
 {
-    WiFi.disconnect(false);
+    WiFi.disconnect(false, false);
 }
 
 inline void platformWifiDisableSleep()
 {
     WiFi.setSleepMode(WIFI_NONE_SLEEP);
-}
-
-inline void platformWifiSetMaxTxPower()
-{
-    WiFi.setOutputPower(20.5f);
 }
 
 inline void platformWifiConfigureApRadio()

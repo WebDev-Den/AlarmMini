@@ -21,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="uk" suppressHydrationWarning>
-      <body suppressHydrationWarning>{children}</body>
+      <body><a className="skip-link" href="#installer">Перейти до прошивання</a>{children}</body>
     </html>
   );
 }
