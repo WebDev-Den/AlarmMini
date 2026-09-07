@@ -289,13 +289,19 @@ int main() {
     for (bool v : gMqttAlerts) assert(v);
     clockMs += 20000;
     alertsFallbackTick();
+    assert(reserveStarted == 1 && !reserveBusy);
+    clockMs += 9999;
+    alertsFallbackTick();
+    assert(reserveStarted == 1 && !reserveBusy);
+    ++clockMs;
+    alertsFallbackTick();
     assert(reserveStarted == 2);
     reserveResponse.status = 503;
     reserveReady = true;
     alertsFallbackTick();
     assert(gFallbackErrors == 1);
     for (bool v : gMqttAlerts) assert(v); // HTTP error never clears alerts.
-    clockMs += 20000;
+    clockMs += 30000;
     alertsFallbackTick();
     reserveResponse.status = 200;
     strcpy(reserveResponse.body, "[0,1]");
@@ -303,7 +309,7 @@ int main() {
     alertsFallbackTick();
     assert(gFallbackErrors == 2);
     for (bool v : gMqttAlerts) assert(v);
-    clockMs += 20000;
+    clockMs += 30000;
     alertsFallbackTick();
     gMqttConnected = true;
     deliver(allStates("0"));

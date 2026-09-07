@@ -6,7 +6,7 @@
 namespace fallbackContract {
 constexpr size_t URL_CAPACITY = 256;
 constexpr size_t BODY_CAPACITY = 256;
-constexpr uint32_t POLL_MS = 20000;
+constexpr uint32_t POLL_MS = 30000;
 constexpr uint32_t FRESH_MS = 90000;
 
 inline bool validUrl(const char *url) {

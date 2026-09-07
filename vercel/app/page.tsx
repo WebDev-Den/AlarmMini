@@ -93,7 +93,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.9";
+const SITE_VERSION = "2.0.10";
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -1503,7 +1503,7 @@ export default function Page() {
             {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
             <details className="reserve-settings"><summary>Резервний канал даних <span>Необов’язково</span></summary>
               <label htmlFor="install-fallback-url">Резервний URL<input id="install-fallback-url" name="install-fallback-url" type="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/alerts.json" value={installFallbackUrl} disabled={flashBusy || waitActive} onChange={(event) => setInstallFallbackUrl(event.target.value)} /></label>
-              <p className="hint">Відповідь: JSON-масив із 25 чисел 0 або 1 у порядку областей MQTT. Плата опитуватиме його кожні 20 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.</p>
+              <p className="hint">Відповідь: JSON-масив із 25 чисел 0 або 1 у порядку областей MQTT. Починаючи з прошивки 2.0.8, плата опитуватиме його кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.</p>
               <p className="hint">Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.</p>
               <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">Порядок областей і приклад відповіді ↗</a>
             </details>
