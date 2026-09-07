@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
+import { BoardIllustration } from "./board-illustration";
 import QRCode from "qrcode";
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
 import { json as jsonLang } from "@codemirror/lang-json";
@@ -91,7 +92,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.7";
+const SITE_VERSION = "2.0.8";
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -1427,22 +1428,30 @@ export default function Page() {
     setStatus(error instanceof Error ? error.message : "Не вдалося виконати дію. Спробуй ще раз.");
   }
 
+  const installerStep = flashBusy || portState === "connected" ? 3 : portState === "connecting" || waitActive ? 2 : 1;
+
   return (
     <main className="simple-shell" id="installer">
-      <header className="topbar card">
+      <header className="topbar">
         <div className="brand">
           <img src="/icon.svg" alt="" width={48} height={48} className="brand-logo" />
-          <div><div className="title-row"><span className="brand-name">AlarmMini</span><span className="version-badge">Інсталятор {SITE_VERSION}</span></div><p>Карта повітряних тривог · ESP32-C3 та ESP8266</p></div>
+          <div><div className="title-row"><span className="brand-name">AlarmMini</span><span className="version-badge">Інсталятор {SITE_VERSION}</span></div><p>Карта повітряних тривог</p></div>
         </div>
         <a className="help-link" href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">Допомога у Telegram ↗</a>
       </header>
 
       <section className="installer-intro">
-        <p className="eyebrow">ПРОШИВАННЯ ЧЕРЕЗ USB</p>
-        <h1>Онови свою карту.<br /><span>Налаштування залишаться.</span></h1>
-        <p className="intro-copy">Вибери плату, підключи її до комп’ютера й запусти оновлення. Сайт збереже налаштування та перевірить їх після запису.</p>
-        <ol className="journey" aria-label="Кроки встановлення"><li><b>1</b> Вибери плату</li><li><b>2</b> Підключи USB</li><li><b>3</b> Запусти запис</li></ol>
+        <div><p className="eyebrow"><span className="eyebrow-dot" /> ПРОШИВАННЯ ЧЕРЕЗ USB</p>
+        <h1>Твоя карта.<br /><span>Готова до оновлення.</span></h1>
+        <p className="intro-copy">Встанови AlarmMini або онови прошивку прямо у браузері. Три прості кроки — з підказками на кожному.</p></div>
+        <div className="intro-note"><span className="preserve-icon" aria-hidden="true">✓</span><div><strong>Твої налаштування під захистом</strong><p>У режимі оновлення спочатку збережемо копію, а після запису відновимо й перевіримо її.</p><span>Wi-Fi <i>·</i> MQTT <i>·</i> Кольори <i>·</i> Світлодіоди</span></div></div>
       </section>
+
+      <nav aria-label="Кроки встановлення"><ol className="journey">
+        <li className={installerStep === 1 ? "current" : "done"}><a href="#choose-title" aria-current={installerStep === 1 ? "step" : undefined}><b>1</b><span>Вибери плату<small>Модель і спосіб встановлення</small></span></a></li>
+        <li className={installerStep === 2 ? "current" : portState === "connected" ? "done" : ""}><a href="#usb-title" aria-current={installerStep === 2 ? "step" : undefined}><b>{portState === "connected" ? "✓" : "2"}</b><span>Підключи USB<small>{portState === "connected" ? "Плату підключено" : "Кабель із передаванням даних"}</small></span></a></li>
+        <li className={flashOutcome === "success" ? "done" : installerStep === 3 ? "current" : ""}><a href="#flash-title" aria-current={installerStep === 3 && flashOutcome !== "success" ? "step" : undefined}><b>{flashOutcome === "success" ? "✓" : "3"}</b><span>{flashOutcome === "success" ? "Готово" : "Запусти запис"}<small>{flashBusy ? "Триває прошивання…" : "З перевіркою результату"}</small></span></a></li>
+      </ol></nav>
 
       {!serialSupported ? <div className="notice warning" role="status"><strong>Для прошивання відкрий сайт на комп’ютері в Chrome або Edge.</strong><p>Цей браузер не надає доступу до USB-порту. На телефоні можна переглянути інструкцію, а прошити плату — з комп’ютера.</p></div> : null}
 
@@ -1453,12 +1462,13 @@ export default function Page() {
             <fieldset className="choice-grid" disabled={flashBusy || waitActive}><legend className="sr-only">Тип плати</legend>
               {BOARD_TARGETS.map((board) => <label key={board.id} className={`choice-card ${selectedBoardId === board.id ? "selected" : ""}`}>
                 <input type="radio" name="board" value={board.id} checked={selectedBoardId === board.id} onChange={() => {setSelectedBoardId(board.id);setFlashOutcome("idle");}} />
-                <span><strong>{board.id === "esp32c3" ? "ESP32-C3" : "ESP8266"}</strong><small>{board.id === "esp32c3" ? "SuperMini · зазвичай USB-C" : "Wemos D1 mini · зазвичай micro-USB"}</small></span>
+                <BoardIllustration compact={board.id === "esp8266"} />
+                <span className="board-copy"><strong>{board.id === "esp32c3" ? "ESP32-C3" : "ESP8266"}</strong><small>{board.id === "esp32c3" ? "SuperMini · зазвичай USB-C" : "Wemos D1 mini · зазвичай micro-USB"}</small><span className="board-selection" aria-hidden="true">{selectedBoardId === board.id ? "Обрано ✓" : "Вибрати плату"}</span></span>
               </label>)}
             </fieldset>
             <fieldset className="install-options" disabled={flashBusy || waitActive}><legend>Що потрібно зробити?</legend>
-              <label className="mode-option"><input type="radio" name="install-mode" checked={!newDeviceMode} onChange={() => {setNewDeviceMode(false);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Оновлення зі збереженням налаштувань</strong><small>Для карти, на якій уже працює AlarmMini. Рекомендовано.</small></span></label>
-              <label className="mode-option"><input type="radio" name="install-mode" checked={newDeviceMode} onChange={() => {setNewDeviceMode(true);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Перше встановлення</strong><small>Для порожньої плати або повного скидання налаштувань.</small></span></label>
+              <label className={`mode-option ${!newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={!newDeviceMode} onChange={() => {setNewDeviceMode(false);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Оновлення зі збереженням налаштувань</strong><small>Для карти, на якій уже працює AlarmMini. Рекомендовано.</small></span></label>
+              <label className={`mode-option ${newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={newDeviceMode} onChange={() => {setNewDeviceMode(true);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Перше встановлення</strong><small>Для порожньої плати. Наявні налаштування буде видалено.</small></span></label>
             </fieldset>
             {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
             <div className="release-summary" aria-live="polite">
@@ -1490,7 +1500,10 @@ export default function Page() {
           {flashOutcome === "success" ? <section className="card step-card completion" aria-labelledby="done-title"><h2 id="done-title">Готово. Підключи карту до мережі</h2><p>Якщо Wi-Fi вже був налаштований, карта спробує підключитися автоматично. Якщо роутер недоступний, з’явиться мережа <strong>{info.apSsid}</strong>.</p><p>Підключись телефоном до цієї мережі та відкрий <strong>192.168.4.1</strong>. Або введи домашній Wi-Fi тут, поки USB підключено.</p><form onSubmit={(event) => {event.preventDefault();void cmdSetWifi().catch(showActionError);}}><label>Назва домашньої Wi-Fi мережі<input name="wifi-ssid" value={wifiSsid} onChange={(event) => setWifiSsid(event.target.value)} autoComplete="off" spellCheck={false} required /></label><label>Пароль Wi-Fi<input name="wifi-password" type="password" autoComplete="new-password" value={wifiPassword} onChange={(event) => setWifiPassword(event.target.value)} /></label><button className="btn" disabled={portState !== "connected" || flashBusy}>Зберегти Wi-Fi на платі</button></form>{ipWebUrl && !isApModeIp ? <a className="btn primary" href={ipWebUrl} target="_blank" rel="noreferrer">Відкрити свою карту ↗</a> : null}</section> : null}
         </div>
 
-        <aside className="card installer-help" aria-labelledby="help-title"><span className="eyebrow">ПЕРЕД ПОЧАТКОМ</span><h2 id="help-title">Усе потрібне — поруч</h2><ul className="checklist"><li>Chrome або Edge на комп’ютері</li><li>USB-кабель із передаванням даних</li><li>Стабільне живлення та інтернет</li></ul><div className="help-note">Оновлюєш наявну карту? Залиш обраним режим зі збереженням налаштувань.</div><details><summary>Плата не з’являється у списку</summary><p>Спробуй інший USB-кабель та порт комп’ютера. Якщо використовується CH340 або CP210x, може знадобитися драйвер від виробника плати.</p></details><details><summary>Не починається запис</summary><p>Закрий інші програми з COM-портом. На ESP32-C3 затисни BOOT, коротко натисни RESET, відпусти BOOT і повтори запис. Якщо порт змінився, вибери пристрій знову.</p></details><details><summary>Оновлення перервалося</summary><p>Не перемикайся на перше встановлення. Перепідключи плату, повтори оновлення або віднови налаштування з резервної копії.</p></details><details><summary>Карта ще не підключилася до Wi-Fi</summary><p>Дочекайся запуску роутера. Для зміни мережі підключись до точки AlarmMap-Setup та відкрий 192.168.4.1. Потрібна мережа 2,4 ГГц.</p></details><a href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">Попросити допомогу в спільноті ↗</a></aside>
+        <aside className="installer-sidebar" aria-labelledby="help-title">
+          <section className="card install-summary" aria-labelledby="summary-title"><span className="eyebrow">ТВІЙ ВИБІР</span><h2 id="summary-title">Усе готове до старту?</h2><dl><div><dt>Плата</dt><dd>{selectedBoardId === "esp32c3" ? "ESP32-C3" : "ESP8266"}</dd></div><div><dt>Прошивка</dt><dd>{selectedRelease?.tag_name ?? "Очікуємо версію"}</dd></div><div><dt>Режим</dt><dd>{newDeviceMode ? "Перше встановлення" : "Оновлення"}</dd></div></dl><div className={`summary-note ${newDeviceMode ? "erase-note" : ""}`}><span aria-hidden="true">{newDeviceMode ? "!" : "✓"}</span>{newDeviceMode ? "Плата буде очищена. Wi-Fi налаштуєш після встановлення." : "Налаштування буде збережено та відновлено автоматично."}</div></section>
+          <section className="card installer-help"><h2 id="help-title">Перед початком</h2><ul className="checklist"><li>Chrome або Edge на комп’ютері</li><li>USB-кабель із передаванням даних</li><li>Стабільне живлення та інтернет</li></ul><h3 className="faq-title">Потрібна підказка?</h3><details><summary>Плата не з’являється у списку</summary><p>Спробуй інший USB-кабель та порт комп’ютера. Якщо використовується CH340 або CP210x, може знадобитися драйвер від виробника плати.</p></details><details><summary>Не починається запис</summary><p>Закрий інші програми з COM-портом. На ESP32-C3 затисни BOOT, коротко натисни RESET, відпусти BOOT і повтори запис. Якщо порт змінився, вибери пристрій знову.</p></details><details><summary>Оновлення перервалося</summary><p>Не перемикайся на перше встановлення. Перепідключи плату, повтори оновлення або віднови налаштування з резервної копії.</p></details><details><summary>Карта ще не підключилася до Wi-Fi</summary><p>Дочекайся запуску роутера. Для зміни мережі підключись до точки AlarmMap-Setup та відкрий 192.168.4.1. Потрібна мережа 2,4 ГГц.</p></details><a className="community-link" href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">Допомога у спільноті <span aria-hidden="true">↗</span></a></section>
+        </aside>
       </div>
 
       <details className="card advanced-settings" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}><summary>Додаткові налаштування та діагностика<span>MQTT, редактор конфігурації, QR-коди, файли прошивки та журнал</span></summary>
