@@ -36,8 +36,10 @@ test('private, reserved and unusual numeric IP forms never reach a socket', asyn
 
 test('real HTTP parser: pinned DNS, status, redirects, stream limits and truncation', async () => {
   let body=states, status=200, encoding='', truncate=false, hugeHeader=false;
+  let requireAuth=false, seenAuthorization;
   const local=createServer((_req,res) => {
-    res.statusCode=status;
+    seenAuthorization=_req.headers.authorization;
+    res.statusCode=requireAuth && seenAuthorization!=='Bearer test-only-token' ? 401 : status;
     if (encoding) res.setHeader('Content-Encoding',encoding);
     if (status===302) res.setHeader('Location','http://127.0.0.1/private');
     if (hugeHeader) res.setHeader('X-Large','x'.repeat(5000));
@@ -63,6 +65,13 @@ test('real HTTP parser: pinned DNS, status, redirects, stream limits and truncat
   try {
     assert.equal(await probeFallbackUrl('http://public.test/',dependencies),'http://public.test/');
     assert.equal(lookups,1); assert.equal(connections,1);
+    assert.equal(seenAuthorization,undefined);
+    requireAuth=true;
+    await assert.rejects(probeFallbackUrl('http://public.test/',dependencies),/401.*авторизацію/);
+    await assert.rejects(probeFallbackUrl('http://public.test/',{...dependencies,token:'wrong-test-token'}),/401.*авторизацію/);
+    assert.equal(await probeFallbackUrl('http://public.test/',{...dependencies,token:'test-only-token'}),'http://public.test/');
+    assert.equal(seenAuthorization,'Bearer test-only-token');
+    requireAuth=false;
     status=503; await assert.rejects(probeFallbackUrl('http://public.test/',dependencies),/HTTP 503/);
     status=302; const before=connections; await assert.rejects(probeFallbackUrl('http://public.test/',dependencies),/перенаправляє/); assert.equal(connections,before+1);
     status=200; body='[0,1]'; await assert.rejects(probeFallbackUrl('http://public.test/',dependencies),/25 чисел/);
@@ -93,8 +102,8 @@ test('client only accepts validation for the exact URL, and clearing skips reque
   const original=globalThis.fetch;
   let calls=0;
   try {
-    globalThis.fetch=async(_path,options)=>{calls++;return Response.json({ok:true,url:JSON.parse(options.body).url});};
-    assert.equal(await verifyFallbackEndpoint(' https://example.com '),'https://example.com/');
+    globalThis.fetch=async(_path,options)=>{calls++;assert.equal(JSON.parse(options.body).token,'test-only-token');assert.equal(_path,'/api/fallback-validation');return Response.json({ok:true,url:JSON.parse(options.body).url});};
+    assert.equal(await verifyFallbackEndpoint(' https://example.com ','test-only-token'),'https://example.com/');
     assert.equal(await verifyFallbackEndpoint(''),'');assert.equal(calls,1);
     globalThis.fetch=async()=>Response.json({ok:true,url:'https://different.test/'});
     await assert.rejects(verifyFallbackEndpoint('https://example.com/'));

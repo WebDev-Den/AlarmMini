@@ -581,6 +581,9 @@
                   <label for="fallbackUrl" class="field-label">Резервний URL</label>
                   <input type="url" id="fallbackUrl" placeholder="https://example.com/alerts.json" class="field-input" maxlength="255" autocomplete="off" spellcheck="false">
                   <p class="muted">JSON-масив із 25 значень 0/1 у порядку MQTT. Порожнє поле вимикає резерв.</p>
+                  <label for="fallbackToken" class="field-label">Токен резервного API (необов’язково)</label>
+                  <input type="password" id="fallbackToken" class="field-input" maxlength="511" autocomplete="new-password" spellcheck="false">
+                  <p class="muted">Тільки токен, без Bearer. Для захисту токена використовуй HTTPS.</p>
                 </div>
                 <div class="form-grid row g-3">
                   <div class="col-12 col-md-6">

@@ -645,10 +645,21 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
             return;
         }
         char previous[sizeof(gConfig.fallbackUrl)];
+        if (root.containsKey("token") && (!root["token"].is<const char *>() ||
+            !fallbackContract::validToken(root["token"].as<const char *>()))) {
+            sendNack(cmd, "invalid_fallback_token");
+            return;
+        }
+        char previousToken[sizeof(gConfig.fallbackToken)];
+        memcpy(previousToken, gConfig.fallbackToken, sizeof(previousToken));
         memcpy(previous, gConfig.fallbackUrl, sizeof(previous));
         copyBounded(gConfig.fallbackUrl, sizeof(gConfig.fallbackUrl), root["url"].as<const char *>());
+        // A URL-only command from an older installer must not send a stored
+        // credential to a newly selected server. Omitted token means clear.
+        copyBounded(gConfig.fallbackToken, sizeof(gConfig.fallbackToken), gConfig.fallbackUrl[0] ? (root["token"] | "") : "");
         if (!storageSaveCurrentConfig(true)) {
             memcpy(gConfig.fallbackUrl, previous, sizeof(previous));
+            memcpy(gConfig.fallbackToken, previousToken, sizeof(previousToken));
             sendNack(cmd, "save_failed");
             return;
         }

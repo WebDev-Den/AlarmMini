@@ -5,9 +5,18 @@
 
 namespace fallbackContract {
 constexpr size_t URL_CAPACITY = 256;
+constexpr size_t TOKEN_CAPACITY = 512;
 constexpr size_t BODY_CAPACITY = 256;
 constexpr uint32_t POLL_MS = 30000;
 constexpr uint32_t FRESH_MS = 90000;
+
+inline bool validToken(const char *token) {
+    if (!token) return true;
+    if (strlen(token) >= TOKEN_CAPACITY) return false;
+    for (const unsigned char *p = (const unsigned char *)token; *p; ++p)
+        if (*p < 33 || *p > 126) return false;
+    return true;
+}
 
 inline bool validUrl(const char *url) {
     if (!url || !*url) return true; // Empty disables the reserve.

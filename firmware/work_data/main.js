@@ -272,6 +272,7 @@ function normalizeConfig(cfg) {
     ledRegionIds: source.l || source.ledRegionIds || source.leds || [],
     mqttHost: mqtt.h ?? source.mqttHost ?? "",
     fallbackUrl: source.fu ?? "",
+    fallbackToken: source.ft ?? "",
     mqttPort: Number(mqtt.p ?? source.mqttPort ?? 1883),
     mqttTopic: mqtt.t ?? source.mqttTopic ?? "alerts/status",
     mqttUser: mqtt.u ?? source.mqttUser ?? "",
@@ -931,6 +932,7 @@ function buildPayload() {
     payload.l = [];
   }
   payload.fu = $("fallbackUrl").value.trim();
+  payload.ft = payload.fu ? $("fallbackToken").value.trim() : "";
   payload.m = {
     h: $("mqttHost").value.trim(),
     p: parseInt($("mqttPort").value, 10) || 1883,
@@ -1525,6 +1527,7 @@ async function bootAuthenticated() {
   currentConfig.logCategoryBits = info.logCategoryBits || {};
   $("mqttHost").value = info.mqttHost || "";
   $("fallbackUrl").value = info.fallbackUrl || "";
+  $("fallbackToken").value = info.fallbackToken || "";
   $("mqttPort").value = info.mqttPort || 1883;
   $("mqttTopic").value = info.mqttTopic || "alerts/status";
   $("mqttUser").value = info.mqttUser || "";

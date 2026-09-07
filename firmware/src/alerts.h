@@ -730,16 +730,20 @@ const char *alertsDataSource() {
 
 void alertsFallbackTick() {
     static char configuredUrl[fallbackContract::URL_CAPACITY] = {};
+    static char configuredToken[fallbackContract::TOKEN_CAPACITY] = {};
+    static uint32_t generation = 0;
     static unsigned long lastAttemptAt = 0;
     static bool attempted = false;
     const unsigned long now = millis();
-    if (strcmp(configuredUrl, gConfig.fallbackUrl) != 0) {
+    if (strcmp(configuredUrl, gConfig.fallbackUrl) != 0 || strcmp(configuredToken, gConfig.fallbackToken) != 0) {
         snprintf(configuredUrl, sizeof(configuredUrl), "%s", gConfig.fallbackUrl);
+        snprintf(configuredToken, sizeof(configuredToken), "%s", gConfig.fallbackToken);
+        ++generation;
         gLastFallbackSuccessAt = 0;
         attempted = false;
     }
     FallbackHttpResult response;
-    if (fallbackHttpTakeResult(response) && strcmp(response.url, configuredUrl) == 0 && configuredUrl[0]) {
+    if (fallbackHttpTakeResult(response) && response.generation == generation && strcmp(response.url, configuredUrl) == 0 && configuredUrl[0]) {
         gFallbackHttpStatus = response.status;
         bool states[REGIONS_COUNT];
         if (response.status == 200 && fallbackContract::parseStates(response.body, states, REGIONS_COUNT)) {
@@ -765,6 +769,6 @@ void alertsFallbackTick() {
     if (attempted && now - lastAttemptAt < fallbackContract::POLL_MS) return;
     attempted = true;
     lastAttemptAt = now;
-    if (fallbackHttpStart(configuredUrl)) ++gFallbackRequests;
+    if (fallbackHttpStart(configuredUrl, configuredToken, generation)) ++gFallbackRequests;
     else ++gFallbackErrors;
 }

@@ -35,7 +35,8 @@ export async function POST(request: Request) {
     let input;
     try { input = JSON.parse(body); } catch { throw new Error("Очікується JSON з URL."); }
     if (typeof input?.url !== "string") throw new Error("Введи URL для перевірки.");
-    const url = await probeFallbackUrl(input.url);
+    if (input.token !== undefined && typeof input.token !== "string") throw new Error("Токен має бути текстом.");
+    const url = await probeFallbackUrl(input.url, { token: input.token ?? "" });
     return reply({ ok: true, url, count: 25 });
   } catch (error) {
     return reply({ ok: false, error: error instanceof Error ? error.message : "Не вдалося перевірити URL." }, 422);

@@ -65,11 +65,14 @@ namespace platform_audio {
 static bool reserveBusy = false, reserveReady = false;
 static int reserveStarted = 0;
 static FallbackHttpResult reserveResponse;
+static std::string reserveToken;
 bool fallbackHttpBusy() { return reserveBusy; }
-bool fallbackHttpStart(const char *url) {
+bool fallbackHttpStart(const char *url, const char *token, uint32_t generation) {
     ++reserveStarted;
     reserveBusy = true;
     snprintf(reserveResponse.url, sizeof(reserveResponse.url), "%s", url);
+    reserveToken = token;
+    reserveResponse.generation = generation;
     return true;
 }
 bool fallbackHttpTakeResult(FallbackHttpResult &out) {
@@ -263,6 +266,10 @@ int main() {
         for (bool v : decoded) assert(v);
     }
     assert(fallbackContract::validUrl("https://example.test/alerts.json"));
+    assert(fallbackContract::validToken(std::string(511, 'x').c_str()));
+    assert(!fallbackContract::validToken(std::string(512, 'x').c_str()));
+    assert(!fallbackContract::validToken("Bearer secret"));
+    assert(!fallbackContract::validToken("secret\r\nX-Injected: value"));
     for (const char *bad : {"ftp://host/x", "https:///x", "http://user:pass@host/x", "http://host/x#fragment", "http://host/\r\ninjected"})
         assert(!fallbackContract::validUrl(bad));
 
@@ -321,6 +328,13 @@ int main() {
     clockMs += fallbackContract::FRESH_MS + 1;
     alertsFallbackTick();
     assert(reserveBusy); // Connected broker without payloads also activates reserve.
+    strcpy(gConfig.fallbackToken, "new-test-token");
+    reserveResponse.status = 200;
+    strcpy(reserveResponse.body, allStates("1").c_str());
+    reserveReady = true;
+    alertsFallbackTick();
+    for (bool v : gMqttAlerts) assert(!v); // Previous credential's reply is stale.
+    assert(reserveToken == "new-test-token" && reserveBusy);
     strcpy(gConfig.fallbackUrl, "http://other.test/alerts");
     reserveReady = true;
     alertsFallbackTick();

@@ -14,6 +14,7 @@
 namespace {
 std::atomic<uint8_t> state{0}; // idle, requested, completed
 FallbackHttpResult result;
+char requestToken[fallbackContract::TOKEN_CAPACITY] = {};
 
 // Bound response header bytes and reads; SDK TLS handshake has its own timeout.
 template<class Base> class LimitedClient : public Base {
@@ -89,6 +90,7 @@ template<class ClientType> void request(ClientType &client) {
     http.addHeader("Accept", "application/json");
     http.addHeader("Accept-Encoding", "identity");
     http.addHeader("Cache-Control", "no-cache");
+    if (requestToken[0]) http.addHeader("Authorization", String("Bearer ") + requestToken);
     const int code = http.GET();
     result.status = code;
     if (code == 200) {
@@ -158,6 +160,7 @@ void work(void *) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         if (state.load(std::memory_order_acquire) != 1) continue;
         fetch();
+        memset(requestToken, 0, sizeof(requestToken));
         state.store(2, std::memory_order_release);
     }
 }
@@ -166,18 +169,21 @@ void work(void *) {
 
 bool fallbackHttpBusy() { return state.load(std::memory_order_acquire) != 0; }
 
-bool fallbackHttpStart(const char *url) {
-    if (fallbackHttpBusy()) return false;
+bool fallbackHttpStart(const char *url, const char *token, uint32_t generation) {
+    if (fallbackHttpBusy() || !fallbackContract::validToken(token)) return false;
 #if defined(ESP32)
     if (!worker && xTaskCreate(work, "fallback-http", 8192, nullptr, 1, &worker) != pdPASS) return false;
 #endif
     snprintf(result.url, sizeof(result.url), "%s", url);
+    snprintf(requestToken, sizeof(requestToken), "%s", token ? token : "");
+    result.generation = generation;
     state.store(1, std::memory_order_release);
 #if defined(ESP32)
     xTaskNotifyGive(worker);
 #else
     // ESP8266 has no second task context; the bounded transport yields to Wi-Fi.
     fetch();
+    memset(requestToken, 0, sizeof(requestToken));
     state.store(2, std::memory_order_release);
 #endif
     return true;

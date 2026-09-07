@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
 import { BoardIllustration } from "./board-illustration";
-import { normalizeFallbackUrl, supportsFallback, verifyFallbackEndpoint } from "./fallback-settings";
+import { normalizeFallbackUrl, normalizeFallbackToken, supportsFallback, supportsFallbackToken, verifyFallbackEndpoint } from "./fallback-settings";
 import { FallbackUrlField } from "./fallback-url-field";
 import QRCode from "qrcode";
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
@@ -94,7 +94,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.11";
+const SITE_VERSION = "2.0.12";
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -264,7 +264,7 @@ function compactJsonLog(obj: any) {
   if (obj?.status === "ACK" || obj?.status === "NACK") {
     return `[${obj.status}] ${obj?.cmd ?? "-"}${obj?.reason ? ` (${obj.reason})` : ""}`;
   }
-  return sanitizeLogLine(JSON.stringify(obj));
+  return sanitizeLogLine(JSON.stringify(obj, (key, value) => ["token", "ft", "fallbackToken", "Authorization"].includes(key) ? "***" : value));
 }
 
 function createPipelineInitialState(restoreSettings: boolean): Record<PipelineStepId, PipelineState> {
@@ -428,6 +428,8 @@ export default function Page() {
   const [networkTab, setNetworkTab] = useState<NetworkTab>("wifi");
   const [mqttHost, setMqttHost] = useState("");
   const [fallbackUrl, setFallbackUrl] = useState("");
+  const [fallbackToken, setFallbackToken] = useState("");
+  const [installFallbackToken, setInstallFallbackToken] = useState("");
   const [fallbackSaving, setFallbackSaving] = useState(false);
   const [installFallbackUrl, setInstallFallbackUrl] = useState("");
   const [mqttPort, setMqttPort] = useState("");
@@ -735,6 +737,7 @@ export default function Page() {
     setMqttUser(mqtt.user);
     setMqttPassword(mqtt.password);
     setFallbackUrl(String(cfg.fu ?? ""));
+    setFallbackToken(String(cfg.ft ?? ""));
   }
 
   function persistBackupConfig(cfg: any) {
@@ -952,8 +955,13 @@ export default function Page() {
   }
 
   async function sendConfigChunked(configObj: any, label = "config") {
-    if ((label === "manual_config" || (label === "mqtt" && configObj.fu !== downloadedConfig?.fu)) && configObj.fu) {
-      configObj = { ...configObj, fu: await verifyFallbackEndpoint(String(configObj.fu)) };
+    if ((label === "manual_config" || (label === "mqtt" && (configObj.fu !== downloadedConfig?.fu || configObj.ft !== downloadedConfig?.ft))) && configObj.fu) {
+      const token = normalizeFallbackToken(String(configObj.ft ?? ""));
+      if (token) {
+        const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+        if (!supportsFallbackToken(String(device.fw))) throw new Error("Для токена резервного API потрібна прошивка 2.0.9 або новіша.");
+      }
+      configObj = { ...configObj, fu: await verifyFallbackEndpoint(String(configObj.fu), token), ...(token ? { ft: token } : {}) };
     }
     const payload = new TextEncoder().encode(JSON.stringify(configObj));
     const chunkSize = 64;
@@ -1144,28 +1152,33 @@ export default function Page() {
     await cmdGetInfo();
   }
 
-  async function saveFallbackUrl(value: string) {
-    const url = await verifyFallbackEndpoint(value);
-    await sendAndWait(JSON.stringify({ cmd: "fallback_set", url }), (j) => j?.status === "ACK" && j?.cmd === "fallback_set", 10000);
+  async function saveFallbackUrl(value: string, tokenValue = "") {
+    const token = value.trim() ? normalizeFallbackToken(tokenValue) : "";
+    const url = await verifyFallbackEndpoint(value, token);
+    await sendAndWait(JSON.stringify({ cmd: "fallback_set", url, token }), (j) => j?.status === "ACK" && j?.cmd === "fallback_set", 10000);
     const verified = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
     if (String(verified.config.fu ?? "") !== url) throw new Error("Не вдалося підтвердити збереження резервного URL.");
+    if (String(verified.config.ft ?? "") !== token) throw new Error("Не вдалося підтвердити збереження токена резервного API.");
     applyConfigToUi(verified.config);
   }
 
   async function cmdSetFallbackUrl() {
     if (fallbackSaving) return;
     const url = normalizeFallbackUrl(fallbackUrl);
+    const token = url ? normalizeFallbackToken(fallbackToken) : "";
     setFallbackSaving(true);
     try {
       await ensureConnected(true);
       const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
       if (!supportsFallback(String(device.fw))) throw new Error("Онови прошивку до 2.0.7 або новішої, щоб увімкнути резервний API.");
+      if (token && !supportsFallbackToken(String(device.fw))) throw new Error("Для токена резервного API потрібна прошивка 2.0.9 або новіша.");
       await snapshotCurrentConfigBeforeWrite();
       setStatus(url ? "Перевіряємо резервний URL перед записом…" : "Вимикаємо резервний API…");
-      await saveFallbackUrl(url);
+      await saveFallbackUrl(url, token);
       setStatus(url ? "Резервний URL збережено й перевірено." : "Резервний API вимкнено.");
     } catch (error) {
       setFallbackUrl(url);
+      setFallbackToken(token);
       throw error;
     } finally { setFallbackSaving(false); }
   }
@@ -1340,6 +1353,9 @@ export default function Page() {
 
   async function runFlashFlow(restoreSettings: boolean) {
     const reserveUrl = normalizeFallbackUrl(installFallbackUrl);
+    const reserveToken = normalizeFallbackToken(installFallbackToken);
+    if (reserveToken && !reserveUrl) throw new Error("Вкажи резервний URL разом із токеном або очисти поле токена.");
+    if (reserveToken && !supportsFallbackToken(selectedRelease?.tag_name ?? "")) throw new Error("Для токена резервного API вибери прошивку 2.0.9 або новішу.");
     if (reserveUrl && !supportsFallback(selectedRelease?.tag_name ?? "")) throw new Error("Для резервного API вибери прошивку 2.0.7 або новішу.");
     if (!serialSupported || !canFlash || !manifest) throw new Error("Спочатку вибери плату та доступну версію прошивки.");
     if (!restoreSettings && !freshInstallConfirmed) throw new Error("Підтвердь перше встановлення: поточні налаштування буде видалено.");
@@ -1351,7 +1367,7 @@ export default function Page() {
     resetPipeline(restoreSettings);
     if (reserveUrl) {
       setFlashStatus("Перевіряємо резервний URL перед прошиванням…");
-      await verifyFallbackEndpoint(reserveUrl);
+      await verifyFallbackEndpoint(reserveUrl, reserveToken);
     }
     let backup: any = null;
     let expectedHostname = "";
@@ -1374,6 +1390,7 @@ export default function Page() {
         throw new Error("Не вдалося зберегти поточні налаштування. Запис не розпочато. Перепідключи USB та спробуй ще раз; режим оновлення залишився увімкненим.");
       }
     }
+    if (backup?.ft && !supportsFallbackToken(selectedRelease?.tag_name ?? "")) throw new Error("Копія налаштувань містить токен резервного API. Вибери прошивку 2.0.9 або новішу, щоб зберегти його.");
     const flashPort = rememberedPortRef.current;
     await disconnectPort();
     setPipelineStep("flash", "active");
@@ -1421,7 +1438,7 @@ export default function Page() {
     if (reserveUrl) {
       setPipelineStep("verify", "active");
       setFlashStatus("Зберігаємо резервний URL і перевіряємо його на платі…");
-      await saveFallbackUrl(reserveUrl);
+      await saveFallbackUrl(reserveUrl, reserveToken);
       setPipelineStep("verify", "done");
     }
     await cmdGetInfo();
@@ -1519,7 +1536,7 @@ export default function Page() {
             </fieldset>
             {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
             <details className="reserve-settings"><summary>Резервний канал даних <span>Необов’язково</span></summary>
-              <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} disabled={flashBusy || waitActive || fallbackSaving} />
+              <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} token={installFallbackToken} onTokenChange={setInstallFallbackToken} disabled={flashBusy || waitActive || fallbackSaving} />
               <p className="hint">Відповідь: JSON-масив із 25 чисел 0 або 1 у порядку областей MQTT. Починаючи з прошивки 2.0.8, плата опитуватиме його кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.</p>
               <p className="hint">Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.</p>
               <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">Порядок областей і приклад відповіді ↗</a>
@@ -1721,7 +1738,7 @@ export default function Page() {
                   Зберегти MQTT
                 </button>
               </div>
-              <FallbackUrlField id="fallback-url" value={fallbackUrl} onChange={setFallbackUrl} disabled={flashBusy || waitActive || fallbackSaving} />
+              <FallbackUrlField id="fallback-url" value={fallbackUrl} onChange={setFallbackUrl} token={fallbackToken} onTokenChange={setFallbackToken} disabled={flashBusy || waitActive || fallbackSaving} />
               <p className="hint">25 значень 0/1 у порядку MQTT. Очисти поле й збережи, щоб вимкнути резерв.</p>
               <button className="btn" disabled={flashBusy || fallbackSaving || portState !== "connected"} onClick={() => void cmdSetFallbackUrl().catch(showActionError)}>{fallbackSaving ? "Перевіряємо й зберігаємо…" : "Зберегти резервний URL"}</button>
             </div>

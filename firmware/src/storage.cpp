@@ -186,6 +186,12 @@ bool validateFullConfigJson(JsonVariantConst cfg, char *error, size_t errorSize)
         return false;
     }
 
+    if (cfg.containsKey("ft") && (!cfg["ft"].is<const char *>() ||
+        !fallbackContract::validToken(cfg["ft"].as<const char *>()))) {
+        setErr("bad_fallback_token");
+        return false;
+    }
+
     if (!cfg["cv"].isNull() && !isNumber(cfg["cv"]))
     {
         setErr("bad_cv");
@@ -624,6 +630,7 @@ void storageApplyJson(JsonVariantConst doc)
     copyBounded(gConfig.wifiPass, WIFI_PASS_MAXLEN, compactWifi.containsKey("p") ? readStr(compactWifi["p"]) : readStr(doc["wifiPass"]));
     copyBounded(gConfig.mqttHost, MQTT_HOST_MAXLEN, compactMqtt.containsKey("h") ? readStr(compactMqtt["h"]) : readStr(doc["mqttHost"]));
     copyBounded(gConfig.fallbackUrl, sizeof(gConfig.fallbackUrl), readStr(doc["fu"]));
+    copyBounded(gConfig.fallbackToken, sizeof(gConfig.fallbackToken), readStr(doc["ft"]));
     copyBounded(gConfig.mqttTopic, MQTT_TOPIC_MAXLEN, compactMqtt.containsKey("t") ? readStr(compactMqtt["t"]) : readStr(doc["mqttTopic"]));
     copyBounded(gConfig.mqttUser, MQTT_USER_MAXLEN, compactMqtt.containsKey("u") ? readStr(compactMqtt["u"]) : readStr(doc["mqttUser"]));
     copyBounded(gConfig.mqttPass, MQTT_PASS_MAXLEN, compactMqtt.containsKey("s") ? readStr(compactMqtt["s"]) : readStr(doc["mqttPass"]));
@@ -762,6 +769,7 @@ void storagePopulateJson(JsonDocument &doc)
     doc["g"] = gConfig.logMask;
     // Preserve the old wire shape when no reserve is configured.
     if (gConfig.fallbackUrl[0]) doc["fu"] = gConfig.fallbackUrl;
+    if (gConfig.fallbackToken[0]) doc["ft"] = gConfig.fallbackToken;
 }
 
 bool storageLoadConfigFromJson(JsonVariantConst configJson, char *error, size_t errorSize)

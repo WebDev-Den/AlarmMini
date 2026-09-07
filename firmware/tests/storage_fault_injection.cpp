@@ -152,9 +152,15 @@ int main()
     // Optional reserve URL is backward compatible, transactional and survives reboot.
     storagePopulateJson(edited);
     edited["fu"] = "https://reserve.example/alerts.json";
+    edited["ft"] = "test-only-token";
     assert(storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
     reboot();
     assert(std::string(gConfig.fallbackUrl) == "https://reserve.example/alerts.json");
+    assert(std::string(gConfig.fallbackToken) == "test-only-token");
+    edited["ft"] = "token\r\nInjected: yes";
+    assert(!storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    assert(std::string(error) == "bad_fallback_token");
+    edited["ft"] = "test-only-token";
     edited["fu"] = "javascript:alert(1)";
     assert(!storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
     assert(std::string(error) == "bad_fallback_url");
@@ -163,10 +169,20 @@ int main()
     assert(!storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
     assert(std::string(gConfig.fallbackUrl) == "https://reserve.example/alerts.json");
     faults = {};
+    std::string maxUrl = "https://reserve.example/";
+    maxUrl.resize(255, 'x');
+    edited["fu"] = maxUrl;
+    edited["ft"] = std::string(511, 't');
+    assert(!edited.overflowed());
+    assert(storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    reboot();
+    assert(strlen(gConfig.fallbackToken) == 511 && strlen(gConfig.fallbackUrl) == 255);
     edited.remove("fu");
+    edited.remove("ft");
     assert(storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
     reboot();
     assert(!gConfig.fallbackUrl[0]);
+    assert(!gConfig.fallbackToken[0]);
 
     std::cout << "PASS: " << powerCuts
               << " power cuts; temp/backup recovery; CRC; invalid-file preservation; "

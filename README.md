@@ -4,6 +4,22 @@ AlarmMini is a commercial firmware and web-installer project for a compact physi
 
 Production installer: [https://alarmmini.vercel.app](https://alarmmini.vercel.app)
 
+## Резервний URL: формат відповіді та авторизація
+
+Резервний API має відповідати на `GET` статусом **HTTP 200** і JSON-масивом
+рівно з **25 чисел**: `0` — немає тривоги, `1` — тривога. Приклад відповіді:
+
+```json
+[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+```
+
+Порядок областей збігається з MQTT. Масив передається без обгортки `data`/`states`,
+без рядків `"0"`/`"1"` і без `true`/`false`. Опитування — раз на 30 секунд.
+Починаючи з прошивки **2.0.9**, у полі «Токен авторизації» можна вказати токен
+резервного API; плата й перевірка сайту передадуть `Authorization: Bearer <token>`.
+
+[Повний контракт, послідовність 25 областей, приклад HTTP-запиту та коди помилок →](docs/http-fallback.md)
+
 ## Product Summary
 
 AlarmMini is designed as a ready-to-assemble IoT map controller. A user can connect the board to a computer, flash the latest firmware from the website, restore or update the full configuration, generate QR labels, and deploy the device without installing developer tools.

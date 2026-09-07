@@ -2,7 +2,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { request as httpRequest, type RequestOptions } from "node:http";
 import { request as httpsRequest } from "node:https";
-import { normalizeFallbackUrl, validateFallbackBody } from "./fallback-settings";
+import { normalizeFallbackUrl, normalizeFallbackToken, validateFallbackBody } from "./fallback-settings";
 
 export function isPublicIpv4(address: string): boolean {
   if (isIP(address) !== 4) return false;
@@ -18,6 +18,7 @@ export function isPublicIpv4(address: string): boolean {
 const privateMessage = "Сайт може перевірити лише публічний URL. Локальні адреси на кшталт 192.168.x.x або localhost недоступні серверу перевірки.";
 const timeoutMessage = "Сервер не відповів за 8 секунд. Перевір його доступність і повтори спробу.";
 type Dependencies = {
+  token?: string;
   resolve?: (host: string) => Promise<{ address: string; family: number }[]>;
   request?: typeof httpRequest;
   timeoutMs?: number;
@@ -25,6 +26,7 @@ type Dependencies = {
 
 export async function probeFallbackUrl(value: string, dependencies: Dependencies = {}): Promise<string> {
   const normalized = normalizeFallbackUrl(value);
+  const token = normalizeFallbackToken(dependencies.token ?? "");
   if (!normalized) throw new Error("Введи резервний URL для перевірки.");
   const url = new URL(normalized);
   if (isIP(url.hostname) && !isPublicIpv4(url.hostname)) throw new Error(privateMessage);
@@ -53,11 +55,12 @@ export async function probeFallbackUrl(value: string, dependencies: Dependencies
       const req = transport(url, {
         method: "GET", agent: false, lookup, family: 4, maxHeaderSize: 4096,
         signal: controller.signal,
-        headers: { Accept: "application/json", "Accept-Encoding": "identity", "Cache-Control": "no-cache", Connection: "close" },
+        headers: { Accept: "application/json", "Accept-Encoding": "identity", "Cache-Control": "no-cache", Connection: "close", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       }, (response) => {
         void (async () => {
           try {
             if (response.statusCode !== 200) {
+              if (response.statusCode === 401 || response.statusCode === 403) throw new Error(`HTTP ${response.statusCode}: сервер відхилив авторизацію. Перевір токен та його права доступу.`);
               if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400) throw new Error("URL перенаправляє на іншу адресу. Введи кінцевий URL без перенаправлення.");
               throw new Error(`Сервер повернув HTTP ${response.statusCode ?? "помилку"}. Потрібна відповідь HTTP 200.`);
             }

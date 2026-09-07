@@ -19,9 +19,16 @@ export function validateFallbackBody(body: string): void {
   }
 }
 
-export async function verifyFallbackEndpoint(value: string, signal?: AbortSignal): Promise<string> {
+export function normalizeFallbackToken(value: string): string {
+  const token = value.trim();
+  if (token.length > 511 || /[^\x21-\x7e]/.test(token)) throw new Error("Введи лише токен без Bearer: до 511 символів ASCII, без пробілів і перенесень рядка.");
+  return token;
+}
+
+export async function verifyFallbackEndpoint(value: string, tokenValue = "", signal?: AbortSignal): Promise<string> {
   const url = normalizeFallbackUrl(value);
   if (!url) return ""; // Clearing an existing reserve never needs the old server.
+  const token = normalizeFallbackToken(tokenValue);
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (signal?.aborted) abort();
@@ -30,7 +37,7 @@ export async function verifyFallbackEndpoint(value: string, signal?: AbortSignal
   try {
     const response = await fetch("/api/fallback-validation", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }), cache: "no-store", signal: controller.signal,
+      body: JSON.stringify({ url, token }), cache: "no-store", signal: controller.signal,
     });
     const result = await response.json().catch(() => null);
     if (!response.ok || result?.ok !== true || result.url !== url) {
@@ -52,4 +59,11 @@ export function supportsFallback(version: string): boolean {
   if (!match) return false;
   const [, major, minor, patch] = match.map(Number);
   return major > 2 || (major === 2 && (minor > 0 || patch >= 7));
+}
+
+export function supportsFallbackToken(version: string): boolean {
+  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)(?:$|-)/);
+  if (!match) return false;
+  const [, major, minor, patch] = match.map(Number);
+  return major > 2 || (major === 2 && (minor > 0 || patch >= 9));
 }
