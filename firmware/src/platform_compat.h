@@ -40,9 +40,19 @@ inline void platformWifiDisconnect()
     WiFi.disconnect(false, false);
 }
 
+inline void platformWifiApplyTxPower()
+{
+#if defined(ALARMMINI_WIFI_TX_POWER_QUARTER_DBM)
+    static_assert(ALARMMINI_WIFI_TX_POWER_QUARTER_DBM >= 8 &&
+                  ALARMMINI_WIFI_TX_POWER_QUARTER_DBM <= 80, "WiFi power must be 2..20 dBm");
+    WiFi.setTxPower(static_cast<wifi_power_t>(ALARMMINI_WIFI_TX_POWER_QUARTER_DBM));
+#endif
+}
+
 inline void platformWifiDisableSleep()
 {
     WiFi.setSleep(false);
+    platformWifiApplyTxPower();
 }
 
 inline void platformWifiConfigureApRadio()
@@ -55,6 +65,8 @@ inline void platformWifiConfigureApRadio()
     };
     esp_wifi_set_country(&country);
     esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
+    // Country/mode changes may update radio limits; reapply the board profile.
+    platformWifiApplyTxPower();
 }
 
 inline uint32_t platformUniqueId24()

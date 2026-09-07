@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "alerts.h"
 #include "reset_trace.h"
+#include "wifi_diagnostics.h"
 
 void scheduleRestart(unsigned long delayMs);
 void startupRequestWifiConnect();
@@ -132,7 +133,7 @@ inline void sendDeviceInfo()
 
 inline void sendDiagnostics()
 {
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(1536);
     doc["event"] = "diagnostics";
     doc["fw"] = FIRMWARE_VERSION;
     doc["hostname"] = gHostname[0] ? gHostname : "unset";
@@ -165,6 +166,7 @@ inline void sendDiagnostics()
     doc["loopMaxMs"] = gLoopMaxDurationMs;
     doc["loopSlowCount"] = gLoopSlowCount;
     doc["loopIterations"] = gLoopIterationCount;
+    wifiDiagnostics::append(doc.as<JsonObject>());
     serializeJson(doc, CONSOLE_PORT);
     CONSOLE_PORT.println();
 }
@@ -182,6 +184,21 @@ inline void sendFactoryTest()
     const int found = WiFi.scanNetworks(false, true);
     doc["wifiScanOk"] = found >= 0;
     doc["wifiNetworks"] = max(found, 0);
+    doc["wifiScanResult"] = found;
+    if (found >= 0) {
+        bool targetFound = false;
+        int32_t targetRssi = -128;
+        for (int i = 0; i < found; ++i) {
+            if (WiFi.SSID(i) == String(gConfig.wifiSsid) && (!targetFound || WiFi.RSSI(i) > targetRssi)) {
+                targetFound = true;
+                targetRssi = WiFi.RSSI(i);
+                doc["configuredNetworkChannel"] = WiFi.channel(i);
+                doc["configuredNetworkAuth"] = static_cast<int>(WiFi.encryptionType(i));
+            }
+        }
+        doc["configuredNetworkFound"] = targetFound;
+        if (targetFound) doc["configuredNetworkRssi"] = targetRssi;
+    }
     WiFi.scanDelete();
     doc["ok"] = doc["fs"].as<bool>() && doc["heapOk"].as<bool>() && doc["wifiScanOk"].as<bool>() && gConfig.ledCount > 0;
     serializeJson(doc, CONSOLE_PORT);
@@ -626,6 +643,29 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
         sendDeviceInfo();
         return;
     }
+
+#if defined(ESP32)
+    // Diagnostic override is temporary: it does not write configuration.
+    if (strcmp(cmd, "wifi_tx_power") == 0)
+    {
+        if (root.isNull() || !root["quarterDbm"].is<int>()) {
+            sendNack(cmd, "missing_power");
+            return;
+        }
+        const int power = root["quarterDbm"].as<int>();
+        if (power < 8 || power > 80) {
+            sendNack(cmd, "power_out_of_range");
+            return;
+        }
+        if (!WiFi.setTxPower(static_cast<wifi_power_t>(power))) {
+            sendNack(cmd, "radio_not_ready");
+            return;
+        }
+        sendAck(cmd);
+        sendDiagnostics();
+        return;
+    }
+#endif
 
     if (strcmp(cmd, "mqtt_set") == 0)
     {

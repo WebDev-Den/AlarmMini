@@ -12,6 +12,7 @@
 #include "uart_config.h"
 #include "reset_trace.h"
 #include "runtime_stats.h"
+#include "wifi_diagnostics.h"
 #if defined(ESP32)
 #include <esp_log.h>
 #endif
@@ -104,6 +105,7 @@ void setup()
     storageInit();
     loggerSetMask(gConfig.logMask);
     WiFi.persistent(false);
+    wifiDiagnostics::init();
     // startupProvisioningHandle owns bounded retries, including during setup.
     WiFi.setAutoReconnect(false);
 
