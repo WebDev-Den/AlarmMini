@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
 import { BoardIllustration } from "./board-illustration";
-import { normalizeFallbackUrl, supportsFallback } from "./fallback-settings";
+import { normalizeFallbackUrl, supportsFallback, verifyFallbackEndpoint } from "./fallback-settings";
+import { FallbackUrlField } from "./fallback-url-field";
 import QRCode from "qrcode";
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
 import { json as jsonLang } from "@codemirror/lang-json";
@@ -93,7 +94,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.10";
+const SITE_VERSION = "2.0.11";
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -427,6 +428,7 @@ export default function Page() {
   const [networkTab, setNetworkTab] = useState<NetworkTab>("wifi");
   const [mqttHost, setMqttHost] = useState("");
   const [fallbackUrl, setFallbackUrl] = useState("");
+  const [fallbackSaving, setFallbackSaving] = useState(false);
   const [installFallbackUrl, setInstallFallbackUrl] = useState("");
   const [mqttPort, setMqttPort] = useState("");
   const [mqttTopic, setMqttTopic] = useState("");
@@ -950,6 +952,9 @@ export default function Page() {
   }
 
   async function sendConfigChunked(configObj: any, label = "config") {
+    if ((label === "manual_config" || (label === "mqtt" && configObj.fu !== downloadedConfig?.fu)) && configObj.fu) {
+      configObj = { ...configObj, fu: await verifyFallbackEndpoint(String(configObj.fu)) };
+    }
     const payload = new TextEncoder().encode(JSON.stringify(configObj));
     const chunkSize = 64;
     appendLog(`[${label}] chunked upload ${payload.length} bytes`);
@@ -1140,7 +1145,7 @@ export default function Page() {
   }
 
   async function saveFallbackUrl(value: string) {
-    const url = normalizeFallbackUrl(value);
+    const url = await verifyFallbackEndpoint(value);
     await sendAndWait(JSON.stringify({ cmd: "fallback_set", url }), (j) => j?.status === "ACK" && j?.cmd === "fallback_set", 10000);
     const verified = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
     if (String(verified.config.fu ?? "") !== url) throw new Error("Не вдалося підтвердити збереження резервного URL.");
@@ -1148,13 +1153,21 @@ export default function Page() {
   }
 
   async function cmdSetFallbackUrl() {
+    if (fallbackSaving) return;
     const url = normalizeFallbackUrl(fallbackUrl);
-    await ensureConnected(true);
-    const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
-    if (!supportsFallback(String(device.fw))) throw new Error("Онови прошивку до 2.0.7 або новішої, щоб увімкнути резервний API.");
-    await snapshotCurrentConfigBeforeWrite();
-    await saveFallbackUrl(url);
-    setStatus(url ? "Резервний URL збережено й перевірено." : "Резервний API вимкнено.");
+    setFallbackSaving(true);
+    try {
+      await ensureConnected(true);
+      const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+      if (!supportsFallback(String(device.fw))) throw new Error("Онови прошивку до 2.0.7 або новішої, щоб увімкнути резервний API.");
+      await snapshotCurrentConfigBeforeWrite();
+      setStatus(url ? "Перевіряємо резервний URL перед записом…" : "Вимикаємо резервний API…");
+      await saveFallbackUrl(url);
+      setStatus(url ? "Резервний URL збережено й перевірено." : "Резервний API вимкнено.");
+    } catch (error) {
+      setFallbackUrl(url);
+      throw error;
+    } finally { setFallbackSaving(false); }
   }
 
   async function cmdSetMqtt() {
@@ -1336,6 +1349,10 @@ export default function Page() {
     setFlashOutcome("idle");
     setFlashProgress(null);
     resetPipeline(restoreSettings);
+    if (reserveUrl) {
+      setFlashStatus("Перевіряємо резервний URL перед прошиванням…");
+      await verifyFallbackEndpoint(reserveUrl);
+    }
     let backup: any = null;
     let expectedHostname = "";
     if (restoreSettings) {
@@ -1502,7 +1519,7 @@ export default function Page() {
             </fieldset>
             {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
             <details className="reserve-settings"><summary>Резервний канал даних <span>Необов’язково</span></summary>
-              <label htmlFor="install-fallback-url">Резервний URL<input id="install-fallback-url" name="install-fallback-url" type="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/alerts.json" value={installFallbackUrl} disabled={flashBusy || waitActive} onChange={(event) => setInstallFallbackUrl(event.target.value)} /></label>
+              <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} disabled={flashBusy || waitActive || fallbackSaving} />
               <p className="hint">Відповідь: JSON-масив із 25 чисел 0 або 1 у порядку областей MQTT. Починаючи з прошивки 2.0.8, плата опитуватиме його кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.</p>
               <p className="hint">Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.</p>
               <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">Порядок областей і приклад відповіді ↗</a>
@@ -1523,7 +1540,7 @@ export default function Page() {
 
           <section className="card step-card flash-card" aria-labelledby="flash-title" aria-busy={flashBusy}>
             <div className="step-heading"><span className="step-number">3</span><div><h2 id="flash-title">{newDeviceMode ? "Встанови AlarmMini" : "Онови прошивку"}</h2><p className="hint">{newDeviceMode ? "Після встановлення підключиш карту до домашнього Wi-Fi." : "Wi-Fi, MQTT, кольори та відповідність світлодіодів збережуться. Якщо прочитати налаштування не вдасться, запис не почнеться."}</p></div></div>
-            <button className="btn primary flash-primary" disabled={!serialSupported || !canFlash || flashBusy || waitActive || portState !== "connected" || (newDeviceMode && !freshInstallConfirmed)} onClick={() => void onFlashClick(!newDeviceMode)}>{flashBusy ? "Триває прошивання…" : newDeviceMode ? "Встановити AlarmMini" : "Оновити й зберегти налаштування"}</button>
+            <button className="btn primary flash-primary" disabled={!serialSupported || !canFlash || flashBusy || fallbackSaving || waitActive || portState !== "connected" || (newDeviceMode && !freshInstallConfirmed)} onClick={() => void onFlashClick(!newDeviceMode)}>{flashBusy ? "Триває прошивання…" : newDeviceMode ? "Встановити AlarmMini" : "Оновити й зберегти налаштування"}</button>
             <p className="hint">{portState !== "connected" ? "Спочатку підключи плату в кроці 2." : !canFlash ? "Для обраної плати немає повного набору файлів. Вибери іншу версію." : newDeviceMode && !freshInstallConfirmed ? "Підтвердь скидання налаштувань у кроці 1." : "Залиш цю вкладку відкритою та не відключай USB до повідомлення про завершення."}</p>
             {flashBusy || flashOutcome !== "idle" ? <>
               <ol className="pipeline-grid" aria-label="Стан прошивання">{PIPELINE_STEPS.filter((step) => pipelineState[step.id] !== "skipped").map((step) => <li key={step.id} className={`pipeline-step ${pipelineState[step.id]}`} aria-current={pipelineState[step.id] === "active" ? "step" : undefined}><span aria-hidden="true">{pipelineState[step.id] === "done" ? "✓ " : pipelineState[step.id] === "error" ? "! " : ""}</span>{step.label}<span className="sr-only">: {pipelineState[step.id]}</span></li>)}</ol>
@@ -1704,9 +1721,9 @@ export default function Page() {
                   Зберегти MQTT
                 </button>
               </div>
-              <label htmlFor="fallback-url">Резервний URL<input id="fallback-url" name="fallback-url" type="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/alerts.json" value={fallbackUrl} onChange={(event) => setFallbackUrl(event.target.value)} /></label>
+              <FallbackUrlField id="fallback-url" value={fallbackUrl} onChange={setFallbackUrl} disabled={flashBusy || waitActive || fallbackSaving} />
               <p className="hint">25 значень 0/1 у порядку MQTT. Очисти поле й збережи, щоб вимкнути резерв.</p>
-              <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetFallbackUrl().catch(showActionError)}>Зберегти резервний URL</button>
+              <button className="btn" disabled={flashBusy || fallbackSaving || portState !== "connected"} onClick={() => void cmdSetFallbackUrl().catch(showActionError)}>{fallbackSaving ? "Перевіряємо й зберігаємо…" : "Зберегти резервний URL"}</button>
             </div>
           )}
         </div>

@@ -9,7 +9,7 @@ test('reserve URL normalization and transport restrictions', () => {
   assert.equal(normalizeFallbackUrl('  '), '');
   assert.equal(normalizeFallbackUrl(' https://example.com '), 'https://example.com/');
   assert.equal(normalizeFallbackUrl('http://192.168.1.2:8766/alerts'), 'http://192.168.1.2:8766/alerts');
-  for (const url of ['ftp://host/x', 'https://user:pass@host/', 'https://host/#x', 'http://[::1]/', 'http://host:99999/', 'http://host/a b', 'http://host/\\x', 'https://host/' + 'x'.repeat(255)]) {
+  for (const url of ['ftp://host/x', 'https://user:pass@host/', 'https://host/#x', 'https://host/#', 'http://[::1]/', 'http://host:99999/', 'http://host:0/', 'http:host', 'http://host/a b', 'http://host/\\x', 'https://host/' + 'x'.repeat(255)]) {
     assert.throws(() => normalizeFallbackUrl(url), url);
   }
 });

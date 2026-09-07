@@ -994,3 +994,10 @@ summary { cursor: pointer; }
 .reserve-settings summary span { color: var(--muted); font-size: 11px; margin-left: 8px; }
 .reserve-settings label { margin-top: 12px; }
 .reserve-settings input { width: 100%; min-width: 0; }
+.fallback-field { min-width: 0; }
+.fallback-field input { width: 100%; min-width: 0; }
+.fallback-field > .btn { margin-top: 10px; min-height: 44px; }
+.fallback-check { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.fallback-check:empty { display: none; }
+.fallback-check.success { color: var(--accent, #79e3c0); }
+.fallback-check.error { color: #ffb4ab; }
