@@ -22,7 +22,7 @@
 #define WIFI_PASS_MAXLEN  64
 #define NTP_SERVER_MAXLEN 64
 #define ADMIN_PASS_MAXLEN 32
-#define FIRMWARE_VERSION  "2.0.7-dev"
+#define FIRMWARE_VERSION  "2.0.7"
 
 #define REGIONS_COUNT 25
 
@@ -182,6 +182,7 @@ struct AppConfig {
     char         wifiSsid[WIFI_SSID_MAXLEN];
     char         wifiPass[WIFI_PASS_MAXLEN];
     char         mqttHost[MQTT_HOST_MAXLEN];
+    char         fallbackUrl[256];
     uint16_t     mqttPort;
     char         mqttTopic[MQTT_TOPIC_MAXLEN];
     char         mqttUser[MQTT_USER_MAXLEN];

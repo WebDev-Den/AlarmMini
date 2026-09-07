@@ -10,6 +10,7 @@
 #include "config.h"
 #include "storage.h"
 #include "logger.h"
+#include "fallback_http.h"
 
 bool gAlerts[REGIONS_COUNT]         = {false};
 bool gPrevAlerts[REGIONS_COUNT]     = {false};
@@ -20,6 +21,11 @@ bool gMqttConnected                 = false;
 bool gInternetConnected             = false;
 bool gMqttDataStale                 = false;
 bool gUsingFallbackSnapshot         = false;
+bool gUsingHttpFallback             = false;
+unsigned long gLastFallbackSuccessAt = 0;
+uint32_t gFallbackRequests = 0;
+uint32_t gFallbackErrors = 0;
+int gFallbackHttpStatus = 0;
 bool gAlertTestActive               = false;
 bool gAlertTestRegions[REGIONS_COUNT] = {false};
 unsigned long gAlertTestStartedAt   = 0;
@@ -377,6 +383,7 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     gFetchOk = true;
     gMqttDataStale = false;
     gUsingFallbackSnapshot = false;
+    gUsingHttpFallback = false;
     gMqttMessagesReceived++;
     gLastMqttMessageAt = millis();
     _mqttSnapshotDirty = _mqttSnapshotDirty || !_mqttSnapshotSaved;
@@ -440,6 +447,8 @@ bool _mqttConnect() {
     _mqttWifi.endOperation();
 
     if (ok) {
+        // A new connection must receive a payload before replacing the reserve.
+        gLastMqttMessageAt = 0;
         const char* t = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : "alerts/status";
         if (!_mqtt.subscribe(t, 1)) {
             gMqttSubscriptionRefreshFailures++;
@@ -700,4 +709,62 @@ void alertsAutonomousHealthTick()
 
     // alertsHandle owns reconnect timing; a health/LED tick must not initiate a
     // second blocking connection attempt in the same loop iteration.
+}
+
+bool alertsMqttFresh(unsigned long now) {
+    return gMqttConnected && !gUsingHttpFallback && gLastMqttMessageAt != 0 &&
+        now - gLastMqttMessageAt < fallbackContract::FRESH_MS && !gUsingFallbackSnapshot;
+}
+
+bool alertsDataFresh() {
+    const unsigned long now = millis();
+    return alertsMqttFresh(now) || (gConfig.fallbackUrl[0] && gUsingHttpFallback &&
+        gLastFallbackSuccessAt != 0 && now - gLastFallbackSuccessAt < fallbackContract::FRESH_MS);
+}
+
+const char *alertsDataSource() {
+    if (gUsingFallbackSnapshot) return "saved";
+    if (gUsingHttpFallback) return "http";
+    return gLastMqttMessageAt ? "mqtt" : "none";
+}
+
+void alertsFallbackTick() {
+    static char configuredUrl[fallbackContract::URL_CAPACITY] = {};
+    static unsigned long lastAttemptAt = 0;
+    static bool attempted = false;
+    const unsigned long now = millis();
+    if (strcmp(configuredUrl, gConfig.fallbackUrl) != 0) {
+        snprintf(configuredUrl, sizeof(configuredUrl), "%s", gConfig.fallbackUrl);
+        gLastFallbackSuccessAt = 0;
+        attempted = false;
+    }
+    FallbackHttpResult response;
+    if (fallbackHttpTakeResult(response) && strcmp(response.url, configuredUrl) == 0 && configuredUrl[0]) {
+        gFallbackHttpStatus = response.status;
+        bool states[REGIONS_COUNT];
+        if (response.status == 200 && fallbackContract::parseStates(response.body, states, REGIONS_COUNT)) {
+            // A delayed HTTP response must never overwrite a recovered MQTT stream.
+            if (!alertsMqttFresh(now)) {
+                for (int i = 0; i < REGIONS_COUNT; ++i) {
+                    if (gMqttAlerts[i] != states[i]) _mqttSnapshotDirty = true;
+                    gMqttAlerts[i] = states[i];
+                }
+                _rebuildEffectiveAlerts();
+                gFetchOk = true;
+                gUsingFallbackSnapshot = false;
+                gUsingHttpFallback = true;
+                gLastFallbackSuccessAt = now;
+                _mqttSnapshotDirty = _mqttSnapshotDirty || !_mqttSnapshotSaved;
+            }
+        } else {
+            ++gFallbackErrors;
+            LOG_WARN(LOG_CAT_INTERNET, "Reserve rejected, HTTP=%d; retaining state", response.status);
+        }
+    }
+    if (!configuredUrl[0] || WiFi.status() != WL_CONNECTED || alertsMqttFresh(now) || fallbackHttpBusy()) return;
+    if (attempted && now - lastAttemptAt < fallbackContract::POLL_MS) return;
+    attempted = true;
+    lastAttemptAt = now;
+    if (fallbackHttpStart(configuredUrl)) ++gFallbackRequests;
+    else ++gFallbackErrors;
 }

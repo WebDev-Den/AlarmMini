@@ -149,6 +149,25 @@ int main()
     reboot();
     assert(std::string(gConfig.wifiSsid) == "new-network");
 
+    // Optional reserve URL is backward compatible, transactional and survives reboot.
+    storagePopulateJson(edited);
+    edited["fu"] = "https://reserve.example/alerts.json";
+    assert(storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    reboot();
+    assert(std::string(gConfig.fallbackUrl) == "https://reserve.example/alerts.json");
+    edited["fu"] = "javascript:alert(1)";
+    assert(!storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    assert(std::string(error) == "bad_fallback_url");
+    edited["fu"] = "https://another.example/alerts.json";
+    faults.failOpenWrite = true;
+    assert(!storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    assert(std::string(gConfig.fallbackUrl) == "https://reserve.example/alerts.json");
+    faults = {};
+    edited.remove("fu");
+    assert(storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    reboot();
+    assert(!gConfig.fallbackUrl[0]);
+
     std::cout << "PASS: " << powerCuts
               << " power cuts; temp/backup recovery; CRC; invalid-file preservation; "
                  "short writes; flush/rename failures; transactional save; WiFi sync\n";

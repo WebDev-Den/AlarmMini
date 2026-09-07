@@ -61,6 +61,23 @@ namespace platform_audio {
     void stopTone() { frequency = 0; }
 }
 
+#include "fallback_http.h"
+static bool reserveBusy = false, reserveReady = false;
+static int reserveStarted = 0;
+static FallbackHttpResult reserveResponse;
+bool fallbackHttpBusy() { return reserveBusy; }
+bool fallbackHttpStart(const char *url) {
+    ++reserveStarted;
+    reserveBusy = true;
+    snprintf(reserveResponse.url, sizeof(reserveResponse.url), "%s", url);
+    return true;
+}
+bool fallbackHttpTakeResult(FallbackHttpResult &out) {
+    if (!reserveReady) return false;
+    out = reserveResponse;
+    reserveReady = reserveBusy = false;
+    return true;
+}
 #include "runtime_under_test.h"
 
 static void deliver(std::string payload) {
@@ -230,5 +247,82 @@ int main() {
         buzzerHandle();
     }
     assert(!gPlaying && platform_audio::frequency == 0 && platform_audio::notesStarted == ALERT_NOTES);
+    // Reserve contract: exact region order, strict 0/1, no partial application.
+    bool decoded[REGIONS_COUNT] = {};
+    for (int selected = 0; selected < REGIONS_COUNT; ++selected) {
+        auto payload = allStates("0");
+        payload[1 + selected * 2] = '1';
+        assert(fallbackContract::parseStates(payload.c_str(), decoded, REGIONS_COUNT));
+        for (int i = 0; i < REGIONS_COUNT; ++i) assert(decoded[i] == (i == selected));
+    }
+    for (const auto &bad : {allStates("true"), allStates("2"), allStates("0.0"),
+            allStates("0") + "x", std::string("[0,1]"), std::string("[]"), std::string("null"), std::string(""),
+            allStates("0").substr(0, 49), allStates("0").substr(0, 50) + ",0]"}) {
+        std::fill_n(decoded, REGIONS_COUNT, true);
+        assert(!fallbackContract::parseStates(bad.c_str(), decoded, REGIONS_COUNT));
+        for (bool v : decoded) assert(v);
+    }
+    assert(fallbackContract::validUrl("https://example.test/alerts.json"));
+    for (const char *bad : {"ftp://host/x", "https:///x", "http://user:pass@host/x", "http://host/x#fragment", "http://host/\r\ninjected"})
+        assert(!fallbackContract::validUrl(bad));
+
+    // Exercise the production failover coordinator, including late HTTP replies.
+    clockMs = 100000;
+    WiFi.state = WL_CONNECTED;
+    gMqttConnected = true;
+    gLastMqttMessageAt = clockMs;
+    gUsingFallbackSnapshot = false;
+    strcpy(gConfig.fallbackUrl, "http://reserve.test/alerts");
+    alertsFallbackTick();
+    assert(reserveStarted == 0); // MQTT wins while fresh.
+    gMqttConnected = false;
+    alertsFallbackTick();
+    assert(reserveStarted == 1 && reserveBusy);
+    reserveResponse.status = 200;
+    strcpy(reserveResponse.body, allStates("1").c_str());
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(gUsingHttpFallback && alertsDataFresh());
+    gMqttConnected = true;
+    assert(!alertsMqttFresh(clockMs)); // Reconnection alone is not a new payload.
+    gMqttConnected = false;
+    for (bool v : gMqttAlerts) assert(v);
+    clockMs += 20000;
+    alertsFallbackTick();
+    assert(reserveStarted == 2);
+    reserveResponse.status = 503;
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(gFallbackErrors == 1);
+    for (bool v : gMqttAlerts) assert(v); // HTTP error never clears alerts.
+    clockMs += 20000;
+    alertsFallbackTick();
+    reserveResponse.status = 200;
+    strcpy(reserveResponse.body, "[0,1]");
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(gFallbackErrors == 2);
+    for (bool v : gMqttAlerts) assert(v);
+    clockMs += 20000;
+    alertsFallbackTick();
+    gMqttConnected = true;
+    deliver(allStates("0"));
+    strcpy(reserveResponse.body, allStates("1").c_str());
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(!gUsingHttpFallback);
+    for (bool v : gMqttAlerts) assert(!v); // Late reserve cannot overwrite MQTT.
+    clockMs += fallbackContract::FRESH_MS + 1;
+    alertsFallbackTick();
+    assert(reserveBusy); // Connected broker without payloads also activates reserve.
+    strcpy(gConfig.fallbackUrl, "http://other.test/alerts");
+    reserveReady = true;
+    alertsFallbackTick();
+    for (bool v : gMqttAlerts) assert(!v); // Old URL result ignored.
+    gConfig.fallbackUrl[0] = 0;
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(!alertsDataFresh());
+
     std::printf("PASS runtime regressions: MQTT packet deadline/DNS/validation/snapshot (%d power cuts), UART budget/timeouts, brightness, buzzer\n", snapshotOperations);
 }

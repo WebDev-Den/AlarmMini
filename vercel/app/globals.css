@@ -988,3 +988,9 @@ summary { cursor: pointer; }
   .advanced-content { padding: 0 12px 12px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+.reserve-settings { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
+.reserve-settings summary { padding: 8px 0; min-height: 44px; }
+.reserve-settings summary span { color: var(--muted); font-size: 11px; margin-left: 8px; }
+.reserve-settings label { margin-top: 12px; }
+.reserve-settings input { width: 100%; min-width: 0; }

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
 import { BoardIllustration } from "./board-illustration";
+import { normalizeFallbackUrl, supportsFallback } from "./fallback-settings";
 import QRCode from "qrcode";
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
 import { json as jsonLang } from "@codemirror/lang-json";
@@ -92,7 +93,7 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.8";
+const SITE_VERSION = "2.0.9";
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -425,6 +426,8 @@ export default function Page() {
   const [wifiPassword, setWifiPassword] = useState("");
   const [networkTab, setNetworkTab] = useState<NetworkTab>("wifi");
   const [mqttHost, setMqttHost] = useState("");
+  const [fallbackUrl, setFallbackUrl] = useState("");
+  const [installFallbackUrl, setInstallFallbackUrl] = useState("");
   const [mqttPort, setMqttPort] = useState("");
   const [mqttTopic, setMqttTopic] = useState("");
   const [mqttUser, setMqttUser] = useState("");
@@ -729,6 +732,7 @@ export default function Page() {
     setMqttTopic(mqtt.topic);
     setMqttUser(mqtt.user);
     setMqttPassword(mqtt.password);
+    setFallbackUrl(String(cfg.fu ?? ""));
   }
 
   function persistBackupConfig(cfg: any) {
@@ -1135,6 +1139,24 @@ export default function Page() {
     await cmdGetInfo();
   }
 
+  async function saveFallbackUrl(value: string) {
+    const url = normalizeFallbackUrl(value);
+    await sendAndWait(JSON.stringify({ cmd: "fallback_set", url }), (j) => j?.status === "ACK" && j?.cmd === "fallback_set", 10000);
+    const verified = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
+    if (String(verified.config.fu ?? "") !== url) throw new Error("Не вдалося підтвердити збереження резервного URL.");
+    applyConfigToUi(verified.config);
+  }
+
+  async function cmdSetFallbackUrl() {
+    const url = normalizeFallbackUrl(fallbackUrl);
+    await ensureConnected(true);
+    const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+    if (!supportsFallback(String(device.fw))) throw new Error("Онови прошивку до 2.0.7 або новішої, щоб увімкнути резервний API.");
+    await snapshotCurrentConfigBeforeWrite();
+    await saveFallbackUrl(url);
+    setStatus(url ? "Резервний URL збережено й перевірено." : "Резервний API вимкнено.");
+  }
+
   async function cmdSetMqtt() {
     await ensureConnected(true);
     if (!mqttHost.trim()) throw new Error("MQTT host порожній");
@@ -1304,6 +1326,8 @@ export default function Page() {
   }
 
   async function runFlashFlow(restoreSettings: boolean) {
+    const reserveUrl = normalizeFallbackUrl(installFallbackUrl);
+    if (reserveUrl && !supportsFallback(selectedRelease?.tag_name ?? "")) throw new Error("Для резервного API вибери прошивку 2.0.7 або новішу.");
     if (!serialSupported || !canFlash || !manifest) throw new Error("Спочатку вибери плату та доступну версію прошивки.");
     if (!restoreSettings && !freshInstallConfirmed) throw new Error("Підтвердь перше встановлення: поточні налаштування буде видалено.");
     if (!rememberedPortRef.current) throw new Error("Спочатку підключи плату через USB у кроці 2.");
@@ -1375,6 +1399,12 @@ export default function Page() {
     } else {
       setPipelineStep("verify", "active");
       await cmdGetConfig();
+      setPipelineStep("verify", "done");
+    }
+    if (reserveUrl) {
+      setPipelineStep("verify", "active");
+      setFlashStatus("Зберігаємо резервний URL і перевіряємо його на платі…");
+      await saveFallbackUrl(reserveUrl);
       setPipelineStep("verify", "done");
     }
     await cmdGetInfo();
@@ -1471,6 +1501,12 @@ export default function Page() {
               <label className={`mode-option ${newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={newDeviceMode} onChange={() => {setNewDeviceMode(true);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Перше встановлення</strong><small>Для порожньої плати. Наявні налаштування буде видалено.</small></span></label>
             </fieldset>
             {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
+            <details className="reserve-settings"><summary>Резервний канал даних <span>Необов’язково</span></summary>
+              <label htmlFor="install-fallback-url">Резервний URL<input id="install-fallback-url" name="install-fallback-url" type="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/alerts.json" value={installFallbackUrl} disabled={flashBusy || waitActive} onChange={(event) => setInstallFallbackUrl(event.target.value)} /></label>
+              <p className="hint">Відповідь: JSON-масив із 25 чисел 0 або 1 у порядку областей MQTT. Плата опитуватиме його кожні 20 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.</p>
+              <p className="hint">Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.</p>
+              <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">Порядок областей і приклад відповіді ↗</a>
+            </details>
             <div className="release-summary" aria-live="polite">
               {releasesLoading ? <span>Завантажуємо доступні версії…</span> : releasesError ? <><span>{releasesError}</span><button className="btn" onClick={() => setReleasesAttempt((v) => v + 1)}>Спробувати ще раз</button></> : !selectedRelease ? <span>Опублікованих версій поки немає.</span> : <><span>Версія <strong>{selectedRelease.tag_name}</strong>{selectedReleaseId === releases[0]?.id ? " · остання стабільна" : " · попередня версія"}</span><small>{selectedReleaseUpdatedAt}</small></>}
             </div>
@@ -1668,6 +1704,9 @@ export default function Page() {
                   Зберегти MQTT
                 </button>
               </div>
+              <label htmlFor="fallback-url">Резервний URL<input id="fallback-url" name="fallback-url" type="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/alerts.json" value={fallbackUrl} onChange={(event) => setFallbackUrl(event.target.value)} /></label>
+              <p className="hint">25 значень 0/1 у порядку MQTT. Очисти поле й збережи, щоб вимкнути резерв.</p>
+              <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetFallbackUrl().catch(showActionError)}>Зберегти резервний URL</button>
             </div>
           )}
         </div>

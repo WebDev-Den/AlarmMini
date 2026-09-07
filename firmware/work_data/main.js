@@ -271,6 +271,7 @@ function normalizeConfig(cfg) {
     buzzerRegionIds: buzzer.r || source.buzzerRegionIds || source.buzzerRegions || [],
     ledRegionIds: source.l || source.ledRegionIds || source.leds || [],
     mqttHost: mqtt.h ?? source.mqttHost ?? "",
+    fallbackUrl: source.fu ?? "",
     mqttPort: Number(mqtt.p ?? source.mqttPort ?? 1883),
     mqttTopic: mqtt.t ?? source.mqttTopic ?? "alerts/status",
     mqttUser: mqtt.u ?? source.mqttUser ?? "",
@@ -929,6 +930,7 @@ function buildPayload() {
   } else if (!Array.isArray(payload.l)) {
     payload.l = [];
   }
+  payload.fu = $("fallbackUrl").value.trim();
   payload.m = {
     h: $("mqttHost").value.trim(),
     p: parseInt($("mqttPort").value, 10) || 1883,
@@ -1144,9 +1146,10 @@ async function updateRuntimeHealth() {
     latestRuntimeHealth = health;
     const wifiOk = Boolean(health.wifiConnected);
     const mqttOk = Boolean(health.mqttConnected);
-    const dataFresh = !Boolean(health.mqttDataStale);
+    const dataFresh = health.alertsFresh ?? !Boolean(health.mqttDataStale);
     setHealthChip("healthWifi", wifiOk, `Wi-Fi: ${wifiOk ? "OK" : "Немає"}`);
-    setHealthChip("healthMqtt", mqttOk, `MQTT: ${mqttOk ? "OK" : "Немає"}`);
+    const reserveActive = health.alertsSource === "http" && dataFresh;
+    setHealthChip("healthMqtt", mqttOk || reserveActive, reserveActive ? "Джерело: резервний API" : `MQTT: ${mqttOk ? "OK" : "Немає"}`);
     setHealthChip("healthData", dataFresh, `Дані: ${dataFresh ? "Актуальні" : "Застарілі"}`);
   } catch (_) {
     setHealthChip("healthWifi", false, "Wi-Fi: помилка");
@@ -1521,6 +1524,7 @@ async function bootAuthenticated() {
   currentSessionReady = true;
   currentConfig.logCategoryBits = info.logCategoryBits || {};
   $("mqttHost").value = info.mqttHost || "";
+  $("fallbackUrl").value = info.fallbackUrl || "";
   $("mqttPort").value = info.mqttPort || 1883;
   $("mqttTopic").value = info.mqttTopic || "alerts/status";
   $("mqttUser").value = info.mqttUser || "";

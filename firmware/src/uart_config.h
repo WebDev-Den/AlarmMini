@@ -167,6 +167,12 @@ inline void sendDiagnostics()
     doc["loopSlowCount"] = gLoopSlowCount;
     doc["loopIterations"] = gLoopIterationCount;
     wifiDiagnostics::append(doc.as<JsonObject>());
+    doc["fallbackConfigured"] = gConfig.fallbackUrl[0] != 0;
+    doc["alertsSource"] = alertsDataSource();
+    doc["alertsFresh"] = alertsDataFresh();
+    doc["fallbackHttpStatus"] = gFallbackHttpStatus;
+    doc["fallbackRequests"] = gFallbackRequests;
+    doc["fallbackErrors"] = gFallbackErrors;
     serializeJson(doc, CONSOLE_PORT);
     CONSOLE_PORT.println();
 }
@@ -628,6 +634,26 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
         startupRequestWifiConnect();
         sendAck(cmd);
         sendDeviceInfo();
+        return;
+    }
+
+    if (strcmp(cmd, "fallback_set") == 0)
+    {
+        if (root.isNull() || !root["url"].is<const char *>() ||
+            !fallbackContract::validUrl(root["url"].as<const char *>())) {
+            sendNack(cmd, "invalid_fallback_url");
+            return;
+        }
+        char previous[sizeof(gConfig.fallbackUrl)];
+        memcpy(previous, gConfig.fallbackUrl, sizeof(previous));
+        copyBounded(gConfig.fallbackUrl, sizeof(gConfig.fallbackUrl), root["url"].as<const char *>());
+        if (!storageSaveCurrentConfig(true)) {
+            memcpy(gConfig.fallbackUrl, previous, sizeof(previous));
+            sendNack(cmd, "save_failed");
+            return;
+        }
+        sendAck(cmd);
+        sendConfigJson();
         return;
     }
 

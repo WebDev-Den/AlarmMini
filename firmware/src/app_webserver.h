@@ -777,6 +777,10 @@ void handleHealth()
     mqttBuildClientId(mqttClientId, sizeof(mqttClientId));
     doc["mqttClientId"] = mqttClientId;
     doc["mqttDataStale"] = gMqttDataStale;
+    doc["alertsSource"] = alertsDataSource();
+    doc["alertsFresh"] = alertsDataFresh();
+    doc["fallbackConfigured"] = gConfig.fallbackUrl[0] != 0;
+    doc["fallbackHttpStatus"] = gFallbackHttpStatus;
     doc["mqttUsingFallbackSnapshot"] = gUsingFallbackSnapshot;
     doc["internetConnected"] = gInternetConnected;
     doc["mqttReconnectAttempts"] = gMqttReconnectAttempts;
@@ -811,6 +815,10 @@ void handleSelfTest()
     doc["internetConnected"] = gInternetConnected;
     doc["mqttConnected"] = gMqttConnected;
     doc["mqttDataStale"] = gMqttDataStale;
+    doc["alertsSource"] = alertsDataSource();
+    doc["alertsFresh"] = alertsDataFresh();
+    doc["fallbackConfigured"] = gConfig.fallbackUrl[0] != 0;
+    doc["fallbackHttpStatus"] = gFallbackHttpStatus;
     doc["usingFallbackSnapshot"] = gUsingFallbackSnapshot;
     doc["webAssetsReady"] = gWebAssetsReady;
     doc["webAssetsMissingMask"] = gWebAssetsMissingMask;

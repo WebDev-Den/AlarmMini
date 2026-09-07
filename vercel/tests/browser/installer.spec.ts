@@ -53,6 +53,8 @@ test('mobile layout remains inside the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await expect(page.locator('.release-summary')).toContainText('v2.0.5');
+  await page.locator('.reserve-settings summary').click();
+  await page.locator('#install-fallback-url').fill('https://example.com/alerts.json');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/installer-mobile.png', fullPage: true });
 });
@@ -94,7 +96,11 @@ test('a fresh backup failure never falls back to an older browser backup or star
   let assetRequests = 0;
   await page.route('**/api/release-asset?**', route => { assetRequests++; return route.abort(); });
   await page.goto('/');
+  await page.locator('.reserve-settings summary').click();
+  await page.locator('#install-fallback-url').fill('https://example.com/alerts.json');
   await page.getByRole('button', { name: 'Підключити через USB' }).click();
+  await expect(page.locator('#install-fallback-url')).toHaveValue('https://example.com/alerts.json');
+  await page.locator('#install-fallback-url').fill('');
   await expect(page.getByText('Плату підключено, налаштування прочитано. Можна оновлювати.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Завантажити резервну копію налаштувань' })).toBeVisible();
   await page.evaluate(() => { (window as any).failConfig = true; });

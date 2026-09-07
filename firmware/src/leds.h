@@ -427,7 +427,7 @@ void ledsHandle() {
         return;
     }
 
-    if (strlen(gConfig.mqttHost) && !gMqttConnected) {
+    if (strlen(gConfig.mqttHost) && !gMqttConnected && !alertsDataFresh()) {
         alertsAutonomousHealthTick();
         // MQTT lost: keep retained autonomous state without pulsing.
         renderRetainedState(night, true);

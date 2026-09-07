@@ -155,6 +155,7 @@ void loop()
     MDNS.update();
 #endif
     alertsHandle();
+    alertsFallbackTick();
     buzzerHandle();
     if (!startupShowProvisioningEffect(gConfig.ledCount))
         ledsHandle();

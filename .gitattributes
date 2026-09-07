@@ -1,0 +1,3 @@
+firmware/certificates/*.pem text eol=lf
+firmware/certificates/*.bundle binary
+firmware/work_data/certs.ar binary

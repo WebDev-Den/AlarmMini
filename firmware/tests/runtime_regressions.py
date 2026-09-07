@@ -47,7 +47,8 @@ def main():
     body += alerts[alerts.index("static constexpr char MQTT_SNAPSHOT_PATH"):alerts.index("// Persistent callback storage")]
     body += "\nstatic constexpr unsigned MQTT_MAX_PAYLOAD_BYTES = 1024;\nstatic void _rebuildEffectiveAlerts();\n"
     for name in ["_saveMqttSnapshot", "_loadMqttSnapshot", "_mqttSnapshotTick", "_formatLogClock",
-                 "_applyEffectiveAlerts", "_rebuildEffectiveAlerts", "_mqttCallback"]:
+                 "_applyEffectiveAlerts", "_rebuildEffectiveAlerts", "_mqttCallback",
+                 "alertsMqttFresh", "alertsDataFresh", "alertsDataSource", "alertsFallbackTick"]:
         body += definition(alerts, name) + "\n"
 
     body += "\nnamespace uartcfg {\n"
