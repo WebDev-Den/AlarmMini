@@ -47,7 +47,7 @@ The project includes:
 - UART service protocol for factory setup and recovery;
 - Vercel web installer for flashing, config backup/restore, and QR label printing;
 - end-user user manual in PDF/DOCX format for setup and onboarding;
-- GitHub Actions CI/CD for firmware builds, release binaries, and Vercel deployment;
+- GitHub Actions for firmware checks and release binaries; Vercel Git integration deploys `main`;
 - STL/manual production assets for enclosure and assembly.
 
 ## Supported Hardware
@@ -79,7 +79,7 @@ The firmware was optimized for small embedded boards: low RAM usage, non-blockin
 - `firmware/` - embedded firmware, PlatformIO project, LittleFS web assets, scripts, config schema, STL files.
 - `vercel/` - Next.js/Vercel installer for flashing boards and managing full config JSON.
 - `docs/` - customer-facing user manual sources and exported PDF/DOCX files.
-- `.github/workflows/` - CI/CD pipelines for firmware, release assets, security scan, and Vercel deploy.
+- `.github/workflows/` - CI pipelines for firmware, release assets, and security scan. The website deploys through the connected Vercel Git integration from `main`.
 
 ## User Manual
 
