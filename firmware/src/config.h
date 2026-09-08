@@ -16,7 +16,7 @@ constexpr char DEFAULT_MQTT_TOPIC[] = "ukraine/alarm/map/full_v2";
 #define WIFI_PASS_MAXLEN  64
 #define NTP_SERVER_MAXLEN 64
 #define ADMIN_PASS_MAXLEN 32
-#define FIRMWARE_VERSION  "2.1.1"
+#define FIRMWARE_VERSION  "2.1.2"
 
 #define REGIONS_COUNT 25
 

@@ -13,7 +13,9 @@ const elements = {};
 function element() {
   return { value: '', children: [], disabled: false, classList: { add() {}, remove() {}, toggle() {} },
     append(...children) { this.children.push(...children); }, appendChild(child) { this.children.push(child); },
-    replaceChildren(...children) { this.children = children; }, setAttribute() {} };
+    replaceChildren(...children) { this.children = children; }, setAttribute() {},
+    setCustomValidity(message) { this.validationMessage = message; },
+    checkValidity() { return !this.validationMessage; }, reportValidity() { this.reported = true; return this.checkValidity(); } };
 }
 let stored = clone(base), posts = 0, reloads = 0;
 const errors = [];
@@ -35,6 +37,14 @@ vm.runInContext(`
 const run = code => vm.runInContext(code, context);
 const value = code => clone(run(code));
 (async () => {
+  // Every stored 8-bit brightness must survive showing and re-entering RGBA.
+  for (let alpha = 0; alpha < 256; alpha++) {
+    assert.deepEqual(value(`parseRgba(formatRgba([0,160,255,${alpha}]))`), [0,160,255,alpha]);
+  }
+  assert.deepEqual(value(`parseRgba(' RGBA( 255, 160, 0, .5 ) ')`), [255,160,0,128]);
+  for (const text of ['rgba(256,0,0,1)', 'rgba(-1,0,0,1)', 'rgba(1.5,0,0,1)', 'rgba(0,0,0,1.1)', 'rgba(0,0,0,-.5)', 'rgba(0,0,0,)', 'rgba(0,0,0,NaN)', 'rgba(0,0,0,1)junk', '', '#ffaa00']) {
+    assert.equal(run(`parseRgba(${JSON.stringify(text)})`), null);
+  }
   assert.equal(elements.stateColors.children.length, 2);
   assert.equal(elements.stateColors.children[0].children[0].children.length, 1); // 0 cannot be removed.
   for (let i = 2; i < 18; i++) run(`$('newStateCode').value='${i}'; addStateColor()`);
@@ -46,9 +56,38 @@ const value = code => clone(run(code));
   firstDay.value = '#123456'; firstDay.oninput();
   const lastNight = elements.stateColors.children[17].children[2].children[1].children[0];
   lastNight.value = '#abcdef'; lastNight.oninput();
+  const dayRow = elements.stateColors.children[2].children[1];
+  const dayRgba = dayRow.children[2];
+  dayRgba.value = 'rgba(255, 160, 0, 0.5)'; dayRgba.oninput();
+  assert.equal(dayRow.children[1].children[0].value, '#ffa000');
+  assert.equal(dayRow.children[1].children[1].value, '128');
+  dayRgba.onchange();
+  assert.equal(dayRgba.value, 'rgba(255, 160, 0, 0.502)');
+  const nightRow = elements.stateColors.children[2].children[2];
+  const nightRgba = nightRow.children[2];
+  nightRgba.value = 'rgba(10, 20, 30, 1)'; nightRgba.oninput(); nightRgba.onchange();
+  const nightCap = Number(nightRow.children[1].children[1].max);
+  assert.equal(value('customStateColors[2]')[7], nightCap);
+  assert.match(nightRow.children[3].textContent, /Нічне обмеження/);
+  // Invalid drafts cannot post a stale or partial color through either save path.
+  const colorsBeforeInvalid = value('customStateColors');
+  const postsBeforeInvalid = posts;
+  dayRgba.value = 'rgba(300, 0, 0, 1)'; dayRgba.oninput();
+  assert.deepEqual(value('customStateColors'), colorsBeforeInvalid);
+  await assert.rejects(run('saveConfig()'), /Перевір RGBA/);
+  await assert.rejects(run('saveCalibrationConfig()'), /Перевір RGBA/);
+  assert.equal(posts, postsBeforeInvalid);
+  assert.equal(dayRgba.reported, true);
+  // Picker and slider also repair invalid text and keep all controls in sync.
+  dayRow.children[1].children[0].value = '#00aaff'; dayRow.children[1].children[0].oninput();
+  assert.equal(dayRgba.checkValidity(), true);
+  assert.equal(dayRgba.value, 'rgba(0, 170, 255, 0.502)');
+  dayRow.children[1].children[1].value = '0'; dayRow.children[1].children[1].oninput();
+  assert.equal(dayRgba.value, 'rgba(0, 170, 255, 0)');
   await run('saveConfig()');
   assert.deepEqual(stored.c.d.c, [18,52,86,80]);
   assert.deepEqual(stored.sc['17'].slice(4,7), [171,205,239]);
+  assert.deepEqual(stored.sc['2'], [0,170,255,0,10,20,30,nightCap]);
   for (const key of ['l','m','w','t','z','fu','ft','g']) assert.deepEqual(stored[key], base[key], key);
   const exported = value('getExportConfig(currentConfigSource)');
   assert.deepEqual(exported.sc, stored.sc);
@@ -74,5 +113,5 @@ const value = code => clone(run(code));
   assert.equal(posts, beforeInvalid);
   assert.equal(errors.length, 1); // The invalid import was rejected intentionally.
   assert.ok(!/testBuzzer|testSubscribedAlert|buzzerEnabled/.test(html));
-  console.log('PASS state palette UI: 0/1 + 16 states, edit, limits, delete, save, export, import, legacy restore, calibration preservation');
+  console.log('PASS state palette UI: RGBA input, byte round trips, validation, night cap, picker/slider sync, 0/1 + 16 states, save/import and calibration preservation');
 })().catch(error => { console.error(error); process.exitCode = 1; });

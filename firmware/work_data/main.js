@@ -5,6 +5,7 @@ let currentConfig = {};
 let currentConfigSource = {};
 let currentAlerts = [];
 let customStateColors = {};
+let stateRgbaInputs = [];
 const MAX_CUSTOM_STATES = 16;
 let currentSessionReady = false;
 let adminLabelDownloadName = "alarmmini-admin.png";
@@ -865,8 +866,29 @@ function writeStateColors(payload, colors) {
   else delete payload.sc;
 }
 
+function parseRgba(text) {
+  const match = /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d*\.?\d+)\s*\)$/i.exec(text.trim());
+  if (!match) return null;
+  const [r, g, b, alpha] = match.slice(1).map(Number);
+  if ([r, g, b].some(value => value > 255) || alpha > 1) return null;
+  return [r, g, b, Math.round(alpha * 255)];
+}
+
+function formatRgba(colors, offset = 0) {
+  return `rgba(${colors[offset]}, ${colors[offset + 1]}, ${colors[offset + 2]}, ${Number((colors[offset + 3] / 255).toFixed(3))})`;
+}
+
+function validateStateRgbaInputs() {
+  const invalid = stateRgbaInputs.find(input => !input.checkValidity());
+  if (invalid) {
+    invalid.reportValidity();
+    throw new Error("Перевір RGBA: RGB від 0 до 255, яскравість A від 0 до 1.");
+  }
+}
+
 function renderStateColors() {
   const container = $("stateColors");
+  stateRgbaInputs = [];
   container.replaceChildren();
   Object.entries(customStateColors).forEach(([state, colors]) => {
     const card = document.createElement("div");
@@ -907,18 +929,64 @@ function renderStateColors() {
       const value = document.createElement("span");
       value.className = "brightness-label";
       value.textContent = `${Math.round(Number(bright.value) / 2.55)}%`;
+      const rgba = document.createElement("input");
+      rgba.type = "text";
+      rgba.className = "state-rgba field-input";
+      rgba.id = `state-${state}-${index}-rgba`;
+      rgba.maxLength = 80;
+      rgba.spellcheck = false;
+      rgba.autocomplete = "off";
+      rgba.value = formatRgba(colors, offset);
+      rgba.placeholder = "rgba(255, 160, 0, 0.5)";
+      rgba.setAttribute("aria-label", `RGBA: стан ${state}, ${mode.toLowerCase()}`);
+      const feedback = document.createElement("span");
+      feedback.id = `${rgba.id}-hint`;
+      feedback.className = "state-rgba-feedback";
+      rgba.setAttribute("aria-describedby", feedback.id);
+      function validity(message = "") {
+        rgba.setCustomValidity(message);
+        rgba.setAttribute("aria-invalid", String(Boolean(message)));
+        feedback.textContent = message;
+      }
+      function syncRgba() {
+        rgba.value = formatRgba(colors, offset);
+        validity();
+      }
+      rgba.oninput = () => {
+        const parsed = parseRgba(rgba.value);
+        if (!parsed) {
+          validity("Формат: rgba(255, 160, 0, 0.5). RGB: 0–255; A: 0–1.");
+          return;
+        }
+        validity();
+        const requestedAlpha = parsed[3];
+        parsed[3] = Math.min(requestedAlpha, Number(bright.max));
+        colors.splice(offset, 4, ...parsed);
+        color.value = rgbToHex(...parsed);
+        bright.value = String(parsed[3]);
+        value.textContent = `${Math.round(parsed[3] / 2.55)}%`;
+        if (requestedAlpha > parsed[3]) feedback.textContent = `Нічне обмеження: ${value.textContent}.`;
+        updateDirtyState(); refreshMapPreview();
+      };
+      rgba.onchange = () => {
+        if (rgba.checkValidity()) rgba.value = formatRgba(colors, offset);
+      };
+      stateRgbaInputs.push(rgba);
       color.oninput = () => {
         const rgb = hexToRgb(color.value);
         colors.splice(offset, 3, rgb.r, rgb.g, rgb.b);
+        syncRgba();
         updateDirtyState(); refreshMapPreview();
       };
       bright.oninput = () => {
         colors[offset + 3] = Number(bright.value);
         value.textContent = `${Math.round(Number(bright.value) / 2.55)}%`;
+        syncRgba();
         updateDirtyState();
       };
       controls.append(color, bright, value);
       row.append(label, controls);
+      row.append(rgba, feedback);
       card.appendChild(row);
     });
     container.appendChild(card);
@@ -942,6 +1010,7 @@ function addStateColor() {
 }
 
 async function saveConfig(options = {}) {
+  validateStateRgbaInputs();
   const { silentSuccess = false } = options;
   const response = await fetch("/api/saveSettings", {
     method: "POST",
@@ -961,6 +1030,7 @@ async function saveConfig(options = {}) {
 }
 
 async function saveCalibrationConfig() {
+  validateStateRgbaInputs();
   const fullPayload = buildPayload();
   const response = await fetch("/api/saveSettings", {
     method: "POST",

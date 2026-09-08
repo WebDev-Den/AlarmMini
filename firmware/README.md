@@ -2,7 +2,10 @@
 
 AlarmMini is firmware + web tooling for a physical WS2812 Ukraine alarm map.
 
-Current firmware version: **2.1.0**
+Current firmware version: **2.1.2**
+
+The Colors panel accepts `rgba(255, 160, 0, 0.5)` for each day/night color.
+Alpha controls LED brightness (0–1) and respects the night brightness limit.
 
 MQTT and HTTP accept state codes 0..255. Configure up to 16 additional day/night
 colors alongside states 0 and 1 in **Кольори**, using **+ Додати стан**. Sound
