@@ -8,6 +8,17 @@ Production URL: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
 The main flow has three steps: select the board and installation mode, connect USB, and start writing. Updating with configuration preservation is the default. A first installation requires a separate acknowledgement that settings will be erased. Unsupported browsers receive desktop Chrome/Edge instructions and cannot start writing.
 
+First installation selects the **UkraineAlarm AIR · 6 states** preset by default.
+It includes day/night colors for states 0–5, the 22:00–07:00 night schedule,
+27-LED mapping, effects and MQTT topic `ukraine/alarm/map/full_v2` on port 1883.
+Wi-Fi credentials, MQTT host/user/password and fallback URL/token are empty.
+The full public template is downloadable at `/profiles/ukrainealarm-air-6-states.json`.
+It is written through the existing chunked USB protocol after flashing, then
+read back and compared before installation is reported as successful. An optional
+fallback URL entered by the user is verified and applied afterward. The preset
+requires firmware 2.1.0+; older releases are blocked before erasing unless the
+user disables the preset. Updates always restore the board's own backup.
+
 An update reads a fresh configuration from the selected board before writing. A read failure stops the operation; a previous browser backup is never substituted automatically. ESP Web Tools' low-level `flash()` terminal event confirms completion before reconnecting, restoring the full configuration in one transaction, and comparing the result. Recovery after an interrupted update checks the board hostname against the current attempt. Backup downloads contain credentials and stay local to the browser.
 
 MQTT, JSON editing, QR labels, and logs are under the collapsed additional settings. Stable GitHub releases are fetched through a cached server endpoint with retry controls.

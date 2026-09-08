@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
 import { BoardIllustration } from "./board-illustration";
+import airPreset from "../public/profiles/ukrainealarm-air-6-states.json";
 import { normalizeFallbackUrl, normalizeFallbackToken, supportsFallback, supportsFallbackToken, supportsMultiState, verifyFallbackEndpoint } from "./fallback-settings";
 import { FallbackUrlField } from "./fallback-url-field";
 import QRCode from "qrcode";
@@ -94,7 +95,9 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.12";
+const SITE_VERSION = "2.0.13";
+const AIR_STATE_LABELS = ["Відбій", "Вся область: червоний", "Вся область: оранжевий", "Червоний + оранжевий", "Частково червоний", "Частково оранжевий"];
+const AIR_STATE_COLORS = [airPreset.c.d.c, airPreset.c.d.a, ...Object.values(airPreset.sc)];
 const BOARD_TARGETS: BoardTarget[] = [
   {
     id: "esp32c3",
@@ -274,7 +277,7 @@ function createPipelineInitialState(restoreSettings: boolean): Record<PipelineSt
     reconnect: "pending",
     restoreWifi: restoreSettings ? "pending" : "skipped",
     restoreConfig: restoreSettings ? "pending" : "skipped",
-    verify: restoreSettings ? "pending" : "skipped",
+    verify: "pending",
   };
 }
 
@@ -470,6 +473,7 @@ export default function Page() {
   const [flashProgress, setFlashProgress] = useState<number | null>(null);
   const [flashOutcome, setFlashOutcome] = useState<"idle" | "success" | "error">("idle");
   const [freshInstallConfirmed, setFreshInstallConfirmed] = useState(false);
+  const [useAirPreset, setUseAirPreset] = useState(true);
   const [releasesAttempt, setReleasesAttempt] = useState(0);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const flashBusyRef = useRef(false);
@@ -656,6 +660,7 @@ export default function Page() {
     if (!selectedBoard.requiresEsp32BootAssets) return true;
     return Boolean(boardAssets.bootloader && boardAssets.partitions && boardAssets.bootApp0);
   }, [selectedRelease, selectedBoard, boardAssets]);
+  const presetUnsupported = newDeviceMode && useAirPreset && Boolean(selectedRelease) && !supportsMultiState(selectedRelease?.tag_name ?? "");
 
   const manifest = useMemo<Manifest | null>(() => {
     if (!canFlash || !selectedRelease || !boardAssets.firmware || !boardAssets.littlefs) return null;
@@ -1374,6 +1379,9 @@ export default function Page() {
   }
 
   async function runFlashFlow(restoreSettings: boolean) {
+    const freshConfig = !restoreSettings && useAirPreset ? structuredClone(airPreset) : null;
+    if (freshConfig && !supportsMultiState(selectedRelease?.tag_name ?? "")) throw new Error("Для шаблону UkraineAlarm AIR · 6 станів вибери прошивку 2.1.0 або новішу.");
+    if (freshConfig && buildConfigValidationErrors(freshConfig).length) throw new Error("Шаблон налаштувань некоректний. Запис не розпочато.");
     const reserveUrl = normalizeFallbackUrl(installFallbackUrl);
     const reserveToken = normalizeFallbackToken(installFallbackToken);
     if (reserveToken && !reserveUrl) throw new Error("Вкажи резервний URL разом із токеном або очисти поле токена.");
@@ -1387,6 +1395,7 @@ export default function Page() {
     setFlashOutcome("idle");
     setFlashProgress(null);
     resetPipeline(restoreSettings);
+    if (freshConfig) setPipelineStep("restoreConfig", "pending");
     if (reserveUrl) {
       setFlashStatus("Перевіряємо резервний URL перед прошиванням…");
       await verifyFallbackEndpoint(reserveUrl, reserveToken, undefined, selectedRelease?.tag_name);
@@ -1459,8 +1468,19 @@ export default function Page() {
       if (collectDiffPaths(backup, verified.config).length) throw new Error("Не всі налаштування відновилися. Резервну копію збережено; скористайся кнопкою відновлення нижче.");
       setPipelineStep("verify", "done");
     } else {
+      if (freshConfig) {
+        setPipelineStep("restoreConfig", "active");
+        setFlashStatus("Записуємо шаблон UkraineAlarm AIR · 6 станів…");
+        await sendConfigChunked(freshConfig, "new_device_preset");
+        await waitDeviceInfoAfterReconnect(4);
+        setPipelineStep("restoreConfig", "done");
+      }
       setPipelineStep("verify", "active");
-      await cmdGetConfig();
+      const verified = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 12000);
+      // Firmware omits empty optional fallback fields from its readback.
+      const actual = { ...verified.config, fu: verified.config.fu ?? "", ft: verified.config.ft ?? "" };
+      if (freshConfig && collectDiffPaths(freshConfig, actual).length) throw new Error("Не вдалося підтвердити запис шаблону. Перепідключи USB та повтори перше встановлення.");
+      applyConfigToUi(verified.config);
       setPipelineStep("verify", "done");
     }
     if (reserveUrl) {
@@ -1471,7 +1491,7 @@ export default function Page() {
     }
     await cmdGetInfo();
     setFlashOutcome("success");
-    setFlashStatus(restoreSettings ? "Оновлення завершено. Усі налаштування відновлено й перевірено." : "AlarmMini встановлено. Тепер підключи пристрій до Wi-Fi.");
+    setFlashStatus(restoreSettings ? "Оновлення завершено. Усі налаштування відновлено й перевірено." : freshConfig ? "AlarmMini встановлено. Шаблон шести станів записано й перевірено. Налаштуй власні Wi-Fi та MQTT." : "AlarmMini встановлено. Тепер підключи пристрій до Wi-Fi.");
   }
 
   async function runRecoveryWizard() {
@@ -1563,6 +1583,14 @@ export default function Page() {
               <label className={`mode-option ${newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={newDeviceMode} onChange={() => {setNewDeviceMode(true);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Перше встановлення</strong><small>Для порожньої плати. Наявні налаштування буде видалено.</small></span></label>
             </fieldset>
             {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
+            {newDeviceMode ? <div className="new-device-preset">
+              <label className="preset-toggle"><input type="checkbox" checked={useAirPreset} disabled={flashBusy || waitActive} onChange={(event) => setUseAirPreset(event.target.checked)} /><span><strong>Шаблон UkraineAlarm AIR · 6 станів</strong><small>Записати готові налаштування після прошивки. Потрібна версія 2.1.0 або новіша.</small></span></label>
+              <ul className="preset-colors" aria-label="Кольори шести станів">{AIR_STATE_LABELS.map((label, state) => <li key={state}><span className="preset-swatch" style={{ backgroundColor: `rgb(${AIR_STATE_COLORS[state].slice(0, 3).join(",")})` }} aria-hidden="true" /><span>{state} · {label}</span></li>)}</ul>
+              <p>Денні й нічні кольори, нічний режим 22:00–07:00, стандартна прив’язка 27 LED, ефекти та топік <code>ukraine/alarm/map/full_v2</code>.</p>
+              <p className="hint">Wi-Fi, адреса брокера MQTT, логіни, паролі, резервний URL і токени порожні. Заповниш їх для свого пристрою. Прив’язку LED можна змінити в калібруванні.</p>
+              <a className="text-button" href="/profiles/ukrainealarm-air-6-states.json" download>Завантажити шаблон JSON</a>
+              {presetUnsupported ? <p className="notice warning" role="alert">Вибери прошивку 2.1.0 або новішу для шести станів, або вимкни шаблон.</p> : null}
+            </div> : null}
             <div className="mqtt-topics">
               <strong>MQTT: два топіки для різних прошивок</strong>
               <p><code>ukraine/alarm/map/full</code> — старий топік: 0 — відбій, 1 — тривога. Залишається для плат зі старою прошивкою.</p>
@@ -1591,17 +1619,17 @@ export default function Page() {
 
           <section className="card step-card flash-card" aria-labelledby="flash-title" aria-busy={flashBusy}>
             <div className="step-heading"><span className="step-number">3</span><div><h2 id="flash-title">{newDeviceMode ? "Встанови AlarmMini" : "Онови прошивку"}</h2><p className="hint">{newDeviceMode ? "Після встановлення підключиш карту до домашнього Wi-Fi." : "Wi-Fi, MQTT, кольори та відповідність світлодіодів збережуться. Якщо прочитати налаштування не вдасться, запис не почнеться."}</p></div></div>
-            <button className="btn primary flash-primary" disabled={!serialSupported || !canFlash || flashBusy || fallbackSaving || waitActive || portState !== "connected" || (newDeviceMode && !freshInstallConfirmed)} onClick={() => void onFlashClick(!newDeviceMode)}>{flashBusy ? "Триває прошивання…" : newDeviceMode ? "Встановити AlarmMini" : "Оновити й зберегти налаштування"}</button>
-            <p className="hint">{portState !== "connected" ? "Спочатку підключи плату в кроці 2." : !canFlash ? "Для обраної плати немає повного набору файлів. Вибери іншу версію." : newDeviceMode && !freshInstallConfirmed ? "Підтвердь скидання налаштувань у кроці 1." : "Залиш цю вкладку відкритою та не відключай USB до повідомлення про завершення."}</p>
+            <button className="btn primary flash-primary" disabled={!serialSupported || !canFlash || presetUnsupported || flashBusy || fallbackSaving || waitActive || portState !== "connected" || (newDeviceMode && !freshInstallConfirmed)} onClick={() => void onFlashClick(!newDeviceMode)}>{flashBusy ? "Триває прошивання…" : newDeviceMode ? "Встановити AlarmMini" : "Оновити й зберегти налаштування"}</button>
+            <p className="hint">{portState !== "connected" ? "Спочатку підключи плату в кроці 2." : !canFlash ? "Для обраної плати немає повного набору файлів. Вибери іншу версію." : presetUnsupported ? "Для шаблону шести станів потрібна прошивка 2.1.0 або новіша.": newDeviceMode && !freshInstallConfirmed ? "Підтвердь скидання налаштувань у кроці 1." : "Залиш цю вкладку відкритою та не відключай USB до повідомлення про завершення."}</p>
             {flashBusy || flashOutcome !== "idle" ? <>
-              <ol className="pipeline-grid" aria-label="Стан прошивання">{PIPELINE_STEPS.filter((step) => pipelineState[step.id] !== "skipped").map((step) => <li key={step.id} className={`pipeline-step ${pipelineState[step.id]}`} aria-current={pipelineState[step.id] === "active" ? "step" : undefined}><span aria-hidden="true">{pipelineState[step.id] === "done" ? "✓ " : pipelineState[step.id] === "error" ? "! " : ""}</span>{step.label}<span className="sr-only">: {pipelineState[step.id]}</span></li>)}</ol>
+              <ol className="pipeline-grid" aria-label="Стан прошивання">{PIPELINE_STEPS.filter((step) => pipelineState[step.id] !== "skipped").map((step) => <li key={step.id} className={`pipeline-step ${pipelineState[step.id]}`} aria-current={pipelineState[step.id] === "active" ? "step" : undefined}><span aria-hidden="true">{pipelineState[step.id] === "done" ? "✓ " : pipelineState[step.id] === "error" ? "! " : ""}</span>{step.id === "restoreConfig" && newDeviceMode ? "Запис шаблону" : step.label}<span className="sr-only">: {pipelineState[step.id]}</span></li>)}</ol>
               {flashProgress !== null ? <progress value={flashProgress} max={100} aria-label="Запис прошивки" /> : flashBusy ? <progress aria-label="Підготовка або відновлення налаштувань" /> : null}
             </> : null}
             {flashStatus ? <div className={`notice ${flashOutcome === "error" ? "warning" : flashOutcome === "success" ? "success" : ""}`} role={flashOutcome === "error" ? "alert" : "status"} aria-live="polite">{flashStatus}</div> : null}
             {backupAvailable ? <div className="backup-actions"><button className="text-button" disabled={flashBusy && pipelineState.backup !== "done"} onClick={() => {try {downloadBackupConfigFile();} catch(error) {showActionError(error);}}}>Завантажити резервну копію налаштувань</button><small>Файл містить паролі. Зберігай його у себе.</small>{flashOutcome === "error" ? <button className="btn" disabled={flashBusy} onClick={() => void runRecoveryWizard().catch(showActionError)}>Відновити налаштування з копії</button> : null}</div> : null}
           </section>
 
-          {flashOutcome === "success" ? <section className="card step-card completion" aria-labelledby="done-title"><h2 id="done-title">Готово. Підключи карту до мережі</h2><p>Якщо Wi-Fi вже був налаштований, карта спробує підключитися автоматично. Якщо роутер недоступний, з’явиться мережа <strong>{info.apSsid}</strong>.</p><p>Підключись телефоном до цієї мережі та відкрий <strong>192.168.4.1</strong>. Або введи домашній Wi-Fi тут, поки USB підключено.</p><form onSubmit={(event) => {event.preventDefault();void cmdSetWifi().catch(showActionError);}}><label>Назва домашньої Wi-Fi мережі<input name="wifi-ssid" value={wifiSsid} onChange={(event) => setWifiSsid(event.target.value)} autoComplete="off" spellCheck={false} required /></label><label>Пароль Wi-Fi<input name="wifi-password" type="password" autoComplete="new-password" value={wifiPassword} onChange={(event) => setWifiPassword(event.target.value)} /></label><button className="btn" disabled={portState !== "connected" || flashBusy}>Зберегти Wi-Fi на платі</button></form>{ipWebUrl && !isApModeIp ? <a className="btn primary" href={ipWebUrl} target="_blank" rel="noreferrer">Відкрити свою карту ↗</a> : null}</section> : null}
+          {flashOutcome === "success" ? <section className="card step-card completion" aria-labelledby="done-title"><h2 id="done-title">Готово. Підключи карту до мережі</h2>{newDeviceMode && useAirPreset ? <p>Шаблон шести станів уже на платі. Після Wi-Fi відкрий «Додаткові налаштування» → MQTT і введи адресу брокера та свої облікові дані.</p> : null}<p>Якщо Wi-Fi вже був налаштований, карта спробує підключитися автоматично. Якщо роутер недоступний, з’явиться мережа <strong>{info.apSsid}</strong>.</p><p>Підключись телефоном до цієї мережі та відкрий <strong>192.168.4.1</strong>. Або введи домашній Wi-Fi тут, поки USB підключено.</p><form onSubmit={(event) => {event.preventDefault();void cmdSetWifi().catch(showActionError);}}><label>Назва домашньої Wi-Fi мережі<input name="wifi-ssid" value={wifiSsid} onChange={(event) => setWifiSsid(event.target.value)} autoComplete="off" spellCheck={false} required /></label><label>Пароль Wi-Fi<input name="wifi-password" type="password" autoComplete="new-password" value={wifiPassword} onChange={(event) => setWifiPassword(event.target.value)} /></label><button className="btn" disabled={portState !== "connected" || flashBusy}>Зберегти Wi-Fi на платі</button></form>{ipWebUrl && !isApModeIp ? <a className="btn primary" href={ipWebUrl} target="_blank" rel="noreferrer">Відкрити свою карту ↗</a> : null}</section> : null}
         </div>
 
         <aside className="installer-sidebar" aria-labelledby="help-title">

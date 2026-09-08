@@ -31,6 +31,43 @@ test('unsupported browser explains how to continue and disables USB actions', as
   await expect(page.getByRole('button', { name: 'Оновити й зберегти налаштування' })).toBeDisabled();
 });
 
+test('new-device AIR preset shows six states and serves a template with blank network settings', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/releases', route => route.fulfill({ json: [{...release,tag_name:'v2.1.2',name:'v2.1.2'}] }));
+  await page.goto('/');
+  await expect(page.locator('.new-device-preset')).not.toBeVisible();
+  await page.getByRole('radio', {name:/Перше встановлення/}).check();
+  const preset = page.getByRole('checkbox', {name:/Шаблон UkraineAlarm AIR/});
+  await expect(preset).toBeChecked();
+  await expect(page.getByRole('list', {name:'Кольори шести станів'}).getByRole('listitem')).toHaveCount(6);
+  await expect(page.getByText('5 · Частково оранжевий', {exact:true})).toBeVisible();
+  await expect(page.getByRole('link', {name:'Завантажити шаблон JSON'})).toHaveAttribute('download','');
+  const response = await page.request.get('/profiles/ukrainealarm-air-6-states.json');
+  expect(response.ok()).toBe(true);
+  const config = await response.json();
+  expect(config.m).toEqual({h:'',p:1883,t:'ukraine/alarm/map/full_v2',u:'',s:''});
+  expect(config.w).toEqual({s:'',p:''});
+  expect(config.fu).toBe(''); expect(config.ft).toBe('');
+  expect(Object.keys(config.sc)).toEqual(['2','3','4','5']);
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/installer-preset-mobile.png',fullPage:true});
+  await page.getByRole('radio', {name:/Оновлення зі збереженням/}).check();
+  await expect(page.locator('.new-device-preset')).not.toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('old firmware gives an actionable preset incompatibility before any USB write', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.release-summary')).toContainText('v2.0.5');
+  await page.getByRole('radio', {name:/Перше встановлення/}).check();
+  await expect(page.locator('.new-device-preset [role=alert]')).toContainText('2.1.0');
+  await expect(page.getByRole('button',{name:'Встановити AlarmMini'})).toBeDisabled();
+  await page.getByRole('checkbox',{name:/Шаблон UkraineAlarm AIR/}).uncheck();
+  await expect(page.locator('.new-device-preset [role=alert]')).not.toBeVisible();
+});
+
 test('canceling the port chooser keeps update mode and permits retry', async ({ page }) => {
   await page.addInitScript(() => Object.defineProperty(navigator, 'serial', { value: { requestPort: async () => { throw new DOMException('No port selected', 'NotFoundError'); } } }));
   await page.goto('/');

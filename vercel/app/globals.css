@@ -1004,3 +1004,13 @@ summary { cursor: pointer; }
 .fallback-check:empty { display: none; }
 .fallback-check.success { color: var(--accent, #79e3c0); }
 .fallback-check.error { color: #ffb4ab; }
+
+.new-device-preset { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; line-height: 1.6; }
+.preset-toggle { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.preset-toggle input { flex: 0 0 auto; width: 18px; height: 18px; margin: 4px 0 0; }
+.preset-toggle strong, .preset-toggle small { display: block; }
+.preset-toggle small { color: var(--muted); }
+.preset-colors { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 16px; margin: 16px 0; padding: 0; list-style: none; }
+.preset-colors li { display: flex; align-items: center; gap: 8px; }
+.preset-swatch { flex: 0 0 12px; width: 12px; height: 12px; border-radius: 50%; }
+.new-device-preset code { overflow-wrap: anywhere; }
