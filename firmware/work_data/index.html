@@ -18,9 +18,9 @@
       tabs: {
         overview: { eyebrow: "Огляд системи", title: "Швидкий доступ до стану мапи та налаштувань" },
         label: { eyebrow: "QR / Друк", title: "QR-наклейки та друковані картки" },
-        colors: { eyebrow: "Кольори", title: "Кожному стану — свій колір" },
-        night: { eyebrow: "Нічний режим", title: "Автоматичне обмеження яскравості в нічний час" },
-        mqtt: { eyebrow: "MQTT", title: "Підключення до брокера для отримання стану мапи" },
+        colors: { eyebrow: "Кольори", title: "Кольори станів" },
+        night: { eyebrow: "Нічний режим", title: "Нічний режим" },
+        mqtt: { eyebrow: "MQTT", title: "MQTT та резервний канал" },
         system: { eyebrow: "Система", title: "Доступ до пристрою, mDNS та системні параметри" },
         calibration: { eyebrow: "Калібрування", title: "Привʼязка фізичних LED до областей із швидким переходом по LED" },
         
@@ -347,13 +347,13 @@
           </section>
 
           <section class="content-pane" id="tab-colors">
-            <article class="panel-card">
+            <article class="panel-card settings-panel">
               <div class="panel-card-head">
                 <div><div class="panel-label">Кольори станів</div><h2 class="panel-title">Кожному стану — свій колір</h2></div>
               </div>
-              <p class="panel-text">Налаштуй колір і яскравість кожного стану окремо для дня та ночі. 0 — відбій, 1 — тривога. Для кодів 2–255 можна додати до 16 кольорів; без налаштування використовується колір стану 1.</p>
+              <p class="panel-text">Колір і яскравість окремо для дня та ночі. Додай до 16 станів із кодами 2–255. Для неналаштованих станів використовується колір стану 1.</p>
               <div id="stateColors"></div>
-              <div class="settings-row">
+              <div class="state-add-row">
                 <label for="newStateCode">Код нового стану</label>
                 <input class="field-input" id="newStateCode" type="number" min="2" max="255" step="1" value="2">
                 <button class="sidebar-action" id="addStateColor" type="button" onclick="addStateColor()" aria-label="Додати стан">+ Додати стан</button>
@@ -362,18 +362,15 @@
           </section>
 
           <section class="content-pane" id="tab-night">
-            <article class="panel-card">
+            <article class="panel-card settings-panel">
               <div class="panel-card-head">
                 <div>
                   <div class="panel-label">Нічний режим</div>
                   <h2 class="panel-title">Автоматичне обмеження яскравості вночі</h2>
                 </div>
               </div>
-              <div class="settings-row">
-                <div>
-                  <div class="row-label">Активний</div>
-                  <div class="row-sub">NIGHT MODE</div>
-                </div>
+              <div class="night-enabled-row">
+                <label for="nightEnabled" class="row-label" data-i18n="nightMode.active">Активний</label>
                 <label class="toggle-wrap">
                   <input type="checkbox" id="nightEnabled" checked>
                   <div class="toggle-track">
@@ -381,25 +378,21 @@
                   </div>
                 </label>
               </div>
-              <div class="settings-row">
+              <div class="night-schedule">
                 <div>
-                  <div class="row-label">Початок</div>
-                  <div class="row-sub">START TIME</div>
+                  <label for="nightStart" class="field-label" data-i18n="nightMode.start">Початок</label>
+                  <input type="time" id="nightStart" value="22:00">
                 </div>
-                <input type="time" id="nightStart" value="22:00">
-              </div>
-              <div class="settings-row">
                 <div>
-                  <div class="row-label">Кінець</div>
-                  <div class="row-sub">END TIME</div>
+                  <label for="nightEnd" class="field-label" data-i18n="nightMode.end">Кінець</label>
+                  <input type="time" id="nightEnd" value="07:00">
                 </div>
-                <input type="time" id="nightEnd" value="07:00">
               </div>
             </article>
           </section>
 
           <section class="content-pane" id="tab-mqtt">
-            <article class="panel-card">
+            <article class="panel-card settings-panel">
               <div class="panel-card-head">
                 <div>
                   <div class="panel-label">MQTT</div>
@@ -407,38 +400,44 @@
                 </div>
               </div>
 
-              <div class="form-stack">
-
-                <div class="form-grid row g-3">
-                  <div class="col-12 col-md-6">
-                    <label class="field-label">Broker</label>
+              <div class="mqtt-fields">
+                <div class="mqtt-broker-grid">
+                  <div>
+                    <label for="mqttHost" class="field-label" data-i18n="mqtt.broker">Broker</label>
                     <input type="text" id="mqttHost" placeholder="192.168.1.100" class="field-input">
                   </div>
-                  <div class="col-12 col-md-6">
-                    <label class="field-label">Порт</label>
+                  <div>
+                    <label for="mqttPort" class="field-label" data-i18n="mqtt.port">Порт</label>
                     <input type="number" id="mqttPort" placeholder="1883" min="1" max="65535" class="field-input">
                   </div>
                 </div>
 
                 <div>
-                  <label class="field-label">Топік</label>
+                  <label for="mqttTopic" class="field-label" data-i18n="mqtt.topic">Топік</label>
                   <input type="text" id="mqttTopic" placeholder="ukraine/alarm/map/full_v2" class="field-input">
-                  <label for="fallbackUrl" class="field-label">Резервний URL</label>
-                  <input type="url" id="fallbackUrl" placeholder="https://example.com/alerts.json" class="field-input" maxlength="255" autocomplete="off" spellcheck="false">
-                  <p class="muted">JSON-масив із 25 значень 0/1 у порядку MQTT. Порожнє поле вимикає резерв.</p>
-                  <label for="fallbackToken" class="field-label">Токен резервного API (необов’язково)</label>
-                  <input type="password" id="fallbackToken" class="field-input" maxlength="511" autocomplete="new-password" spellcheck="false">
-                  <p class="muted">Тільки токен, без Bearer. Для захисту токена використовуй HTTPS.</p>
                 </div>
-                <div class="form-grid row g-3">
-                  <div class="col-12 col-md-6">
-                    <label class="field-label">Логін</label>
+                <div class="mqtt-credentials-grid">
+                  <div>
+                    <label for="mqttUser" class="field-label" data-i18n="mqtt.login">Логін</label>
                     <input type="text" id="mqttUser" placeholder="(без авторизації)" class="field-input">
                   </div>
-                  <div class="col-12 col-md-6">
-                    <label class="field-label">Пароль</label>
+                  <div>
+                    <label for="mqttPass" class="field-label" data-i18n="mqtt.password">Пароль</label>
                     <input type="password" id="mqttPass" placeholder="••••••••" class="field-input">
                   </div>
+                </div>
+              </div>
+              <div class="mqtt-fields mqtt-reserve">
+                <h3 class="settings-subtitle">Резервний канал</h3>
+                <div>
+                  <label for="fallbackUrl" class="field-label">Резервний URL</label>
+                  <input type="url" id="fallbackUrl" placeholder="https://example.com/alerts.json" class="field-input" maxlength="255" autocomplete="off" spellcheck="false" aria-describedby="fallbackUrlHint">
+                  <p class="field-hint" id="fallbackUrlHint">JSON-масив із 25 кодів стану 0–255 у порядку MQTT. Порожнє поле вимикає резерв.</p>
+                </div>
+                <div>
+                  <label for="fallbackToken" class="field-label">Токен API <span class="field-optional">(необов’язково)</span></label>
+                  <input type="password" id="fallbackToken" class="field-input" maxlength="511" autocomplete="new-password" spellcheck="false" aria-describedby="fallbackTokenHint">
+                  <p class="field-hint" id="fallbackTokenHint">Тільки токен, без Bearer. Для захисту токена використовуй HTTPS.</p>
                 </div>
               </div>
             </article>

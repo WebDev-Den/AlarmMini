@@ -1597,8 +1597,61 @@ input[type=time],
 .panel-card-label .label-card .label-line {
     min-height: 0;
 }
-/* Additional state controls share the existing color/settings layout. */
-.custom-state-card { border-top: 1px solid var(--border); margin-top: 16px; }
-#newStateCode { max-width: 90px; }
-.custom-state-card input[type="color"] { position: static; inset: auto; opacity: 1; width: 44px; min-width: 44px; height: 36px; border: 1px solid var(--border2); border-radius: 8px; padding: 2px; background: transparent; }
-.custom-state-card input[type="range"] { width: min(140px, 26vw); }
+/* Compact settings are scoped so calibration keeps its existing layout. */
+.settings-header { padding: 12px 2px; margin-bottom: 4px; border: 0; background: none; }
+.settings-header .content-eyebrow { display: none; }
+.settings-header .content-title { margin: 0; font-size: 24px; line-height: 1.25; }
+.settings-panel { max-width: 960px; border-radius: 18px; }
+.settings-panel .panel-card-head { padding: 18px 18px 0; }
+.settings-panel .panel-label { display: none; }
+.settings-panel .panel-title { margin: 0; font-size: 16px; line-height: 1.4; }
+.settings-panel .panel-text { margin: 0; padding: 8px 18px 16px; font-size: 12px; line-height: 1.6; }
+.settings-panel .field-label { margin-bottom: 6px; font-size: 11px; line-height: 1.4; }
+.settings-panel .field-input,
+.settings-panel input[type="time"] { min-height: 40px; padding: 8px 10px; border-radius: 10px; }
+.settings-panel input[type="time"] { color-scheme: dark; }
+.custom-state-card { display: grid; grid-template-columns: minmax(124px, .8fr) repeat(2, minmax(0, 1fr)); gap: 20px; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border); }
+.state-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 36px; font-size: 13px; }
+.state-remove { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text2); font-size: 22px; line-height: 1; cursor: pointer; }
+.state-remove:hover { color: var(--text); border-color: var(--border2); background: var(--surface3); }
+.state-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.state-mode { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.state-mode > label { margin: 0; color: var(--text2); font-size: 12px; min-width: 30px; }
+.state-mode .color-control { flex: 1; min-width: 0; gap: 8px; }
+.custom-state-card input[type="color"] { position: static; inset: auto; opacity: 1; flex: 0 0 34px; width: 34px; height: 34px; border: 1px solid var(--border2); border-radius: 8px; padding: 3px; background: transparent; cursor: pointer; }
+.custom-state-card input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.custom-state-card input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 4px; }
+.custom-state-card input[type="range"] { flex: 1; width: 0; min-width: 40px; }
+.custom-state-card .brightness-label { flex: 0 0 34px; text-align: right; font-size: 11px; }
+.state-add-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border); }
+.state-add-row > label { margin: 0; color: var(--text2); font-size: 12px; }
+#newStateCode { width: 72px; }
+.state-add-row .sidebar-action { width: auto; min-height: 40px; margin-left: auto; padding: 8px 12px; border-radius: 10px; }
+#tab-night .settings-panel { max-width: 480px; }
+.night-enabled-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; }
+.night-enabled-row .row-label { margin: 0; }
+.night-schedule { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 0 18px 18px; }
+#tab-mqtt .settings-panel { max-width: 760px; }
+.mqtt-fields { display: grid; gap: 14px; padding: 16px 18px 18px; }
+.mqtt-broker-grid { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 14px; }
+.mqtt-credentials-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.mqtt-reserve { border-top: 1px solid var(--border); }
+.settings-subtitle { margin: 0; font-size: 13px; font-weight: 700; line-height: 1.4; }
+.field-hint { margin: 6px 0 0; color: var(--text2); font-size: 12px; line-height: 1.5; }
+.field-optional { text-transform: none; }
+@media (min-width: 641px) and (max-width: 1199px) {
+    .custom-state-card { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 24px; }
+    .state-heading { grid-column: 1 / -1; justify-content: flex-start; }
+}
+@media (max-width: 640px) {
+    .settings-header .content-title { font-size: 22px; }
+    .custom-state-card { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px 16px; }
+    .state-heading { min-height: 24px; }
+    .state-heading:has(.state-remove) { margin-top: -6px; margin-bottom: -6px; }
+    .state-add-row { padding: 12px 16px; }
+    .state-add-row .sidebar-action { flex-basis: 100%; margin-left: 0; }
+    .custom-state-card input[type="color"] { flex-basis: 38px; width: 38px; height: 38px; }
+    .state-mode { gap: 16px; }
+    .state-mode .color-control { gap: 12px; }
+    .mqtt-credentials-grid { grid-template-columns: minmax(0, 1fr); }
+}

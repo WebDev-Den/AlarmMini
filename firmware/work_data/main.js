@@ -103,16 +103,8 @@ function applyStaticLang() {
   set("#tab-colors .panel-title", UI_LANG.colors.title);
   set("#tab-night .panel-label", UI_LANG.tabs.night.eyebrow);
   set("#tab-night .panel-title", UI_LANG.nightMode.title);
-  set("#tab-night .settings-row:nth-of-type(2) .row-label", UI_LANG.nightMode.active);
-  set("#tab-night .settings-row:nth-of-type(3) .row-label", UI_LANG.nightMode.start);
-  set("#tab-night .settings-row:nth-of-type(4) .row-label", UI_LANG.nightMode.end);
   set("#tab-mqtt .panel-title", UI_LANG.mqtt.title);
-  set("#tab-mqtt .form-stack > div:nth-child(1) .col-12.col-md-6:nth-child(1) .field-label", UI_LANG.mqtt.broker);
-  set("#tab-mqtt .form-stack > div:nth-child(1) .col-12.col-md-6:nth-child(2) .field-label", UI_LANG.mqtt.port);
-  set("#tab-mqtt .form-stack > div:nth-child(2) .field-label", UI_LANG.mqtt.topic);
-  set("#tab-mqtt .form-stack > div:nth-child(3) .col-12.col-md-6:nth-child(1) .field-label", UI_LANG.mqtt.login);
   setAttr("#mqttUser", "placeholder", UI_LANG.mqtt.loginPlaceholder);
-  set("#tab-mqtt .form-stack > div:nth-child(3) .col-12.col-md-6:nth-child(2) .field-label", UI_LANG.mqtt.password);
   set("#tab-system .panel-label", UI_LANG.tabs.system.eyebrow);
   set("#tab-system .panel-title", UI_LANG.system.title);
   const systemLabelMap = {
@@ -431,6 +423,7 @@ function setActiveTab(tabId) {
   }
 
   activeTab = tabId;
+  document.querySelector(".content-header")?.classList.toggle("settings-header", ["colors", "night", "mqtt"].includes(tabId));
   document.querySelectorAll(".nav-tab").forEach((button) => button.classList.toggle("active", button.dataset.tab === tabId));
   document.querySelectorAll(".content-pane").forEach((pane) => pane.classList.toggle("active", pane.id === `tab-${tabId}`));
   $("contentEyebrow").textContent = TAB_META[tabId].eyebrow;
@@ -879,13 +872,14 @@ function renderStateColors() {
     const card = document.createElement("div");
     card.className = "custom-state-card";
     const heading = document.createElement("div");
-    heading.className = "settings-row";
+    heading.className = "state-heading";
     const title = document.createElement("strong");
     title.textContent = state === "0" ? "Стан 0 · Відбій" : state === "1" ? "Стан 1 · Тривога" : `Стан ${state}`;
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.className = "sidebar-action";
-    remove.textContent = "Видалити";
+    remove.className = "state-remove";
+    remove.textContent = "×";
+    remove.title = `Видалити колір стану ${state}`;
     remove.setAttribute("aria-label", `Видалити колір стану ${state}`);
     remove.onclick = () => { delete customStateColors[state]; renderStateColors(); updateDirtyState(); refreshMapPreview(); };
     heading.appendChild(title);
@@ -894,7 +888,7 @@ function renderStateColors() {
     ["День", "Ніч"].forEach((mode, index) => {
       const offset = index * 4;
       const row = document.createElement("div");
-      row.className = "settings-row";
+      row.className = "state-mode";
       const label = document.createElement("label");
       label.textContent = mode;
       label.htmlFor = `state-${state}-${index}-color`;
