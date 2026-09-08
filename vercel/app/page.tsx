@@ -466,7 +466,6 @@ export default function Page() {
   const [releases, setReleases] = useState<GithubRelease[]>([]);
   const [releasesLoading, setReleasesLoading] = useState(true);
   const [releasesError, setReleasesError] = useState("");
-  const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
   const [selectedBoardId, setSelectedBoardId] = useState<BoardTargetId>("esp32c3");
   const [flashBusy, setFlashBusy] = useState(false);
   const [flashStatus, setFlashStatus] = useState("");
@@ -555,9 +554,8 @@ export default function Page() {
         return res.json();
       })
       .then((data: GithubRelease[]) => {
-        const stable = data.filter((release) => !release.draft && !release.prerelease);
+        const stable = data.filter((release) => !release.draft && !release.prerelease).slice(0, 1);
         setReleases(stable);
-        setSelectedReleaseId(stable[0]?.id ?? null);
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setReleasesError("Не вдалося завантажити версії. Перевір інтернет і спробуй ще раз.");
@@ -619,10 +617,7 @@ export default function Page() {
     }
   }, []);
 
-  const selectedRelease = useMemo(
-    () => releases.find((r) => r.id === selectedReleaseId) ?? null,
-    [releases, selectedReleaseId],
-  );
+  const selectedRelease = releases[0] ?? null;
 
   const selectedBoard = useMemo(
     () => BOARD_TARGETS.find((board) => board.id === selectedBoardId) ?? BOARD_TARGETS[0],
@@ -1605,9 +1600,9 @@ export default function Page() {
               <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">Порядок областей і приклад відповіді ↗</a>
             </details>
             <div className="release-summary" aria-live="polite">
-              {releasesLoading ? <span>Завантажуємо доступні версії…</span> : releasesError ? <><span>{releasesError}</span><button className="btn" onClick={() => setReleasesAttempt((v) => v + 1)}>Спробувати ще раз</button></> : !selectedRelease ? <span>Опублікованих версій поки немає.</span> : <><span>Версія <strong>{selectedRelease.tag_name}</strong>{selectedReleaseId === releases[0]?.id ? " · остання стабільна" : " · попередня версія"}</span><small>{selectedReleaseUpdatedAt}</small></>}
+              {releasesLoading ? <span>Завантажуємо актуальну версію…</span> : releasesError ? <><span>{releasesError}</span><button className="btn" onClick={() => setReleasesAttempt((v) => v + 1)}>Спробувати ще раз</button></> : !selectedRelease ? <span>Опублікованих версій поки немає.</span> : <><span>Версія <strong>{selectedRelease.tag_name}</strong> · актуальна</span><small>{selectedReleaseUpdatedAt}</small></>}
             </div>
-            <details className="inline-details"><summary>Вибрати іншу версію</summary><label>Версія прошивки<select className="select" value={selectedReleaseId ?? ""} onChange={(e) => setSelectedReleaseId(Number(e.target.value))} disabled={flashBusy || releasesLoading || !releases.length}>{releases.map((release) => <option key={release.id} value={release.id}>{release.name || release.tag_name}</option>)}</select></label></details>
+            <p className="hint">Підтримується лише актуальна версія. Старі прошивки більше не доступні для встановлення; налаштування з них можна перенести під час оновлення.</p>
           </section>
 
           <section className="card step-card" aria-labelledby="usb-title">

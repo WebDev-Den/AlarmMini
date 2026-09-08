@@ -4,6 +4,15 @@ AlarmMini is a commercial firmware and web-installer project for a compact physi
 
 Production installer: [https://alarmmini.vercel.app](https://alarmmini.vercel.app)
 
+## Актуальна версія
+
+Єдина робоча гілка — **main**. Підтримується лише найновіший стабільний реліз,
+зараз **v2.1.3**, для обох плат: ESP32-C3 SuperMini та Wemos D1 mini / ESP8266.
+Старі релізи й теги прибрані з GitHub; інсталятор пропонує лише актуальну версію.
+Імпорт попередніх конфігурацій збережено для оновлення вже встановлених плат.
+
+[Результати перевірки Wemos D1 mini та підключення LED](docs/wemos-d1-mini.md).
+
 ## Резервний URL: формат відповіді та авторизація
 
 Резервний API має відповідати на `GET` статусом **HTTP 200** і JSON-масивом
