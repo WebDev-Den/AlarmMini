@@ -34,12 +34,12 @@ def main():
     firmware = tests.parent
     alerts = (firmware / "src/alerts.h").read_text(encoding="utf-8")
     uart = (firmware / "src/uart_config.h").read_text(encoding="utf-8")
-    buzzer = (firmware / "src/buzzer.h").read_text(encoding="utf-8")
+    leds = (firmware / "src/leds.h").read_text(encoding="utf-8")
     json_header = next((firmware / ".pio/libdeps").glob("*/ArduinoJson/src/ArduinoJson.h"), None)
     if not json_header:
         raise SystemExit("Install the firmware PlatformIO dependencies first")
 
-    body = alerts[alerts.index("bool gAlerts["):alerts.index("// PubSubClient's timeout")]
+    body = alerts[alerts.index("AlertState gAlerts["):alerts.index("// PubSubClient's timeout")]
     body += alerts[alerts.index("class MqttWiFiClient"):alerts.index("static MqttWiFiClient _mqttWifi;")]
     for name in ["_mqttResolvedIp", "_mqttHasResolvedIp", "_mqttLastDnsLogAt", "_mqttLastDnsResolveAt", "MQTT_DNS_REFRESH_MS"]:
         body += re.search(r"(?m)^static [^\n]*\b" + name + r"\b[^\n]*", alerts).group() + "\n"
@@ -58,9 +58,11 @@ def main():
     for name in ["hexNibble", "resetLineBuffer", "resetSession", "decodeHexAppend", "init", "handle"]:
         body += definition(uart, name) + "\n"
     body += "}\n"
-    # Keep the active production melody/timing implementation, replacing only its
-    # platform-audio dependency (provided by runtime_regressions.cpp).
-    body += buzzer[buzzer.index("#define NOTE_C4"):buzzer.index("\n#else\n\nvoid buzzerInit")]
+    for name in ["countAssignedLeds", "assignedIndexForLed", "currentAlertColor", "currentClearColor",
+                 "modeBrightnessLimit", "capColorForMode", "capColorForAnimation", "smoothstep01",
+                 "pulseAllowedForState", "fixedTransitionBrightness", "fixedAlertClearColor",
+                 "retainedStateColorForLed", "renderAlertClearState"]:
+        body += definition(leds, name) + "\n"
 
     with tempfile.TemporaryDirectory(prefix="alarmmini-runtime-") as temp:
         build = Path(temp)

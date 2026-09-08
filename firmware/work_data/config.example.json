@@ -17,11 +17,6 @@
     "b": 150,
     "p": [false, false]
   },
-  "z": {
-    "e": false,
-    "v": [80, 30],
-    "r": [20]
-  },
   "k": {
     "e": true,
     "i": [75, 30]
@@ -37,7 +32,7 @@
   "m": {
     "h": "__ALARMMINI_MQTT_HOST__",
     "p": 1883,
-    "t": "__ALARMMINI_MQTT_TOPIC__",
+    "t": "ukraine/alarm/map/full_v2",
     "u": "__ALARMMINI_MQTT_USER__",
     "s": "__ALARMMINI_MQTT_PASS__"
   },

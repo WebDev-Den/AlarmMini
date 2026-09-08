@@ -1597,3 +1597,8 @@ input[type=time],
 .panel-card-label .label-card .label-line {
     min-height: 0;
 }
+/* Additional state controls share the existing color/settings layout. */
+.custom-state-card { border-top: 1px solid var(--border); margin-top: 16px; }
+#newStateCode { max-width: 90px; }
+.custom-state-card input[type="color"] { position: static; inset: auto; opacity: 1; width: 44px; min-width: 44px; height: 36px; border: 1px solid var(--border2); border-radius: 8px; padding: 2px; background: transparent; }
+.custom-state-card input[type="range"] { width: min(140px, 26vw); }

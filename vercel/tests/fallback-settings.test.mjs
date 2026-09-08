@@ -4,7 +4,12 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 const source = readFileSync(new URL('../app/fallback-settings.ts', import.meta.url), 'utf8');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } });
-const { normalizeFallbackUrl, normalizeFallbackToken, supportsFallback, supportsFallbackToken } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+const { normalizeFallbackUrl, normalizeFallbackToken, supportsFallback, supportsFallbackToken, supportsMultiState } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+
+test('multistate firmware capability starts at 2.1.0', () => {
+  for (const version of ['2.0.9', '2.0.99', '', '-', '2.1.0garbage']) assert.equal(supportsMultiState(version), false);
+  for (const version of ['2.1.0', 'v2.1.0', '2.1.0-dev', '3.0.0']) assert.equal(supportsMultiState(version), true);
+});
 test('reserve URL normalization and transport restrictions', () => {
   assert.equal(normalizeFallbackUrl('  '), '');
   assert.equal(normalizeFallbackUrl(' https://example.com '), 'https://example.com/');

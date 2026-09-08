@@ -989,6 +989,9 @@ summary { cursor: pointer; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
+.mqtt-topics { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; line-height: 1.6; }
+.mqtt-topics p { margin: 8px 0 0; }
+.mqtt-topics code { overflow-wrap: anywhere; }
 .reserve-settings { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
 .reserve-settings summary { padding: 8px 0; min-height: 44px; }
 .reserve-settings summary span { color: var(--muted); font-size: 11px; margin-left: 8px; }

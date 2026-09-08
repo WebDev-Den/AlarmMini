@@ -18,10 +18,8 @@
       tabs: {
         overview: { eyebrow: "Огляд системи", title: "Швидкий доступ до стану мапи та налаштувань" },
         label: { eyebrow: "QR / Друк", title: "QR-наклейки та друковані картки" },
-        colors: { eyebrow: "Кольори", title: "Налаштування денних і нічних кольорів мапи" },
+        colors: { eyebrow: "Кольори", title: "Кожному стану — свій колір" },
         night: { eyebrow: "Нічний режим", title: "Автоматичне обмеження яскравості в нічний час" },
-        buzzer: { eyebrow: "Бузер", title: "Звук сповіщення для тривоги та відбою" },
-        regions: { eyebrow: "Регіони", title: "Області, для яких активні звукові сповіщення" },
         mqtt: { eyebrow: "MQTT", title: "Підключення до брокера для отримання стану мапи" },
         system: { eyebrow: "Система", title: "Доступ до пристрою, mDNS та системні параметри" },
         calibration: { eyebrow: "Калібрування", title: "Привʼязка фізичних LED до областей із швидким переходом по LED" },
@@ -32,8 +30,6 @@
         label: "QR / Друк",
         colors: "Кольори",
         night: "Нічний режим",
-        buzzer: "Бузер",
-        regions: "Регіони",
         mqtt: "MQTT",
         system: "Система",
         calibration: "Калібрування",
@@ -90,7 +86,7 @@
         ssid: "SSID"
       },
       colors: {
-        title: "Денні та нічні кольори тривоги",
+        title: "Кожному стану — свій колір",
         day: "День",
         night: "Ніч",
         alert: "Тривога",
@@ -101,15 +97,6 @@
         active: "Активний",
         start: "Початок",
         end: "Кінець"
-      },
-      buzzer: {
-        title: "Звук для тривоги та відбою",
-        active: "Активний",
-        dayVolume: "Гучність вдень",
-        nightVolume: "Гучність вночі"
-      },
-      regions: {
-        title: "Обери області, для яких активний бузер"
       },
       mqtt: {
         title: "Підключення до брокера",
@@ -127,7 +114,6 @@
         ip: "IP адреса",
         labelUrl: "URL для наклейки",
         ledPin: "Пін стрічки",
-        buzzerPin: "Пін бузера",
         ntpTitle: "NTP сервери",
         ntpHint: "Якщо поле порожнє, використовується значення за замовчуванням."
       },
@@ -236,8 +222,6 @@
           <button class="nav-tab" type="button" data-tab="label">QR / Друк</button>
           <button class="nav-tab" type="button" data-tab="colors">Кольори</button>
           <button class="nav-tab" type="button" data-tab="night">Нічний режим</button>
-          <button class="nav-tab" type="button" data-tab="buzzer">Бузер</button>
-          <button class="nav-tab" type="button" data-tab="regions">Регіони</button>
           <button class="nav-tab" type="button" data-tab="mqtt">MQTT</button>
           <button class="nav-tab" type="button" data-tab="system">Система</button>
           <button class="nav-tab nav-tab-accent" type="button" data-tab="calibration">Калібрування</button>
@@ -365,88 +349,16 @@
           <section class="content-pane" id="tab-colors">
             <article class="panel-card">
               <div class="panel-card-head">
-                <div>
-                  <div class="panel-label">Кольори LED</div>
-                  <h2 class="panel-title">Денні та нічні кольори тривоги</h2>
-                </div>
+                <div><div class="panel-label">Кольори станів</div><h2 class="panel-title">Кожному стану — свій колір</h2></div>
               </div>
-
-              <div class="mode-divider"><span>День</span></div>
+              <p class="panel-text">Налаштуй колір і яскравість кожного стану окремо для дня та ночі. 0 — відбій, 1 — тривога. Для кодів 2–255 можна додати до 16 кольорів; без налаштування використовується колір стану 1.</p>
+              <div id="stateColors"></div>
               <div class="settings-row">
-                <div>
-                  <div class="row-label">Тривога</div>
-                  <div class="row-sub">ALERT · DAY</div>
-                </div>
-                <div class="color-control">
-                  <div class="color-swatch-wrap">
-                    <div class="color-swatch" id="dayAlertSwatch" style="background:#ff0000"></div>
-                    <input type="color" id="dayAlertColor" value="#ff0000"
-                      oninput="document.getElementById('dayAlertSwatch').style.background=this.value">
-                  </div>
-                  <div class="brightness-control">
-                    <input type="range" id="dayAlertBright" min="0" max="255" value="255"
-                      oninput="document.getElementById('dayAlertBrightVal').textContent=Math.round(this.value/2.55)+'%'">
-                    <span class="brightness-label" id="dayAlertBrightVal">100%</span>
-                  </div>
-                </div>
+                <label for="newStateCode">Код нового стану</label>
+                <input class="field-input" id="newStateCode" type="number" min="2" max="255" step="1" value="2">
+                <button class="sidebar-action" id="addStateColor" type="button" onclick="addStateColor()" aria-label="Додати стан">+ Додати стан</button>
               </div>
-              <div class="settings-row">
-                <div>
-                  <div class="row-label">Відбій</div>
-                  <div class="row-sub">CLEAR · DAY</div>
-                </div>
-                <div class="color-control">
-                  <div class="color-swatch-wrap">
-                    <div class="color-swatch" id="dayClearSwatch" style="background:#005000"></div>
-                    <input type="color" id="dayClearColor" value="#005000"
-                      oninput="document.getElementById('dayClearSwatch').style.background=this.value">
-                  </div>
-                  <div class="brightness-control">
-                    <input type="range" id="dayClearBright" min="0" max="255" value="80"
-                      oninput="document.getElementById('dayClearBrightVal').textContent=Math.round(this.value/2.55)+'%'">
-                    <span class="brightness-label" id="dayClearBrightVal">31%</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="mode-divider"><span>Ніч</span></div>
-              <div class="settings-row">
-                <div>
-                  <div class="row-label">Тривога</div>
-                  <div class="row-sub">ALERT · NIGHT</div>
-                </div>
-                <div class="color-control">
-                  <div class="color-swatch-wrap">
-                    <div class="color-swatch" id="nightAlertSwatch" style="background:#500000"></div>
-                    <input type="color" id="nightAlertColor" value="#500000"
-                      oninput="document.getElementById('nightAlertSwatch').style.background=this.value">
-                  </div>
-                  <div class="brightness-control">
-                    <input type="range" id="nightAlertBright" min="0" max="255" value="255"
-                      oninput="document.getElementById('nightAlertBrightVal').textContent=Math.round(this.value/2.55)+'%'">
-                    <span class="brightness-label" id="nightAlertBrightVal">100%</span>
-                  </div>
-                </div>
-              </div>
-              <div class="settings-row">
-                <div>
-                  <div class="row-label">Відбій</div>
-                  <div class="row-sub">CLEAR · NIGHT</div>
-                </div>
-                <div class="color-control">
-                  <div class="color-swatch-wrap">
-                    <div class="color-swatch" id="nightClearSwatch" style="background:#000f00"></div>
-                    <input type="color" id="nightClearColor" value="#000f00"
-                      oninput="document.getElementById('nightClearSwatch').style.background=this.value">
-                  </div>
-                  <div class="brightness-control">
-                    <input type="range" id="nightClearBright" min="0" max="255" value="255"
-                      oninput="document.getElementById('nightClearBrightVal').textContent=Math.round(this.value/2.55)+'%'">
-                    <span class="brightness-label" id="nightClearBrightVal">100%</span>
-                  </div>
-                </div>
-              </div>
-              </article>
+            </article>
           </section>
 
           <section class="content-pane" id="tab-night">
@@ -486,73 +398,6 @@
             </article>
           </section>
 
-          <section class="content-pane" id="tab-buzzer">
-            <article class="panel-card">
-              <div class="panel-card-head">
-                <div>
-                  <div class="panel-label">Бузер</div>
-                  <h2 class="panel-title">Звук для тривоги та відбою</h2>
-                </div>
-              </div>
-              <div class="settings-row">
-                <div>
-                  <div class="row-label">Активний</div>
-                  <div class="row-sub">BUZZER ON</div>
-                </div>
-                <label class="toggle-wrap">
-                  <input type="checkbox" id="buzzerEnabled" checked>
-                  <div class="toggle-track">
-                    <div class="toggle-thumb"></div>
-                  </div>
-                </label>
-              </div>
-              <div class="settings-row">
-                <div>
-                  <div class="row-label">Гучність вдень</div>
-                  <div class="row-sub">DAY VOLUME</div>
-                </div>
-                <div class="brightness-control">
-                  <input type="range" id="dayVol" min="0" max="100" value="80"
-                    oninput="document.getElementById('dayVolVal').textContent=this.value+'%'">
-                  <span class="brightness-label" id="dayVolVal">80%</span>
-                </div>
-              </div>
-              <div class="settings-row">
-                <div>
-                  <div class="row-label">Гучність вночі</div>
-                  <div class="row-sub">NIGHT VOLUME</div>
-                </div>
-                <div class="brightness-control">
-                  <input type="range" id="nightVol" min="0" max="100" value="30"
-                    oninput="document.getElementById('nightVolVal').textContent=this.value+'%'">
-                  <span class="brightness-label" id="nightVolVal">30%</span>
-                </div>
-              </div>
-              <div class="panel-actions panel-actions-pad">
-                <button class="inline-btn" onclick="testBuzzer(true)" type="button">Тест тривоги</button>
-                <button class="inline-btn" onclick="testBuzzer(false)" type="button">Тест відбою</button>
-              </div>
-            </article>
-          </section>
-
-          <section class="content-pane" id="tab-regions">
-            <article class="panel-card">
-              <div class="panel-card-head">
-                <div>
-                  <div class="panel-label">Регіони сповіщень</div>
-                  <h2 class="panel-title">Обері області, для яких активний бузер</h2>
-                </div>
-                <div class="panel-actions">
-                  <button class="inline-btn" onclick="selectAll(true)" type="button">Всі</button>
-                  <button class="inline-btn" onclick="selectAll(false)" type="button">Жодного</button>
-                  <button class="inline-btn inline-btn-primary" onclick="testSubscribedAlert()" type="button">Тест
-                    тривоги</button>
-                </div>
-              </div>
-              <div class="regions-grid" id="regions"></div>
-            </article>
-          </section>
-
           <section class="content-pane" id="tab-mqtt">
             <article class="panel-card">
               <div class="panel-card-head">
@@ -577,7 +422,7 @@
 
                 <div>
                   <label class="field-label">Топік</label>
-                  <input type="text" id="mqttTopic" placeholder="alerts/status" class="field-input">
+                  <input type="text" id="mqttTopic" placeholder="ukraine/alarm/map/full_v2" class="field-input">
                   <label for="fallbackUrl" class="field-label">Резервний URL</label>
                   <input type="url" id="fallbackUrl" placeholder="https://example.com/alerts.json" class="field-input" maxlength="255" autocomplete="off" spellcheck="false">
                   <p class="muted">JSON-масив із 25 значень 0/1 у порядку MQTT. Порожнє поле вимикає резерв.</p>
@@ -643,13 +488,6 @@
                   <div class="row-sub">WS2812 / DATA PIN</div>
                 </div>
                 <span id="ledPinValue" class="inline-value" data-label-id="systemLedPinLabel">-</span>
-              </div>
-              <div class="settings-row">
-                <div>
-                  <div class="row-label">Пін бузера</div>
-                  <div class="row-sub">BUZZER PIN</div>
-                </div>
-                <span id="buzzerPinValue" class="inline-value" data-label-id="systemBuzzerPinLabel">-</span>
               </div>
               <div class="form-stack">
                 <div class="row-label">NTP сервери</div>

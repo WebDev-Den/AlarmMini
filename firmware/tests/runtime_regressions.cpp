@@ -16,7 +16,12 @@ static uint32_t &clockMs = fakeMillis;
 #include "config.h"
 #include "animations.h"
 AppConfig gConfig{};
-constexpr size_t CONFIG_JSON_CAPACITY = 4096;
+constexpr size_t CONFIG_JSON_CAPACITY = 6144;
+struct Pixels {
+    uint32_t colors[MAX_LEDS]{};
+    void setPixelColor(int index, uint32_t color) { colors[index] = color; }
+} strip;
+void ledsShowIfChanged() {}
 
 class WiFiClient {
 public:
@@ -52,14 +57,6 @@ struct SerialInput {
     void set(std::string value) { bytes = std::move(value); offset = 0; }
 } console;
 #define CONSOLE_PORT console
-
-namespace platform_audio {
-    unsigned frequency = 0;
-    unsigned notesStarted = 0;
-    void initBuzzerPin() {}
-    void playTone(uint16_t value) { frequency = value; ++notesStarted; }
-    void stopTone() { frequency = 0; }
-}
 
 #include "fallback_http.h"
 static bool reserveBusy = false, reserveReady = false;
@@ -135,7 +132,7 @@ int main() {
     for (bool state : gMqttAlerts) assert(state);
     deliver("[]");
     deliver("[0,0]");
-    deliver(allStates("2"));
+    deliver(allStates("256"));
     deliver(allStates("\"false\""));
     deliver("broken");
     assert(gFetchOk && gMqttMessagesReceived == 1 && gMqttPayloadErrors == 5);
@@ -188,12 +185,14 @@ int main() {
     assert(_loadMqttSnapshot());
     for (bool state : gMqttAlerts) assert(state);
 
-    // Rebuilding a test/MQTT state twice before the buzzer runs preserves edge.
-    gAlertsChanged = false;
+    // Repeated MQTT messages preserve the transition timestamp.
     memset(gAlerts, 0, sizeof(gAlerts));
     _rebuildEffectiveAlerts();
+    assert(gAlertsChanged && gAlerts[0] == 1);
+    const auto changedAt = gRegionStateChangedAt[0];
+    ++clockMs;
     _rebuildEffectiveAlerts();
-    assert(gAlertsChanged && !gPrevAlerts[0] && gAlerts[0]);
+    assert(!gAlertsChanged && gRegionStateChangedAt[0] == changedAt);
 
     // All input bytes count against UART budget, including CR; an overflowing
     // line's suffix is discarded until newline, never treated as a command.
@@ -236,29 +235,15 @@ int main() {
     flag.enabled = false;
     assert(animationColor(flag, 2, 25, 5000, {255,0,0,15}, {0,255,0,15}) == 0x0F0000);
 
-    // Every note plays for its own duration, including the final note.
-    gConfig.buzzer.enabled = false;
-    clockMs = 0;
-    buzzerPlay(true);
-    buzzerHandle();
-    for (int note = 0; note < ALERT_NOTES; ++note) {
-        assert(gPlaying && platform_audio::frequency == (unsigned)ALERT_MELODY[note]);
-        clockMs += ALERT_DURATIONS[note] - 1;
-        buzzerHandle();
-        assert(gPlaying && platform_audio::frequency == (unsigned)ALERT_MELODY[note]);
-        ++clockMs;
-        buzzerHandle();
-    }
-    assert(!gPlaying && platform_audio::frequency == 0 && platform_audio::notesStarted == ALERT_NOTES);
-    // Reserve contract: exact region order, strict 0/1, no partial application.
-    bool decoded[REGIONS_COUNT] = {};
+    // Reserve contract: exact region order, integer codes, no partial application.
+    AlertState decoded[REGIONS_COUNT] = {};
     for (int selected = 0; selected < REGIONS_COUNT; ++selected) {
         auto payload = allStates("0");
         payload[1 + selected * 2] = '1';
         assert(fallbackContract::parseStates(payload.c_str(), decoded, REGIONS_COUNT));
         for (int i = 0; i < REGIONS_COUNT; ++i) assert(decoded[i] == (i == selected));
     }
-    for (const auto &bad : {allStates("true"), allStates("2"), allStates("0.0"),
+    for (const auto &bad : {allStates("true"), allStates("256"), allStates("0.0"), allStates("-1"), allStates("01"), allStates("1e0"),
             allStates("0") + "x", std::string("[0,1]"), std::string("[]"), std::string("null"), std::string(""),
             allStates("0").substr(0, 49), allStates("0").substr(0, 50) + ",0]"}) {
         std::fill_n(decoded, REGIONS_COUNT, true);
@@ -344,5 +329,51 @@ int main() {
     alertsFallbackTick();
     assert(!alertsDataFresh());
 
-    std::printf("PASS runtime regressions: MQTT packet deadline/DNS/validation/snapshot (%d power cuts), UART budget/timeouts, brightness, buzzer\n", snapshotOperations);
+    // Numeric codes survive MQTT, HTTP, snapshots and source changes.
+    for (const char *code : {"2", "3", "4", "10", "255"}) {
+        deliver(allStates(code));
+        for (AlertState state : gAlerts) assert(state == std::atoi(code));
+        assert(fallbackContract::parseStates(allStates(code).c_str(), decoded, REGIONS_COUNT));
+        for (AlertState state : decoded) assert(state == std::atoi(code));
+        assert(_saveMqttSnapshot());
+        memset(gMqttAlerts, 0, sizeof(gMqttAlerts));
+        assert(_loadMqttSnapshot());
+        for (AlertState state : gAlerts) assert(state == std::atoi(code));
+    }
+    files[MQTT_SNAPSHOT_PATH] = "{\"states\":" + allStates("true") + ",\"ts\":1}";
+    assert(_loadMqttSnapshot());
+    for (AlertState state : gAlerts) assert(state == 1); // Pre-2.1.0 boolean snapshots.
+    deliver(allStates("4"));
+    const auto received = gMqttMessagesReceived;
+    for (const char *bad : {"-1", "256", "1.5", "null", "\"2\""}) deliver(allStates(bad));
+    assert(gMqttMessagesReceived == received);
+    for (AlertState state : gAlerts) assert(state == 4);
+    strcpy(gConfig.fallbackUrl, "http://reserve.test/multistate");
+    gMqttConnected = false;
+    alertsFallbackTick(); assert(reserveBusy);
+    reserveResponse.status = 200;
+    strcpy(reserveResponse.body, allStates("255").c_str()); reserveReady = true;
+    alertsFallbackTick();
+    assert(gUsingHttpFallback);
+    for (AlertState state : gAlerts) assert(state == 255);
+    gMqttConnected = true; deliver(allStates("3"));
+    assert(!gUsingHttpFallback);
+    for (AlertState state : gAlerts) assert(state == 3);
+
+    // Live and retained rendering use the numeric state's own color and caps.
+    gConfig.ledCount = 1; gConfig.ledRegion[0] = 0;
+    gConfig.stateColorCount = 1;
+    gConfig.stateColors[0] = {2, {0,255,0,255}, {0,0,255,80}};
+    gConfig.dayMode.alertColor = {255,0,0,255};
+    gConfig.night.maxBrightness = 30;
+    gAlerts[0] = 2;
+    renderAlertClearState(false); assert(strip.colors[0] == 0x00FF00);
+    renderAlertClearState(true); assert(strip.colors[0] == 30);
+    const auto offline = animationForState(MAP_STATE_MQTT_LOST);
+    assert(retainedStateColorForLed(0, true, clockMs, offline, 1) == 15);
+    gConfig.stateColors[0].night.a = 0;
+    renderAlertClearState(true); assert(strip.colors[0] == 0);
+    gAlerts[0] = 255;
+    renderAlertClearState(false); assert(strip.colors[0] == 0xFF0000);
+    std::printf("PASS runtime regressions: MQTT/DNS/snapshot (%d power cuts), UART, multistate MQTT/HTTP/rendering/legacy snapshot\n", snapshotOperations);
 }

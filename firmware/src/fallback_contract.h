@@ -58,22 +58,28 @@ inline void skipSpace(const char *&p) {
 }
 
 // Parse a complete JSON array. Never partially apply a malformed snapshot.
-inline bool parseStates(const char *text, bool *states, size_t count) {
+inline bool parseStates(const char *text, uint8_t *states, size_t count) {
     if (!text || !states || count > 32) return false;
-    bool parsed[32] = {};
+    uint8_t parsed[32] = {};
     const char *p = text;
     skipSpace(p);
     if (*p++ != '[') return false;
     for (size_t i = 0; i < count; ++i) {
         skipSpace(p);
-        if (*p != '0' && *p != '1') return false;
-        parsed[i] = *p++ == '1';
+        if (*p < '0' || *p > '9') return false;
+        unsigned value = unsigned(*p++ - '0');
+        if (value == 0 && *p >= '0' && *p <= '9') return false;
+        while (*p >= '0' && *p <= '9') {
+            value = value * 10 + unsigned(*p++ - '0');
+            if (value > 255) return false;
+        }
+        parsed[i] = uint8_t(value);
         skipSpace(p);
         if (*p++ != (i + 1 == count ? ']' : ',')) return false;
     }
     skipSpace(p);
     if (*p) return false;
-    memcpy(states, parsed, count * sizeof(bool));
+    memcpy(states, parsed, count * sizeof(uint8_t));
     return true;
 }
 }

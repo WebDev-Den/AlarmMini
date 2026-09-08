@@ -6,33 +6,20 @@
 #define LED_PIN    5
 #endif
 #define MAX_LEDS   27
-#ifndef BUZZER_PIN
-#if defined(ESP32)
-#define BUZZER_PIN 4
-#else
-#define BUZZER_PIN 14
-#endif
-#endif
 
 #define MQTT_HOST_MAXLEN  64
 #define MQTT_TOPIC_MAXLEN 64
 #define MQTT_USER_MAXLEN  32
 #define MQTT_PASS_MAXLEN  32
+constexpr char DEFAULT_MQTT_TOPIC[] = "ukraine/alarm/map/full_v2";
 #define WIFI_SSID_MAXLEN  64
 #define WIFI_PASS_MAXLEN  64
 #define NTP_SERVER_MAXLEN 64
 #define ADMIN_PASS_MAXLEN 32
-#define FIRMWARE_VERSION  "2.0.9"
+#define FIRMWARE_VERSION  "2.1.0"
 
 #define REGIONS_COUNT 25
 
-#ifndef ALARMMINI_FEATURE_BUZZER
-#if defined(ESP8266)
-#define ALARMMINI_FEATURE_BUZZER 0
-#else
-#define ALARMMINI_FEATURE_BUZZER 1
-#endif
-#endif
 
 #ifndef ALARMMINI_FEATURE_WIFI_SCAN_PORTAL
 #if defined(ESP8266)
@@ -72,6 +59,9 @@ const char* const REGIONS[REGIONS_COUNT] = {
 
 struct Color      { uint8_t r, g, b, a; };
 struct ModeConfig { Color alertColor; Color clearColor; };
+using AlertState = uint8_t;
+constexpr uint8_t MAX_CUSTOM_STATES = 16;
+struct StateColorConfig { AlertState state; Color day; Color night; };
 enum AnimationEffectType : uint8_t {
     ANIM_STATIC = 0,
     ANIM_PULSE,
@@ -156,7 +146,8 @@ struct BlinkConfig {
     uint8_t dayIntensity;    // 0-100: інтенсивність мигання вдень
     uint8_t nightIntensity;  // 0-100: інтенсивність мигання вночі
 };
-struct BuzzerConfig {
+// Retained only to round-trip old backups; no audio driver or runtime uses it.
+struct LegacySoundConfig {
     bool    enabled;
     uint8_t dayVolume, nightVolume;
     bool    regions[REGIONS_COUNT];
@@ -174,8 +165,11 @@ struct AppConfig {
     uint8_t      ledCount;
     ModeConfig   dayMode;
     ModeConfig   nightMode;
+    uint8_t      stateColorCount;
+    StateColorConfig stateColors[MAX_CUSTOM_STATES];
     NightConfig  night;
-    BuzzerConfig buzzer;
+    bool hasLegacySoundConfig;
+    LegacySoundConfig legacySound;
     OfflineConfig offline;
     BlinkConfig  blink;        // Налаштування мигання при втраті MQTT
     // MQTT — всі налаштування через веб-інтерфейс
@@ -194,3 +188,15 @@ struct AppConfig {
     char         adminPassword[ADMIN_PASS_MAXLEN];
     uint16_t     logMask;
 };
+
+inline Color colorForAlertState(const AppConfig &config, AlertState state, bool night) {
+    const ModeConfig &mode = night ? config.nightMode : config.dayMode;
+    if (state == 0) return mode.clearColor;
+    if (state > 1) {
+        for (uint8_t i = 0; i < config.stateColorCount; ++i) {
+            if (config.stateColors[i].state == state)
+                return night ? config.stateColors[i].night : config.stateColors[i].day;
+        }
+    }
+    return mode.alertColor; // Unconfigured codes must not look like an all-clear.
+}

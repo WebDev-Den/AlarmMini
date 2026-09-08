@@ -11,12 +11,13 @@ export function normalizeFallbackUrl(value: string): string {
   return url.href;
 }
 
-export function validateFallbackBody(body: string): void {
+export function validateFallbackBody(body: string, maxState = 255): void {
   if (new TextEncoder().encode(body).length > 256) throw new Error("Відповідь перевищує 256 байтів — плата не зможе її прийняти.");
   // Match the firmware parser exactly, including JSON whitespace and numeric tokens.
-  if (!/^[ \t\r\n]*\[[ \t\r\n]*[01](?:[ \t\r\n]*,[ \t\r\n]*[01]){24}[ \t\r\n]*\][ \t\r\n]*$/.test(body)) {
-    throw new Error("Сервер має повернути JSON-масив рівно з 25 чисел 0 або 1, без інших полів.");
+  if (!/^[ \t\r\n]*\[[ \t\r\n]*(?:0|[1-9][0-9]{0,2})(?:[ \t\r\n]*,[ \t\r\n]*(?:0|[1-9][0-9]{0,2})){24}[ \t\r\n]*\][ \t\r\n]*$/.test(body) || JSON.parse(body).some((state: number) => state > 255)) {
+    throw new Error("Сервер має повернути JSON-масив рівно з 25 чисел від 0 до 255, без інших полів.");
   }
+  if (JSON.parse(body).some((state: number) => state > maxState)) throw new Error("Сервер повертає стани 2–255. Потрібна прошивка 2.1.0 або новіша; для старої плати використай URL зі станами 0/1.");
 }
 
 export function normalizeFallbackToken(value: string): string {
@@ -25,7 +26,7 @@ export function normalizeFallbackToken(value: string): string {
   return token;
 }
 
-export async function verifyFallbackEndpoint(value: string, tokenValue = "", signal?: AbortSignal): Promise<string> {
+export async function verifyFallbackEndpoint(value: string, tokenValue = "", signal?: AbortSignal, firmwareVersion = ""): Promise<string> {
   const url = normalizeFallbackUrl(value);
   if (!url) return ""; // Clearing an existing reserve never needs the old server.
   const token = normalizeFallbackToken(tokenValue);
@@ -37,7 +38,7 @@ export async function verifyFallbackEndpoint(value: string, tokenValue = "", sig
   try {
     const response = await fetch("/api/fallback-validation", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, token }), cache: "no-store", signal: controller.signal,
+      body: JSON.stringify({ url, token, firmwareVersion }), cache: "no-store", signal: controller.signal,
     });
     const result = await response.json().catch(() => null);
     if (!response.ok || result?.ok !== true || result.url !== url) {
@@ -66,4 +67,10 @@ export function supportsFallbackToken(version: string): boolean {
   if (!match) return false;
   const [, major, minor, patch] = match.map(Number);
   return major > 2 || (major === 2 && (minor > 0 || patch >= 9));
+}
+
+export function supportsMultiState(version: string): boolean {
+  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)(?:$|-)/);
+  if (!match) return false;
+  return Number(match[1]) > 2 || (Number(match[1]) === 2 && Number(match[2]) >= 1);
 }

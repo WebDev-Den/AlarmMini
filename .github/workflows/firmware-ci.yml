@@ -54,7 +54,12 @@ jobs:
           node-version: 20
 
       - name: Test embedded setup portal
-        run: node tests/provision_ui_test.js
+        run: |
+          node tests/provision_ui_test.js
+          node tests/state_colors_ui_test.js
+
+      - name: Test config backup and serial transfers
+        run: python tests/config_transfer_test.py
 
       - name: Upload firmware CI binaries
         uses: actions/upload-artifact@v4
@@ -91,3 +96,6 @@ jobs:
 
       - name: Build installer
         run: npm run build
+
+      - name: Test installer contracts
+        run: npm test

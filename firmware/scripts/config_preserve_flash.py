@@ -177,6 +177,9 @@ def _collect_diffs(expected, actual, path: str = "$", out: list[str] | None = No
         if not isinstance(actual, dict):
             out.append(path)
             return out
+        # State overrides are a complete palette; stale extra entries are data loss too.
+        if path == "$" and set(expected.get("sc", {})) != set(actual.get("sc", {})):
+            out.append("$.sc")
         for key in sorted(expected.keys()):
             child = f"{path}.{key}"
             if key not in actual:

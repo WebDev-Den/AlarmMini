@@ -2,23 +2,23 @@
 import { useEffect, useRef, useState } from "react";
 import { verifyFallbackEndpoint } from "./fallback-settings";
 
-export function FallbackUrlField({ id, value, onChange, token, onTokenChange, disabled = false }: {
-  id: string; value: string; onChange: (value: string) => void; token: string; onTokenChange: (value: string) => void; disabled?: boolean;
+export function FallbackUrlField({ id, value, onChange, token, onTokenChange, firmwareVersion = "", disabled = false }: {
+  id: string; value: string; onChange: (value: string) => void; token: string; onTokenChange: (value: string) => void; firmwareVersion?: string; disabled?: boolean;
 }) {
   const [result, setResult] = useState<{ kind: "idle" | "checking" | "success" | "error"; message: string }>({ kind: "idle", message: "" });
   const pending = useRef<AbortController | null>(null);
   useEffect(() => {
     setResult({ kind: "idle", message: "" });
     return () => pending.current?.abort();
-  }, [value, token]);
+  }, [value, token, firmwareVersion]);
   async function check() {
     pending.current?.abort();
     const controller = new AbortController();
     pending.current = controller;
     setResult({ kind: "checking", message: "Перевіряємо доступність і 25 станів областей…" });
     try {
-      await verifyFallbackEndpoint(value, token, controller.signal);
-      if (!controller.signal.aborted) setResult({ kind: "success", message: "Перевірено: HTTP 200, усі 25 значень — 0 або 1. URL можна записати в плату." });
+      await verifyFallbackEndpoint(value, token, controller.signal, firmwareVersion);
+      if (!controller.signal.aborted) setResult({ kind: "success", message: "Перевірено: HTTP 200, 25 станів сумісні з вибраною прошивкою. URL можна записати в плату." });
     } catch (error) {
       if (!controller.signal.aborted) setResult({ kind: "error", message: error instanceof Error ? error.message : "Не вдалося перевірити URL. Повтори спробу." });
     }

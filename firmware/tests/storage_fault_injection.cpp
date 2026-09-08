@@ -184,7 +184,62 @@ int main()
     assert(!gConfig.fallbackUrl[0]);
     assert(!gConfig.fallbackToken[0]);
 
-    std::cout << "PASS: " << powerCuts
+    // A maximum palette and maximum-length settings fit on the ESP8266 too.
+    const AppConfig legacy = gConfig;
+    gConfig.stateColorCount = MAX_CUSTOM_STATES;
+    for (uint8_t i = 0; i < MAX_CUSTOM_STATES; ++i)
+        gConfig.stateColors[i] = {uint8_t(240 + i), {255,128,i,255}, {i,0,255,20}};
+    const auto fillField = [](char *field, size_t size) { memset(field, 'x', size - 1); field[size - 1] = 0; };
+    fillField(gConfig.mqttHost, sizeof(gConfig.mqttHost));
+    fillField(gConfig.mqttTopic, sizeof(gConfig.mqttTopic));
+    fillField(gConfig.mqttUser, sizeof(gConfig.mqttUser));
+    fillField(gConfig.mqttPass, sizeof(gConfig.mqttPass));
+    fillField(gConfig.wifiSsid, 33);
+    fillField(gConfig.wifiPass, sizeof(gConfig.wifiPass));
+    fillField(gConfig.ntpServer1, sizeof(gConfig.ntpServer1));
+    fillField(gConfig.ntpServer2, sizeof(gConfig.ntpServer2));
+    fillField(gConfig.ntpServer3, sizeof(gConfig.ntpServer3));
+    fillField(gConfig.adminPassword, sizeof(gConfig.adminPassword));
+    fillField(gConfig.fallbackToken, sizeof(gConfig.fallbackToken));
+    strcpy(gConfig.fallbackUrl, maxUrl.c_str());
+    gConfig.hasLegacySoundConfig = true;
+    gConfig.legacySound.enabled = true;
+    std::fill_n(gConfig.legacySound.regions, REGIONS_COUNT, true);
+    storagePopulateJson(edited);
+    assert(!edited.overflowed());
+    std::string fullPalette;
+    serializeJson(edited, fullPalette);
+    edited.clear();
+    assert(!deserializeJson(edited, fullPalette)); // Includes owned key/string storage.
+    assert(storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    reboot();
+    assert(gConfig.stateColorCount == MAX_CUSTOM_STATES && gConfig.stateColors[15].state == 255);
+    assert(gConfig.stateColors[15].day.b == 15 && gConfig.stateColors[15].night.r == 15);
+    assert(strlen(gConfig.fallbackToken) == 511);
+    assert(gConfig.hasLegacySoundConfig && gConfig.legacySound.enabled);
+    edited["sc"]["255"][0] = 256;
+    assert(!storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    assert(std::string(error) == "bad_state_colors" && gConfig.stateColors[15].day.r == 255);
+    edited["sc"]["255"][0] = 255;
+    edited["sc"]["2"].to<JsonArray>().add(0); // 17th entry must not be truncated.
+    assert(!storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    edited["sc"].remove("2");
+    for (const char *badKey : {"0", "1", "02", "256", "-2", "x"}) {
+        storagePopulateJson(edited);
+        edited["sc"].to<JsonObject>();
+        auto rgba = edited["sc"][badKey].to<JsonArray>();
+        for (int i = 0; i < 8; ++i) rgba.add(0);
+        assert(!storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    }
+    gConfig = legacy;
+    storagePopulateJson(edited);
+    assert(!edited.containsKey("sc"));
+    edited.remove("z");
+    assert(storageSaveConfigFromJson(edited.as<JsonVariantConst>(), true, error, sizeof(error)));
+    reboot(); assert(gConfig.stateColorCount == 0 && !gConfig.hasLegacySoundConfig);
+    storagePopulateJson(edited); assert(!edited.containsKey("z"));
+
+    std::cout << "PASS: maximum palette round-trip/validation/legacy config; " << powerCuts
               << " power cuts; temp/backup recovery; CRC; invalid-file preservation; "
                  "short writes; flush/rename failures; transactional save; WiFi sync\n";
 }

@@ -4,7 +4,6 @@
 #include <ArduinoJson.h>
 #include "config.h"
 #include "storage.h"
-#include "buzzer.h"
 #include "alerts.h"
 #include "leds.h"
 #include "logger.h"
@@ -450,7 +449,7 @@ void handleGetInfo()
     doc["maxLeds"] = MAX_LEDS;
     doc["mqttHost"] = gConfig.mqttHost;
     doc["mqttPort"] = gConfig.mqttPort ? gConfig.mqttPort : 1883;
-    doc["mqttTopic"] = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : "alerts/status";
+    doc["mqttTopic"] = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : DEFAULT_MQTT_TOPIC;
     doc["mqttUser"] = gConfig.mqttUser;
     doc["mqttPass"] = gConfig.mqttPass;
     doc["adminPassword"] = gConfig.adminPassword;
@@ -474,12 +473,6 @@ void handleGetInfo()
     doc["apSsid"] = provisioningApSsidForLabels();
     doc["apPassword"] = AP_PASSWORD;
     doc["ledPin"] = LED_PIN;
-    doc["buzzerEnabled"] = (bool)ALARMMINI_FEATURE_BUZZER;
-#if ALARMMINI_FEATURE_BUZZER
-    doc["buzzerPin"] = BUZZER_PIN;
-#else
-    doc["buzzerPin"] = -1;
-#endif
     JsonObject logCategoryBits = doc.createNestedObject("logCategoryBits");
     logCategoryBits["system"] = LOG_CAT_SYSTEM;
     logCategoryBits["wifi"] = LOG_CAT_WIFI;
@@ -559,37 +552,6 @@ void handleSaveSettings()
     }
 
     addCors();
-    gServer.send(200, "text/plain", "OK");
-}
-
-void handleTestBuzzer()
-{
-    if (!ensureAuthorized())
-        return;
-
-#if ALARMMINI_FEATURE_BUZZER
-    buzzerTest(gServer.arg("alert") == "1");
-    LOG_INFO(LOG_CAT_TEST, "Buzzer test requested");
-    addCors();
-    gServer.send(200, "text/plain", "OK");
-#else
-    addCors();
-    gServer.send(404, "application/json", "{\"ok\":false,\"error\":\"buzzer_disabled\"}");
-#endif
-}
-
-void handleTestRegionAlert()
-{
-    if (!ensureAuthorized())
-        return;
-
-    addCors();
-    if (!alertsStartSubscribedRegionTest())
-    {
-        gServer.send(400, "text/plain", "No subscribed regions");
-        return;
-    }
-
     gServer.send(200, "text/plain", "OK");
 }
 
@@ -825,7 +787,6 @@ void handleSelfTest()
     doc["heapFree"] = ESP.getFreeHeap();
     doc["heapFragPct"] = platformHeapFragmentationPct();
     doc["ledCount"] = gConfig.ledCount;
-    doc["buzzerEnabled"] = (bool)(ALARMMINI_FEATURE_BUZZER && gConfig.buzzer.enabled);
     doc["ok"] =
         (doc["wifiConnected"].as<bool>() || strlen(gConfig.wifiSsid) == 0) &&
         doc["webAssetsReady"].as<bool>() &&
@@ -865,8 +826,6 @@ void webserverInit()
     gServer.on("/api/logs", HTTP_GET, handleGetLogs);
     gServer.on("/api/logs/clear", HTTP_POST, handleClearLogs);
     gServer.on("/api/logs/disable", HTTP_POST, handleDisableLogs);
-    gServer.on("/api/testBuzzer", HTTP_GET, handleTestBuzzer);
-    gServer.on("/api/testRegionAlert", HTTP_GET, handleTestRegionAlert);
     gServer.on("/api/calibrate/led", HTTP_GET, handleCalibrateLed);
     gServer.on("/api/calibrate/done", HTTP_GET, handleCalibrateDone);
     gServer.on("/api/calibrate/save", HTTP_POST, handleSaveCalibrationLite);

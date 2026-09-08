@@ -1,4 +1,5 @@
 import { probeFallbackUrl } from "../../fallback-probe";
+import { supportsMultiState } from "../../fallback-settings";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -36,7 +37,8 @@ export async function POST(request: Request) {
     try { input = JSON.parse(body); } catch { throw new Error("Очікується JSON з URL."); }
     if (typeof input?.url !== "string") throw new Error("Введи URL для перевірки.");
     if (input.token !== undefined && typeof input.token !== "string") throw new Error("Токен має бути текстом.");
-    const url = await probeFallbackUrl(input.url, { token: input.token ?? "" });
+    if (input.firmwareVersion !== undefined && typeof input.firmwareVersion !== "string") throw new Error("Версія прошивки має бути текстом.");
+    const url = await probeFallbackUrl(input.url, { token: input.token ?? "", maxState: supportsMultiState(input.firmwareVersion ?? "") ? 255 : 1 });
     return reply({ ok: true, url, count: 25 });
   } catch (error) {
     return reply({ ok: false, error: error instanceof Error ? error.message : "Не вдалося перевірити URL." }, 422);

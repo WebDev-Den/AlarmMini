@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
 import { BoardIllustration } from "./board-illustration";
-import { normalizeFallbackUrl, normalizeFallbackToken, supportsFallback, supportsFallbackToken, verifyFallbackEndpoint } from "./fallback-settings";
+import { normalizeFallbackUrl, normalizeFallbackToken, supportsFallback, supportsFallbackToken, supportsMultiState, verifyFallbackEndpoint } from "./fallback-settings";
 import { FallbackUrlField } from "./fallback-url-field";
 import QRCode from "qrcode";
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
@@ -306,6 +306,20 @@ function buildConfigValidationErrors(cfg: any) {
     if (!isU8Color(cfg.c.n.c)) errors.push("c.n.c має бути [r,g,b,a], 0..255");
   }
 
+  if (cfg.sc !== undefined) {
+    if (!isObj(cfg.sc) || Object.keys(cfg.sc).length > 16) {
+      errors.push("sc має містити до 16 додаткових станів");
+    } else {
+      for (const [code, colors] of Object.entries(cfg.sc)) {
+        if (!/^(?:[2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/.test(code) ||
+            !Array.isArray(colors) || colors.length !== 8 ||
+            !colors.every((v) => Number.isInteger(v) && v >= 0 && v <= 255)) {
+          errors.push(`sc.${code}: код 2–255 та 8 цілих значень 0–255 (день RGBA, ніч RGBA)`);
+        }
+      }
+    }
+  }
+
   if (!isObj(cfg.n)) {
     errors.push("n (нічний режим) має бути об'єктом");
   } else {
@@ -322,15 +336,18 @@ function buildConfigValidationErrors(cfg: any) {
     }
   }
 
-  if (!isObj(cfg.z) || !isBool(cfg.z.e)) {
-    errors.push("z (buzzer) має містити поле e:boolean");
-  } else {
-    if (!Array.isArray(cfg.z.v) || cfg.z.v.length !== 2 || !inRange(cfg.z.v[0], 0, 100) || !inRange(cfg.z.v[1], 0, 100)) {
-      errors.push("z.v має бути [dayVol,nightVol] у діапазоні 0..100");
+  if (cfg.z !== undefined) {
+    if (!isObj(cfg.z) || !isBool(cfg.z.e)) {
+      errors.push("z (buzzer) має містити поле e:boolean");
+    } else {
+      if (!Array.isArray(cfg.z.v) || cfg.z.v.length !== 2 || !inRange(cfg.z.v[0], 0, 100) || !inRange(cfg.z.v[1], 0, 100)) {
+        errors.push("z.v має бути [dayVol,nightVol] у діапазоні 0..100");
+      }
+      if (!Array.isArray(cfg.z.r) || !cfg.z.r.every((x: unknown) => Number.isInteger(asNum(x)) && asNum(x) >= 0 && asNum(x) <= 24)) {
+        errors.push("z.r має бути масивом індексів регіонів 0..24");
+      }
     }
-    if (!Array.isArray(cfg.z.r) || !cfg.z.r.every((x: unknown) => Number.isInteger(asNum(x)) && asNum(x) >= 0 && asNum(x) <= 24)) {
-      errors.push("z.r має бути масивом індексів регіонів 0..24");
-    }
+
   }
 
   if (!isObj(cfg.k) || !isBool(cfg.k.e)) {
@@ -399,6 +416,9 @@ function collectDiffPaths(expected: any, actual: any, path = ""): string[] {
   }
 
   if (typeof expected === "object") {
+    if (p === "$" && JSON.stringify(Object.keys(expected.sc || {}).sort()) !== JSON.stringify(Object.keys(actual.sc || {}).sort())) {
+      diffs.push("$.sc");
+    }
     // Compare only keys that existed in backup config.
     // Device firmware may append runtime/service fields after restore.
     const keys = Object.keys(expected).sort();
@@ -955,13 +975,15 @@ export default function Page() {
   }
 
   async function sendConfigChunked(configObj: any, label = "config") {
+    if (Object.keys(configObj.sc || {}).length || configObj.m?.t === "ukraine/alarm/map/full_v2") {
+      const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+      if (!supportsMultiState(String(device.fw))) throw new Error("Для нових станів і топіка full_v2 потрібна прошивка 2.1.0 або новіша.");
+    }
     if ((label === "manual_config" || (label === "mqtt" && (configObj.fu !== downloadedConfig?.fu || configObj.ft !== downloadedConfig?.ft))) && configObj.fu) {
       const token = normalizeFallbackToken(String(configObj.ft ?? ""));
-      if (token) {
-        const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
-        if (!supportsFallbackToken(String(device.fw))) throw new Error("Для токена резервного API потрібна прошивка 2.0.9 або новіша.");
-      }
-      configObj = { ...configObj, fu: await verifyFallbackEndpoint(String(configObj.fu), token), ...(token ? { ft: token } : {}) };
+      const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+      if (token && !supportsFallbackToken(String(device.fw))) throw new Error("Для токена резервного API потрібна прошивка 2.0.9 або новіша.");
+      configObj = { ...configObj, fu: await verifyFallbackEndpoint(String(configObj.fu), token, undefined, String(device.fw)), ...(token ? { ft: token } : {}) };
     }
     const payload = new TextEncoder().encode(JSON.stringify(configObj));
     const chunkSize = 64;
@@ -1152,9 +1174,9 @@ export default function Page() {
     await cmdGetInfo();
   }
 
-  async function saveFallbackUrl(value: string, tokenValue = "") {
+  async function saveFallbackUrl(value: string, tokenValue = "", firmwareVersion = "") {
     const token = value.trim() ? normalizeFallbackToken(tokenValue) : "";
-    const url = await verifyFallbackEndpoint(value, token);
+    const url = await verifyFallbackEndpoint(value, token, undefined, firmwareVersion);
     await sendAndWait(JSON.stringify({ cmd: "fallback_set", url, token }), (j) => j?.status === "ACK" && j?.cmd === "fallback_set", 10000);
     const verified = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
     if (String(verified.config.fu ?? "") !== url) throw new Error("Не вдалося підтвердити збереження резервного URL.");
@@ -1174,7 +1196,7 @@ export default function Page() {
       if (token && !supportsFallbackToken(String(device.fw))) throw new Error("Для токена резервного API потрібна прошивка 2.0.9 або новіша.");
       await snapshotCurrentConfigBeforeWrite();
       setStatus(url ? "Перевіряємо резервний URL перед записом…" : "Вимикаємо резервний API…");
-      await saveFallbackUrl(url, token);
+      await saveFallbackUrl(url, token, String(device.fw));
       setStatus(url ? "Резервний URL збережено й перевірено." : "Резервний API вимкнено.");
     } catch (error) {
       setFallbackUrl(url);
@@ -1367,10 +1389,11 @@ export default function Page() {
     resetPipeline(restoreSettings);
     if (reserveUrl) {
       setFlashStatus("Перевіряємо резервний URL перед прошиванням…");
-      await verifyFallbackEndpoint(reserveUrl, reserveToken);
+      await verifyFallbackEndpoint(reserveUrl, reserveToken, undefined, selectedRelease?.tag_name);
     }
     let backup: any = null;
     let expectedHostname = "";
+    let backupFirmware = "";
     if (restoreSettings) {
       setPipelineStep("backup", "active");
       setFlashStatus("Зберігаємо налаштування саме підключеної плати…");
@@ -1378,6 +1401,7 @@ export default function Page() {
         await ensureConnected(false);
         const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
         expectedHostname = String(device.hostname || "");
+        backupFirmware = String(device.fw || "");
         const obj = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
         backup = obj.config;
         if (!isSafeBackupConfig(backup)) throw new Error("Конфігурація неповна або несумісна.");
@@ -1391,6 +1415,10 @@ export default function Page() {
       }
     }
     if (backup?.ft && !supportsFallbackToken(selectedRelease?.tag_name ?? "")) throw new Error("Копія налаштувань містить токен резервного API. Вибери прошивку 2.0.9 або новішу, щоб зберегти його.");
+    if ((Object.keys(backup?.sc || {}).length || backup?.m?.t === "ukraine/alarm/map/full_v2") && !supportsMultiState(selectedRelease?.tag_name ?? "")) throw new Error("Копія містить додаткові кольори або топік full_v2. Вибери прошивку 2.1.0 або новішу, щоб зберегти їх.");
+    if (backup?.fu && !reserveUrl && supportsMultiState(backupFirmware) && !supportsMultiState(selectedRelease?.tag_name ?? "")) {
+      await verifyFallbackEndpoint(String(backup.fu), String(backup.ft ?? ""), undefined, selectedRelease?.tag_name);
+    }
     const flashPort = rememberedPortRef.current;
     await disconnectPort();
     setPipelineStep("flash", "active");
@@ -1438,7 +1466,7 @@ export default function Page() {
     if (reserveUrl) {
       setPipelineStep("verify", "active");
       setFlashStatus("Зберігаємо резервний URL і перевіряємо його на платі…");
-      await saveFallbackUrl(reserveUrl, reserveToken);
+      await saveFallbackUrl(reserveUrl, reserveToken, selectedRelease?.tag_name);
       setPipelineStep("verify", "done");
     }
     await cmdGetInfo();
@@ -1535,9 +1563,15 @@ export default function Page() {
               <label className={`mode-option ${newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={newDeviceMode} onChange={() => {setNewDeviceMode(true);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Перше встановлення</strong><small>Для порожньої плати. Наявні налаштування буде видалено.</small></span></label>
             </fieldset>
             {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
+            <div className="mqtt-topics">
+              <strong>MQTT: два топіки для різних прошивок</strong>
+              <p><code>ukraine/alarm/map/full</code> — старий топік: 0 — відбій, 1 — тривога. Залишається для плат зі старою прошивкою.</p>
+              <p><code>ukraine/alarm/map/full_v2</code> — новий топік зі станами 0–255. Потрібна прошивка 2.1.0 або новіша. У вебпанелі плати можна задати денний і нічний колір для 0, 1 та ще 16 станів через «+».</p>
+              <p className="hint">При оновленні зберігається твій поточний топік. Для нових станів після оновлення вибери full_v2 у налаштуваннях MQTT. Звук у новій прошивці прибрано.</p>
+            </div>
             <details className="reserve-settings"><summary>Резервний канал даних <span>Необов’язково</span></summary>
-              <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} token={installFallbackToken} onTokenChange={setInstallFallbackToken} disabled={flashBusy || waitActive || fallbackSaving} />
-              <p className="hint">Відповідь: JSON-масив із 25 чисел 0 або 1 у порядку областей MQTT. Починаючи з прошивки 2.0.8, плата опитуватиме його кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.</p>
+              <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} token={installFallbackToken} onTokenChange={setInstallFallbackToken} firmwareVersion={selectedRelease?.tag_name} disabled={flashBusy || waitActive || fallbackSaving} />
+              <p className="hint">JSON-масив із 25 чисел у порядку областей MQTT: 0/1 для старих прошивок, 0–255 починаючи з 2.1.0. Опитування кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.</p>
               <p className="hint">Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.</p>
               <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">Порядок областей і приклад відповіді ↗</a>
             </details>
@@ -1723,7 +1757,8 @@ export default function Page() {
               </label>
               <label>
                 Topic
-                <input value={mqttTopic} onChange={(e) => setMqttTopic(e.target.value)} placeholder="alarmmini/device" />
+                <input value={mqttTopic} onChange={(e) => setMqttTopic(e.target.value)} placeholder="ukraine/alarm/map/full_v2" />
+                <span className="hint">Старий: ukraine/alarm/map/full (0/1). Новий: ukraine/alarm/map/full_v2 (0–255, прошивка від 2.1.0).</span>
               </label>
               <label>
                 Username
@@ -1738,8 +1773,8 @@ export default function Page() {
                   Зберегти MQTT
                 </button>
               </div>
-              <FallbackUrlField id="fallback-url" value={fallbackUrl} onChange={setFallbackUrl} token={fallbackToken} onTokenChange={setFallbackToken} disabled={flashBusy || waitActive || fallbackSaving} />
-              <p className="hint">25 значень 0/1 у порядку MQTT. Очисти поле й збережи, щоб вимкнути резерв.</p>
+              <FallbackUrlField id="fallback-url" value={fallbackUrl} onChange={setFallbackUrl} token={fallbackToken} onTokenChange={setFallbackToken} firmwareVersion={info.fw} disabled={flashBusy || waitActive || fallbackSaving} />
+              <p className="hint">25 значень у порядку MQTT: 0/1 або 0–255 з прошивкою 2.1.0+. Очисти поле й збережи, щоб вимкнути резерв.</p>
               <button className="btn" disabled={flashBusy || fallbackSaving || portState !== "connected"} onClick={() => void cmdSetFallbackUrl().catch(showActionError)}>{fallbackSaving ? "Перевіряємо й зберігаємо…" : "Зберегти резервний URL"}</button>
             </div>
           )}

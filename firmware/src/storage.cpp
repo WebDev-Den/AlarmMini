@@ -10,7 +10,6 @@ namespace
 constexpr char CONFIG_PATH[] = "/amcfg.json";
 constexpr char CONFIG_TMP_PATH[] = "/amcfg.tmp";
 constexpr char CONFIG_BAK_PATH[] = "/amcfg.bak";
-constexpr int DEFAULT_BUZZER_REGION_INDEX = 20;
 constexpr uint32_t CONFIG_MAGIC = 0x414D4346UL; // AMCF
 constexpr size_t WIFI_SSID_MAX_BYTES = 32;
 constexpr uint16_t LOG_MASK_DEFAULT_RUNTIME =
@@ -56,6 +55,32 @@ bool validateColorArray(JsonVariantConst value)
     return true;
 }
 
+bool stateColorKey(const char *key, uint8_t &state) {
+    if (!key || *key < '1' || *key > '9') return false;
+    unsigned value = 0;
+    for (const char *p = key; *p; ++p) {
+        if (*p < '0' || *p > '9') return false;
+        value = value * 10 + unsigned(*p - '0');
+        if (value > 255) return false;
+    }
+    if (value < 2) return false;
+    state = uint8_t(value);
+    return true;
+}
+
+bool validateStateColors(JsonVariantConst value) {
+    const JsonObjectConst colors = value.as<JsonObjectConst>();
+    if (colors.isNull() || colors.size() > MAX_CUSTOM_STATES) return false;
+    for (JsonPairConst entry : colors) {
+        uint8_t state;
+        const JsonArrayConst rgba = entry.value().as<JsonArrayConst>();
+        if (!stateColorKey(entry.key().c_str(), state) || rgba.isNull() || rgba.size() != 8) return false;
+        for (JsonVariantConst channel : rgba)
+            if (!channel.is<uint8_t>()) return false;
+    }
+    return true;
+}
+
 bool validateFullConfigJson(JsonVariantConst cfg, char *error, size_t errorSize)
 {
     auto setErr = [&](const char *code)
@@ -86,6 +111,11 @@ bool validateFullConfigJson(JsonVariantConst cfg, char *error, size_t errorSize)
         return false;
     }
 
+    if (cfg.containsKey("sc") && !validateStateColors(cfg["sc"])) {
+        setErr("bad_state_colors");
+        return false;
+    }
+
     JsonObjectConst n;
     if (!readObject(cfg, "n", n))
     {
@@ -103,18 +133,21 @@ bool validateFullConfigJson(JsonVariantConst cfg, char *error, size_t errorSize)
         return false;
     }
 
-    JsonObjectConst z;
-    if (!readObject(cfg, "z", z))
-    {
-        setErr("miss_z");
-        return false;
-    }
-    JsonArrayConst zVol = z["v"].as<JsonArrayConst>();
-    JsonArrayConst zReg = z["r"].as<JsonArrayConst>();
-    if (z["e"].isNull() || zVol.isNull() || zVol.size() != 2 || zReg.isNull())
-    {
-        setErr("bad_z");
-        return false;
+    // Sound fields are optional legacy backup data.
+    if (cfg.containsKey("z")) {
+        JsonObjectConst z;
+        if (!readObject(cfg, "z", z))
+        {
+            setErr("miss_z");
+            return false;
+        }
+        JsonArrayConst zVol = z["v"].as<JsonArrayConst>();
+        JsonArrayConst zReg = z["r"].as<JsonArrayConst>();
+        if (z["e"].isNull() || zVol.isNull() || zVol.size() != 2 || zReg.isNull())
+        {
+            setErr("bad_z");
+            return false;
+        }
     }
 
     JsonObjectConst k;
@@ -324,13 +357,6 @@ void applyDefaults()
     gConfig.night.pulseOnAlert = false;
     gConfig.night.pulseOnClear = false;
 
-    gConfig.buzzer.enabled = true;
-    gConfig.buzzer.dayVolume = 80;
-    gConfig.buzzer.nightVolume = 30;
-    for (int i = 0; i < REGIONS_COUNT; i++)
-        gConfig.buzzer.regions[i] = false;
-    if (DEFAULT_BUZZER_REGION_INDEX >= 0 && DEFAULT_BUZZER_REGION_INDEX < REGIONS_COUNT)
-        gConfig.buzzer.regions[DEFAULT_BUZZER_REGION_INDEX] = true;
     gConfig.offline.autonomousSeconds = 60;
     gConfig.offline.pulseAmplitudePct = 60;
     gConfig.offline.pulseDurationMs = 2400;
@@ -342,7 +368,7 @@ void applyDefaults()
     gConfig.blink.nightIntensity = 30;
 
     gConfig.mqttPort = 1883;
-    copyBounded(gConfig.mqttTopic, MQTT_TOPIC_MAXLEN, "alerts/status");
+    copyBounded(gConfig.mqttTopic, MQTT_TOPIC_MAXLEN, DEFAULT_MQTT_TOPIC);
     gConfig.logMask = LOG_MASK_DEFAULT_RUNTIME;
 }
 
@@ -551,9 +577,11 @@ void sanitizeConfig()
     gConfig.night.maxBrightness = clampU8(gConfig.night.maxBrightness, 0, NIGHT_BRIGHTNESS_SAFE_CAP);
     gConfig.nightMode.alertColor.a = min<uint8_t>(gConfig.nightMode.alertColor.a, gConfig.night.maxBrightness);
     gConfig.nightMode.clearColor.a = min<uint8_t>(gConfig.nightMode.clearColor.a, gConfig.night.maxBrightness);
+    for (uint8_t i = 0; i < gConfig.stateColorCount; ++i)
+        gConfig.stateColors[i].night.a = min<uint8_t>(gConfig.stateColors[i].night.a, gConfig.night.maxBrightness);
 
-    gConfig.buzzer.dayVolume = clampU8(gConfig.buzzer.dayVolume, 0, 100);
-    gConfig.buzzer.nightVolume = clampU8(gConfig.buzzer.nightVolume, 0, 100);
+    gConfig.legacySound.dayVolume = clampU8(gConfig.legacySound.dayVolume, 0, 100);
+    gConfig.legacySound.nightVolume = clampU8(gConfig.legacySound.nightVolume, 0, 100);
 
     gConfig.blink.dayIntensity = clampU8(gConfig.blink.dayIntensity, 0, 100);
     gConfig.blink.nightIntensity = clampU8(gConfig.blink.nightIntensity, 0, 100);
@@ -578,6 +606,7 @@ void storageApplyJson(JsonVariantConst doc)
     JsonObjectConst compactNightColors = compactColors["n"];
     JsonObjectConst compactNight = doc["n"];
     JsonObjectConst compactBuzzer = doc["z"];
+    gConfig.hasLegacySoundConfig = doc.containsKey("z");
     JsonObjectConst compactBlink = doc["k"];
     JsonObjectConst compactOffline = doc["o"];
     JsonObjectConst compactWifi = doc["w"];
@@ -587,6 +616,19 @@ void storageApplyJson(JsonVariantConst doc)
     gConfig.dayMode.clearColor = readColor(compactDay["c"], doc["dayClearR"], doc["dayClearG"], doc["dayClearB"], doc["dayClearA"]);
     gConfig.nightMode.alertColor = readColor(compactNightColors["a"], doc["nightAlertR"], doc["nightAlertG"], doc["nightAlertB"], doc["nightAlertA"]);
     gConfig.nightMode.clearColor = readColor(compactNightColors["c"], doc["nightClearR"], doc["nightClearG"], doc["nightClearB"], doc["nightClearA"]);
+
+    // Optional extension: importing an old full config clears custom overrides.
+    gConfig.stateColorCount = 0;
+    memset(gConfig.stateColors, 0, sizeof(gConfig.stateColors));
+    if (validateStateColors(doc["sc"])) {
+        for (JsonPairConst entry : doc["sc"].as<JsonObjectConst>()) {
+            StateColorConfig &color = gConfig.stateColors[gConfig.stateColorCount++];
+            stateColorKey(entry.key().c_str(), color.state);
+            JsonArrayConst rgba = entry.value().as<JsonArrayConst>();
+            color.day = {readU8(rgba[0]), readU8(rgba[1]), readU8(rgba[2]), readU8(rgba[3])};
+            color.night = {readU8(rgba[4]), readU8(rgba[5]), readU8(rgba[6]), readU8(rgba[7])};
+        }
+    }
 
     JsonArrayConst nightStart = compactNight["s"];
     JsonArrayConst nightEnd = compactNight["x"];
@@ -602,9 +644,9 @@ void storageApplyJson(JsonVariantConst doc)
     gConfig.night.pulseOnClear = !nightPulse.isNull() && nightPulse.size() > 1 ? readBool(nightPulse[1]) : readBool(doc["nightPulseClear"]);
 
     JsonArrayConst buzzerVolume = compactBuzzer["v"];
-    gConfig.buzzer.enabled = compactBuzzer.containsKey("e") ? readBool(compactBuzzer["e"], true) : readBool(doc["buzzerEnabled"], true);
-    gConfig.buzzer.dayVolume = !buzzerVolume.isNull() && buzzerVolume.size() > 0 ? readU8(buzzerVolume[0], 80) : readU8(doc["buzzerDayVol"], 80);
-    gConfig.buzzer.nightVolume = !buzzerVolume.isNull() && buzzerVolume.size() > 1 ? readU8(buzzerVolume[1], 30) : readU8(doc["buzzerNightVol"], 30);
+    gConfig.legacySound.enabled = compactBuzzer.containsKey("e") ? readBool(compactBuzzer["e"], true) : readBool(doc["buzzerEnabled"], true);
+    gConfig.legacySound.dayVolume = !buzzerVolume.isNull() && buzzerVolume.size() > 0 ? readU8(buzzerVolume[0], 80) : readU8(doc["buzzerDayVol"], 80);
+    gConfig.legacySound.nightVolume = !buzzerVolume.isNull() && buzzerVolume.size() > 1 ? readU8(buzzerVolume[1], 30) : readU8(doc["buzzerNightVol"], 30);
 
     JsonArrayConst blinkIntensity = compactBlink["i"];
     gConfig.blink.enabled = compactBlink.containsKey("e") ? readBool(compactBlink["e"], true) : readBool(doc["blinkEnabled"], true);
@@ -657,7 +699,7 @@ void storageApplyJson(JsonVariantConst doc)
     }
 
     for (int i = 0; i < REGIONS_COUNT; i++)
-        gConfig.buzzer.regions[i] = false;
+        gConfig.legacySound.regions[i] = false;
 
     JsonArrayConst buzCompact = compactBuzzer["r"].as<JsonArrayConst>();
     JsonArrayConst buzCurrent = doc["buzzerRegionIds"].as<JsonArrayConst>();
@@ -668,7 +710,7 @@ void storageApplyJson(JsonVariantConst doc)
     {
         const int idx = regionIndexFromVariant(v);
         if (idx >= 0)
-            gConfig.buzzer.regions[idx] = true;
+            gConfig.legacySound.regions[idx] = true;
     }
 
     sanitizeConfig();
@@ -706,6 +748,19 @@ void storagePopulateJson(JsonDocument &doc)
     nightClear.add(gConfig.nightMode.clearColor.b);
     nightClear.add(gConfig.nightMode.clearColor.a);
 
+    if (gConfig.stateColorCount) {
+        JsonObject custom = doc.createNestedObject("sc");
+        for (uint8_t i = 0; i < gConfig.stateColorCount; ++i) {
+            const StateColorConfig &color = gConfig.stateColors[i];
+            char key[4];
+            snprintf(key, sizeof(key), "%u", unsigned(color.state));
+            JsonArray rgba = custom.createNestedArray(key);
+            for (const Color &mode : {color.day, color.night}) {
+                rgba.add(mode.r); rgba.add(mode.g); rgba.add(mode.b); rgba.add(mode.a);
+            }
+        }
+    }
+
     JsonObject night = doc["n"].to<JsonObject>();
     night["e"] = gConfig.night.enabled;
     JsonArray nightStart = night["s"].to<JsonArray>();
@@ -719,16 +774,18 @@ void storagePopulateJson(JsonDocument &doc)
     nightPulse.add(gConfig.night.pulseOnAlert);
     nightPulse.add(gConfig.night.pulseOnClear);
 
-    JsonObject buzzer = doc["z"].to<JsonObject>();
-    buzzer["e"] = gConfig.buzzer.enabled;
-    JsonArray buzzerVolume = buzzer["v"].to<JsonArray>();
-    buzzerVolume.add(gConfig.buzzer.dayVolume);
-    buzzerVolume.add(gConfig.buzzer.nightVolume);
-    JsonArray buzzerRegions = buzzer["r"].to<JsonArray>();
-    for (int i = 0; i < REGIONS_COUNT; i++)
-    {
-        if (gConfig.buzzer.regions[i])
-            buzzerRegions.add(i);
+    if (gConfig.hasLegacySoundConfig) {
+        JsonObject buzzer = doc["z"].to<JsonObject>();
+        buzzer["e"] = gConfig.legacySound.enabled;
+        JsonArray buzzerVolume = buzzer["v"].to<JsonArray>();
+        buzzerVolume.add(gConfig.legacySound.dayVolume);
+        buzzerVolume.add(gConfig.legacySound.nightVolume);
+        JsonArray buzzerRegions = buzzer["r"].to<JsonArray>();
+        for (int i = 0; i < REGIONS_COUNT; i++)
+        {
+            if (gConfig.legacySound.regions[i])
+                buzzerRegions.add(i);
+        }
     }
 
     JsonObject blink = doc["k"].to<JsonObject>();

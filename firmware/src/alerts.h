@@ -12,9 +12,8 @@
 #include "logger.h"
 #include "fallback_http.h"
 
-bool gAlerts[REGIONS_COUNT]         = {false};
-bool gPrevAlerts[REGIONS_COUNT]     = {false};
-bool gMqttAlerts[REGIONS_COUNT]     = {false};
+AlertState gAlerts[REGIONS_COUNT]     = {};
+AlertState gMqttAlerts[REGIONS_COUNT] = {};
 bool gFetchOk                       = false;
 bool gAlertsChanged                 = false;
 bool gMqttConnected                 = false;
@@ -26,9 +25,6 @@ unsigned long gLastFallbackSuccessAt = 0;
 uint32_t gFallbackRequests = 0;
 uint32_t gFallbackErrors = 0;
 int gFallbackHttpStatus = 0;
-bool gAlertTestActive               = false;
-bool gAlertTestRegions[REGIONS_COUNT] = {false};
-unsigned long gAlertTestStartedAt   = 0;
 unsigned long gRegionStateChangedAt[REGIONS_COUNT] = {0};
 uint32_t gMqttReconnectAttempts = 0;
 uint32_t gMqttReconnectSuccess = 0;
@@ -224,12 +220,13 @@ static bool _loadMqttSnapshot()
     JsonArrayConst arr = doc["states"].as<JsonArrayConst>();
     if (arr.isNull() || arr.size() != REGIONS_COUNT) return false;
     for (JsonVariantConst value : arr) {
-        if (!value.is<bool>()) return false;
+        // Read old boolean snapshots as well as the new numeric state codes.
+        if (!value.is<bool>() && !value.is<uint8_t>()) return false;
     }
 
     bool anyChanged = false;
     for (int i = 0; i < REGIONS_COUNT; i++) {
-        const bool v = (i < (int)arr.size()) ? arr[i].as<bool>() : false;
+        const AlertState v = arr[i].is<bool>() ? (arr[i].as<bool>() ? 1 : 0) : arr[i].as<uint8_t>();
         if (gMqttAlerts[i] != v) anyChanged = true;
         gMqttAlerts[i] = v;
     }
@@ -274,17 +271,13 @@ static void _formatLogClock(char* buffer, size_t size)
     snprintf(buffer, size, "uptime %02lu:%02lu:%02lu", hours, minutes, secs);
 }
 
-static void _applyEffectiveAlerts(const bool* nextStates) {
+static void _applyEffectiveAlerts(const AlertState* nextStates) {
     unsigned long now = millis();
 
-    // Preserve the state before the first unconsumed change. Test updates and
-    // MQTT callbacks can both run before buzzerHandle in one loop iteration.
-    if (!gAlertsChanged) {
-        memcpy(gPrevAlerts, gAlerts, sizeof(gPrevAlerts));
-    }
+    gAlertsChanged = false;
 
     for (int i = 0; i < REGIONS_COUNT; i++) {
-        bool next = nextStates[i];
+        AlertState next = nextStates[i];
         if (next != gAlerts[i]) {
             gAlertsChanged = true;
             gRegionStateChangedAt[i] = now;
@@ -294,47 +287,7 @@ static void _applyEffectiveAlerts(const bool* nextStates) {
 }
 
 static void _rebuildEffectiveAlerts() {
-    bool effective[REGIONS_COUNT];
-    unsigned long now = millis();
-    for (int i = 0; i < REGIONS_COUNT; i++) {
-        effective[i] = gMqttAlerts[i];
-    }
-
-    if (gAlertTestActive) {
-        unsigned long elapsed = now - gAlertTestStartedAt;
-        bool alertPhase = elapsed < 30000UL;
-        bool clearPhase = elapsed >= 30000UL && elapsed < 60000UL;
-
-        if (!alertPhase && !clearPhase) {
-            gAlertTestActive = false;
-        } else {
-            for (int i = 0; i < REGIONS_COUNT; i++) {
-                if (gAlertTestRegions[i]) {
-                    effective[i] = alertPhase;
-                }
-            }
-        }
-    }
-
-    _applyEffectiveAlerts(effective);
-}
-
-bool alertsStartSubscribedRegionTest() {
-    bool hasAny = false;
-    for (int i = 0; i < REGIONS_COUNT; i++) {
-        gAlertTestRegions[i] = gConfig.buzzer.regions[i];
-        hasAny = hasAny || gAlertTestRegions[i];
-    }
-
-    if (!hasAny) {
-        return false;
-    }
-
-    gAlertTestActive = true;
-    gAlertTestStartedAt = millis();
-    _rebuildEffectiveAlerts();
-    LOG_INFO(LOG_CAT_TEST, "Region alert simulation started: 30s alert + 30s clear");
-    return true;
+    _applyEffectiveAlerts(gMqttAlerts);
 }
 
 void _mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -347,7 +300,7 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, payload, length) || !doc.is<JsonArray>()) {
         gMqttPayloadErrors++;
-        LOG_WARN(LOG_CAT_MQTT, "Invalid payload, expected [0,1,0,...]");
+        LOG_WARN(LOG_CAT_MQTT, "Invalid payload, expected 25 state codes (0..255)");
         return;
     }
 
@@ -358,7 +311,7 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
         return;
     }
     for (JsonVariantConst value : arr) {
-        if (!value.is<bool>() && !(value.is<int>() && (value.as<int>() == 0 || value.as<int>() == 1))) {
+        if (!value.is<bool>() && !value.is<uint8_t>()) {
             gMqttPayloadErrors++;
             LOG_WARN(LOG_CAT_MQTT, "Invalid region state; retaining previous states");
             return;
@@ -368,12 +321,12 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     _formatLogClock(eventTime, sizeof(eventTime));
 
     for (int i = 0; i < REGIONS_COUNT; i++) {
-        bool v = (i < (int)arr.size()) && arr[i].as<bool>();
+        const AlertState v = arr[i].is<bool>() ? (arr[i].as<bool>() ? 1 : 0) : arr[i].as<uint8_t>();
         if (v != gMqttAlerts[i]) {
             _mqttSnapshotDirty = true;
-            LOG_INFO(LOG_CAT_MQTT, "Region '%s' -> %s at %s",
+            LOG_INFO(LOG_CAT_MQTT, "Region '%s' -> state %u at %s",
                      REGIONS[i],
-                     v ? "ALERT" : "CLEAR",
+                     unsigned(v),
                      eventTime);
         }
         gMqttAlerts[i] = v;
@@ -449,7 +402,7 @@ bool _mqttConnect() {
     if (ok) {
         // A new connection must receive a payload before replacing the reserve.
         gLastMqttMessageAt = 0;
-        const char* t = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : "alerts/status";
+        const char* t = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : DEFAULT_MQTT_TOPIC;
         if (!_mqtt.subscribe(t, 1)) {
             gMqttSubscriptionRefreshFailures++;
             LOG_WARN(LOG_CAT_MQTT, "Subscribe failed for topic: '%s'", t);
@@ -489,7 +442,7 @@ static bool _mqttRefreshStatusSubscription(unsigned long now) {
     }
     _mqttLastStatusRefreshAt = now;
 
-    const char* t = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : "alerts/status";
+    const char* t = strlen(gConfig.mqttTopic) ? gConfig.mqttTopic : DEFAULT_MQTT_TOPIC;
     // Re-subscribing delivers retained state without an unsubscribe delivery gap.
     if (_mqtt.subscribe(t, 1)) {
         gMqttSubscriptionRefreshes++;
@@ -564,10 +517,6 @@ void alertsReloadClientConfig() {
 
 void alertsHandle() {
     unsigned long now = millis();
-
-    if (gAlertTestActive) {
-        _rebuildEffectiveAlerts();
-    }
 
     if (!_mqttSnapshotLoadedOnce) {
         _mqttSnapshotLoadedOnce = true;
@@ -745,7 +694,7 @@ void alertsFallbackTick() {
     FallbackHttpResult response;
     if (fallbackHttpTakeResult(response) && response.generation == generation && strcmp(response.url, configuredUrl) == 0 && configuredUrl[0]) {
         gFallbackHttpStatus = response.status;
-        bool states[REGIONS_COUNT];
+        AlertState states[REGIONS_COUNT];
         if (response.status == 200 && fallbackContract::parseStates(response.body, states, REGIONS_COUNT)) {
             // A delayed HTTP response must never overwrite a recovered MQTT stream.
             if (!alertsMqttFresh(now)) {

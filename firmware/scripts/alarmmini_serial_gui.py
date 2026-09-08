@@ -8,6 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import serial
 from serial.tools import list_ports
+from config_preserve_flash import _collect_diffs
 
 
 APP_TITLE = "AlarmMini Serial Control"
@@ -84,6 +85,9 @@ class App(tk.Tk):
         self.worker = SerialWorker()
         self.last_config_json = None
         self.last_info_json = None
+        self.config_upload = None
+        self.config_upload_expected = None
+        self.config_upload_deadline = 0.0
 
         self.port_var = tk.StringVar()
         self.status_var = tk.StringVar(value="Disconnected")
@@ -275,6 +279,8 @@ class App(tk.Tk):
         self.log_line({"event": "ui", "message": f"connected {port}"})
 
     def disconnect(self):
+        self.config_upload = None
+        self.config_upload_expected = None
         self.worker.close()
         self.status_var.set("Disconnected")
         self.log_line({"event": "ui", "message": "disconnected"})
@@ -295,7 +301,34 @@ class App(tk.Tk):
         payload = self._editor_json_minified()
         if payload is None:
             return
-        self._send_command("set:config " + payload)
+        if self.config_upload is not None or self.config_upload_expected is not None:
+            return
+        raw = payload.encode("utf-8")
+        if len(raw) > 6144:
+            messagebox.showerror(APP_TITLE, "Config exceeds the firmware limit of 6144 bytes.")
+            return
+        commands = [("cmd=set_begin", "set_begin")]
+        commands += [("data=" + raw[i:i + 64].hex(), "set_data") for i in range(0, len(raw), 64)]
+        commands.append(("cmd=set_end", "set_end"))
+        self.config_upload = iter(commands)
+        self.config_upload_expected = json.loads(payload)
+        self._advance_config_upload()
+
+    def _advance_config_upload(self):
+        command = next(self.config_upload, None)
+        self.config_upload_deadline = time.monotonic() + 25
+        if command is None:
+            self.config_upload = None
+            self._send_command("get:config", upload=True)
+        else:
+            line, self.config_upload_ack = command
+            self._send_command(line, upload=True)
+
+    def _fail_config_upload(self, reason):
+        self.config_upload = None
+        self.config_upload_expected = None
+        self.log_line({"error": reason})
+        messagebox.showerror(APP_TITLE, reason)
 
     def cmd_set_wifi(self):
         ssid = self.wifi_ssid_var.get().strip()
@@ -306,13 +339,20 @@ class App(tk.Tk):
         payload = json.dumps({"ssid": ssid, "password": password}, ensure_ascii=False)
         self._send_command("set:wifi " + payload)
 
-    def _send_command(self, cmd: str):
+    def _send_command(self, cmd: str, upload=False):
+        if self.config_upload_expected is not None and not upload:
+            messagebox.showwarning(APP_TITLE, "Wait for config upload and verification to finish.")
+            return
         if not self.worker.is_open():
+            self.config_upload = None
+            self.config_upload_expected = None
             messagebox.showwarning(APP_TITLE, "Connect to COM first.")
             return
         try:
             self.worker.send_line(cmd)
         except Exception as exc:
+            self.config_upload = None
+            self.config_upload_expected = None
             messagebox.showerror(APP_TITLE, f"Send failed: {exc}")
             return
         self.log_line({"tx": cmd})
@@ -327,6 +367,8 @@ class App(tk.Tk):
                     self._handle_rx_line(item["text"])
         except queue.Empty:
             pass
+        if self.config_upload_expected is not None and time.monotonic() > self.config_upload_deadline:
+            self._fail_config_upload("Config upload or readback timed out. Read the board config before retrying.")
         self.after(80, self._poll_serial_queue)
 
     def _handle_rx_line(self, line: str):
@@ -337,8 +379,20 @@ class App(tk.Tk):
             return
 
         event = obj.get("event")
+        if self.config_upload is not None:
+            if obj.get("status") == "NACK":
+                self._fail_config_upload(f"Config upload rejected: {obj.get('reason', obj.get('cmd', 'NACK'))}")
+            elif obj.get("status") == "ACK" and obj.get("cmd") == self.config_upload_ack:
+                self._advance_config_upload()
         if event == "config" and isinstance(obj.get("config"), dict):
             self.last_config_json = obj["config"]
+            if self.config_upload is None and self.config_upload_expected is not None:
+                diffs = _collect_diffs(self.config_upload_expected, self.last_config_json)
+                if diffs:
+                    self._fail_config_upload("Config verification failed: " + ", ".join(diffs[:8]))
+                else:
+                    self.config_upload_expected = None
+                    self.log_line({"event": "ui", "message": "Config saved and verified"})
         if event == "device_info":
             self.last_info_json = obj
             self._update_info_fields(obj)

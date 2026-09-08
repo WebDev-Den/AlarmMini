@@ -18,6 +18,7 @@ export function isPublicIpv4(address: string): boolean {
 const privateMessage = "Сайт може перевірити лише публічний URL. Локальні адреси на кшталт 192.168.x.x або localhost недоступні серверу перевірки.";
 const timeoutMessage = "Сервер не відповів за 8 секунд. Перевір його доступність і повтори спробу.";
 type Dependencies = {
+  maxState?: number;
   token?: string;
   resolve?: (host: string) => Promise<{ address: string; family: number }[]>;
   request?: typeof httpRequest;
@@ -75,7 +76,7 @@ export async function probeFallbackUrl(value: string, dependencies: Dependencies
               chunks.push(Buffer.from(chunk));
             }
             if (!response.complete) throw new Error("Сервер надіслав неповну відповідь. Повтори перевірку.");
-            validateFallbackBody(Buffer.concat(chunks).toString("utf8"));
+            validateFallbackBody(Buffer.concat(chunks).toString("utf8"), dependencies.maxState);
             resolveRequest();
           } catch (error) { reject(error); }
           finally { response.destroy(); }

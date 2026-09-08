@@ -4,6 +4,8 @@ let gLedMap = {};
 let currentConfig = {};
 let currentConfigSource = {};
 let currentAlerts = [];
+let customStateColors = {};
+const MAX_CUSTOM_STATES = 16;
 let currentSessionReady = false;
 let adminLabelDownloadName = "alarmmini-admin.png";
 let apLabelDownloadName = "alarmmini-ap.png";
@@ -31,8 +33,6 @@ const TAB_META = {
   label: { eyebrow: UI_LANG.tabs.label.eyebrow, title: UI_LANG.tabs.label.title },
   colors: { eyebrow: UI_LANG.tabs.colors.eyebrow, title: UI_LANG.tabs.colors.title },
   night: { eyebrow: UI_LANG.tabs.night.eyebrow, title: UI_LANG.tabs.night.title },
-  buzzer: { eyebrow: UI_LANG.tabs.buzzer.eyebrow, title: UI_LANG.tabs.buzzer.title },
-  regions: { eyebrow: UI_LANG.tabs.regions.eyebrow, title: UI_LANG.tabs.regions.title },
   mqtt: { eyebrow: UI_LANG.tabs.mqtt.eyebrow, title: UI_LANG.tabs.mqtt.title },
   system: { eyebrow: UI_LANG.tabs.system.eyebrow, title: UI_LANG.tabs.system.title },
   calibration: { eyebrow: UI_LANG.tabs.calibration.eyebrow, title: UI_LANG.tabs.calibration.title },
@@ -80,8 +80,6 @@ function applyStaticLang() {
   set("[data-tab='label']", UI_LANG.nav.label);
   set("[data-tab='colors']", UI_LANG.nav.colors);
   set("[data-tab='night']", UI_LANG.nav.night);
-  set("[data-tab='buzzer']", UI_LANG.nav.buzzer);
-  set("[data-tab='regions']", UI_LANG.nav.regions);
   set("[data-tab='system']", UI_LANG.nav.system);
   set("[data-tab='calibration']", UI_LANG.nav.calibration);
   set("[data-tab='logs']", UI_LANG.nav.logs);
@@ -103,31 +101,11 @@ function applyStaticLang() {
   document.querySelectorAll("#tab-label .inline-btn").forEach((btn) => btn.textContent = UI_LANG.actions.downloadPng);
   set("#tab-colors .panel-label", UI_LANG.tabs.colors.eyebrow);
   set("#tab-colors .panel-title", UI_LANG.colors.title);
-  set("#tab-colors .mode-divider:first-of-type span", UI_LANG.colors.day);
-  set("#tab-colors .mode-divider:last-of-type span", UI_LANG.colors.night);
-  set("#tab-colors .settings-row:nth-of-type(1) .row-label", UI_LANG.colors.alert);
-  set("#tab-colors .settings-row:nth-of-type(2) .row-label", UI_LANG.colors.clear);
-  set("#tab-colors .settings-row:nth-of-type(3) .row-label", UI_LANG.colors.alert);
-  set("#tab-colors .settings-row:nth-of-type(4) .row-label", UI_LANG.colors.clear);
   set("#tab-night .panel-label", UI_LANG.tabs.night.eyebrow);
   set("#tab-night .panel-title", UI_LANG.nightMode.title);
   set("#tab-night .settings-row:nth-of-type(2) .row-label", UI_LANG.nightMode.active);
   set("#tab-night .settings-row:nth-of-type(3) .row-label", UI_LANG.nightMode.start);
   set("#tab-night .settings-row:nth-of-type(4) .row-label", UI_LANG.nightMode.end);
-  set("#tab-buzzer .panel-label", UI_LANG.tabs.buzzer.eyebrow);
-  set("#tab-buzzer .panel-title", UI_LANG.buzzer.title);
-  set("#tab-buzzer .settings-row:nth-of-type(2) .row-label", UI_LANG.buzzer.active);
-  set("#tab-buzzer .settings-row:nth-of-type(3) .row-label", UI_LANG.buzzer.dayVolume);
-  set("#tab-buzzer .settings-row:nth-of-type(4) .row-label", UI_LANG.buzzer.nightVolume);
-  document.querySelectorAll("#tab-buzzer .panel-actions .inline-btn").forEach((btn, index) => {
-    btn.textContent = index === 0 ? UI_LANG.actions.testAlert : UI_LANG.actions.testClear;
-  });
-  set("#tab-regions .panel-label", UI_LANG.tabs.regions.eyebrow);
-  set("#tab-regions .panel-title", UI_LANG.regions.title);
-  const regionButtons = document.querySelectorAll("#tab-regions .panel-actions .inline-btn");
-  if (regionButtons[0]) regionButtons[0].textContent = UI_LANG.actions.all;
-  if (regionButtons[1]) regionButtons[1].textContent = UI_LANG.actions.none;
-  if (regionButtons[2]) regionButtons[2].textContent = UI_LANG.actions.testAlert;
   set("#tab-mqtt .panel-title", UI_LANG.mqtt.title);
   set("#tab-mqtt .form-stack > div:nth-child(1) .col-12.col-md-6:nth-child(1) .field-label", UI_LANG.mqtt.broker);
   set("#tab-mqtt .form-stack > div:nth-child(1) .col-12.col-md-6:nth-child(2) .field-label", UI_LANG.mqtt.port);
@@ -143,7 +121,6 @@ function applyStaticLang() {
     systemIpLabel: UI_LANG.system.ip,
     systemLabelUrlLabel: UI_LANG.system.labelUrl,
     systemLedPinLabel: UI_LANG.system.ledPin,
-    systemBuzzerPinLabel: UI_LANG.system.buzzerPin,
   };
   Object.entries(systemLabelMap).forEach(([labelId, text]) => {
     const target = document.querySelector(`[data-label-id="${labelId}"]`);
@@ -197,7 +174,6 @@ function normalizeConfig(cfg) {
   const day = colors.d || {};
   const nightColors = colors.n || {};
   const night = source.n || {};
-  const buzzer = source.z || {};
   const blink = source.k || {};
   const offline = source.o || {};
   const wifi = source.w || {};
@@ -228,7 +204,6 @@ function normalizeConfig(cfg) {
   const nightStart = Array.isArray(night.s) ? night.s : [source.nightStartH, source.nightStartM];
   const nightEnd = Array.isArray(night.x) ? night.x : [source.nightEndH, source.nightEndM];
   const nightPulse = Array.isArray(night.p) ? night.p : [source.nightPulseAlert, source.nightPulseClear];
-  const buzzerVolume = Array.isArray(buzzer.v) ? buzzer.v : [source.buzzerDayVol, source.buzzerNightVol];
   const blinkIntensity = Array.isArray(blink.i) ? blink.i : [source.blinkDayInt, source.blinkNightInt];
 
   return {
@@ -257,9 +232,6 @@ function normalizeConfig(cfg) {
     nightMaxBright: Number(night.b ?? source.nightMaxBright ?? 150),
     nightPulseAlert: Boolean(nightPulse[0] ?? source.nightPulseAlert ?? false),
     nightPulseClear: Boolean(nightPulse[1] ?? source.nightPulseClear ?? false),
-    buzzerEnabled: buzzer.e ?? source.buzzerEnabled ?? false,
-    buzzerDayVol: Number(buzzerVolume[0] ?? source.buzzerDayVol ?? 80),
-    buzzerNightVol: Number(buzzerVolume[1] ?? source.buzzerNightVol ?? 30),
     blinkEnabled: blink.e ?? source.blinkEnabled ?? true,
     blinkDayInt: Number(blinkIntensity[0] ?? source.blinkDayInt ?? 75),
     blinkNightInt: Number(blinkIntensity[1] ?? source.blinkNightInt ?? 30),
@@ -268,13 +240,12 @@ function normalizeConfig(cfg) {
     pulseDurationMs: Number(offline.d ?? source.pulseDurationMs ?? 2400),
     pulseSpeedPct: Number(offline.s ?? source.pulseSpeedPct ?? 100),
     pulseContrastPct: Number(offline.c ?? source.pulseContrastPct ?? 60),
-    buzzerRegionIds: buzzer.r || source.buzzerRegionIds || source.buzzerRegions || [],
     ledRegionIds: source.l || source.ledRegionIds || source.leds || [],
     mqttHost: mqtt.h ?? source.mqttHost ?? "",
     fallbackUrl: source.fu ?? "",
     fallbackToken: source.ft ?? "",
     mqttPort: Number(mqtt.p ?? source.mqttPort ?? 1883),
-    mqttTopic: mqtt.t ?? source.mqttTopic ?? "alerts/status",
+    mqttTopic: mqtt.t ?? source.mqttTopic ?? "ukraine/alarm/map/full_v2",
     mqttUser: mqtt.u ?? source.mqttUser ?? "",
     mqttPass: mqtt.s ?? source.mqttPass ?? "",
     wifiSsid: wifi.s ?? source.wifiSsid ?? "",
@@ -591,33 +562,6 @@ async function disableLogs() {
   }
 }
 
-function initRegionUI() {
-  const container = $("regions");
-  container.innerHTML = "";
-  REGIONS.forEach((name) => {
-    const label = document.createElement("label");
-    label.className = "region-chip";
-    label.id = `chip_${name}`;
-    label.innerHTML = `<input type="checkbox" id="buz_${name}" value="${name}"><span class="chip-dot"></span><span>${name}</span>`;
-    label.querySelector("input").addEventListener("change", function () {
-      label.classList.toggle("active", this.checked);
-      updateDirtyState();
-    });
-    container.appendChild(label);
-  });
-}
-
-function selectAll(enabled) {
-  REGIONS.forEach((name) => {
-    const checkbox = $(`buz_${name}`);
-    const chip = $(`chip_${name}`);
-    if (!checkbox || !chip) return;
-    checkbox.checked = enabled;
-    chip.classList.toggle("active", enabled);
-  });
-  updateDirtyState();
-}
-
 function findExactRegion(value) {
   if (!value) return "";
   return REGIONS.find((region) => region === value || region.includes(value)) || "";
@@ -769,7 +713,6 @@ function applyDeviceInfo(info) {
     ? `WIFI:T:WPA;S:${apSsid};P:${apPassword};;`
     : `WIFI:T:nopass;S:${apSsid};;`;
   const ledPin = info.ledPin ?? "-";
-  const buzzerPin = info.buzzerPin ?? "-";
   const mdnsHost = hostname ? `${hostname}.local` : "";
   const mdnsUrl = mdnsHost ? `http://${mdnsHost}` : `http://${ip}`;
   const adminQrUrl = `${mdnsUrl.replace(/\/$/, "")}/index.html?p=${encodeURIComponent(adminPassword)}`;
@@ -785,7 +728,6 @@ function applyDeviceInfo(info) {
   setText("labelApSsid", apSsid);
   setText("labelApPassword", apPasswordLabel);
   setText("ledPinValue", String(ledPin));
-  setText("buzzerPinValue", String(buzzerPin));
   setValue("adminPassword", adminPassword);
 
   const deviceBadge = $("deviceBadge");
@@ -825,47 +767,17 @@ function applyConfig(cfg) {
   const previousLogCategoryBits = currentConfig.logCategoryBits || {};
   currentConfigSource = JSON.parse(JSON.stringify(cfg || {}));
   currentConfig = normalizeConfig(cfg);
+  customStateColors = stateColorsFromConfig(cfg);
+  renderStateColors();
   currentConfig.logCategoryBits = previousLogCategoryBits;
 
-  applyColor("dayAlertColor", "dayAlertSwatch", currentConfig.dayAlertR, currentConfig.dayAlertG, currentConfig.dayAlertB);
-  applyColor("dayClearColor", "dayClearSwatch", currentConfig.dayClearR, currentConfig.dayClearG, currentConfig.dayClearB);
-  applyColor("nightAlertColor", "nightAlertSwatch", currentConfig.nightAlertR, currentConfig.nightAlertG, currentConfig.nightAlertB);
-  applyColor("nightClearColor", "nightClearSwatch", currentConfig.nightClearR, currentConfig.nightClearG, currentConfig.nightClearB);
-  applySliderValue("dayAlertBright", "dayAlertBrightVal", currentConfig.dayAlertA, (v) => `${Math.round(v / 2.55)}%`);
-  applySliderValue("dayClearBright", "dayClearBrightVal", currentConfig.dayClearA, (v) => `${Math.round(v / 2.55)}%`);
-  applySliderValue("nightAlertBright", "nightAlertBrightVal", currentConfig.nightAlertA, (v) => `${Math.round(v / 2.55)}%`);
-  applySliderValue("nightClearBright", "nightClearBrightVal", currentConfig.nightClearA, (v) => `${Math.round(v / 2.55)}%`);
-  applySliderValue("dayVol", "dayVolVal", currentConfig.buzzerDayVol, (v) => `${v}%`);
-  applySliderValue("nightVol", "nightVolVal", currentConfig.buzzerNightVol, (v) => `${v}%`);
-
   $("nightEnabled").checked = Boolean(currentConfig.nightEnabled);
-  $("buzzerEnabled").checked = Boolean(currentConfig.buzzerEnabled);
   $("nightStart").value = `${pad(currentConfig.nightStartH)}:${pad(currentConfig.nightStartM)}`;
   $("nightEnd").value = `${pad(currentConfig.nightEndH)}:${pad(currentConfig.nightEndM)}`;
   $("ntpServer1").value = currentConfig.ntpServer1 || "";
   $("ntpServer2").value = currentConfig.ntpServer2 || "";
   $("ntpServer3").value = currentConfig.ntpServer3 || "";
   latestLogMask = Number(currentConfig.logMask || latestLogMask || 0);
-
-  REGIONS.forEach((name) => {
-    const checkbox = $(`buz_${name}`);
-    const chip = $(`chip_${name}`);
-    if (!checkbox || !chip) return;
-    checkbox.checked = false;
-    chip.classList.remove("active");
-  });
-
-  const buzzerRegions = currentConfig.buzzerRegionIds || [];
-  buzzerRegions.forEach((regionRoot) => {
-    const exact = regionNameFromConfigValue(regionRoot);
-    if (!exact) return;
-    const checkbox = $(`buz_${exact}`);
-    const chip = $(`chip_${exact}`);
-    if (checkbox && chip) {
-      checkbox.checked = true;
-      chip.classList.add("active");
-    }
-  });
 
   gLedMap = {};
   const ledAssignments = currentConfig.ledRegionIds || [];
@@ -883,37 +795,15 @@ function buildPayload() {
   const payload = JSON.parse(JSON.stringify(currentConfigSource || {}));
   const [nightStartH, nightStartM] = $("nightStart").value.split(":").map(Number);
   const [nightEndH, nightEndM] = $("nightEnd").value.split(":").map(Number);
-  const dayAlert = hexToRgb($("dayAlertColor").value);
-  const dayClear = hexToRgb($("dayClearColor").value);
-  const nightAlert = hexToRgb($("nightAlertColor").value);
-  const nightClear = hexToRgb($("nightClearColor").value);
-  const buzzerRegionIds = REGIONS.reduce((acc, name, index) => {
-    if ($(`buz_${name}`)?.checked) acc.push(index);
-    return acc;
-  }, []);
   const ledRegionIds = Array.from({ length: MAX_LEDS }, (_, index) => regionIndexByName(gLedMap[index] || ""));
 
-  payload.c = {
-    d: {
-      a: [dayAlert.r, dayAlert.g, dayAlert.b, Number($("dayAlertBright").value)],
-      c: [dayClear.r, dayClear.g, dayClear.b, Number($("dayClearBright").value)],
-    },
-    n: {
-      a: [nightAlert.r, nightAlert.g, nightAlert.b, Number($("nightAlertBright").value)],
-      c: [nightClear.r, nightClear.g, nightClear.b, Number($("nightClearBright").value)],
-    },
-  };
+  writeStateColors(payload, customStateColors);
   payload.n = {
     e: $("nightEnabled").checked,
     s: [nightStartH, nightStartM],
     x: [nightEndH, nightEndM],
     b: currentConfig.nightMaxBright ?? 150,
     p: [currentConfig.nightPulseAlert ?? false, currentConfig.nightPulseClear ?? false],
-  };
-  payload.z = {
-    e: $("buzzerEnabled").checked,
-    v: [Number($("dayVol").value), Number($("nightVol").value)],
-    r: buzzerRegionIds,
   };
   payload.k = {
     e: currentConfig.blinkEnabled ?? true,
@@ -936,7 +826,7 @@ function buildPayload() {
   payload.m = {
     h: $("mqttHost").value.trim(),
     p: parseInt($("mqttPort").value, 10) || 1883,
-    t: $("mqttTopic").value.trim() || "alerts/status",
+    t: $("mqttTopic").value.trim() || "ukraine/alarm/map/full_v2",
     u: $("mqttUser").value.trim(),
     s: $("mqttPass").value.trim(),
   };
@@ -951,6 +841,110 @@ function buildPayload() {
   ];
   payload.g = readLogMaskInputs();
   return payload;
+}
+
+function stateColorsFromConfig(cfg) {
+  const normalized = normalizeConfig(cfg);
+  const extras = cfg.sc ?? {};
+  if (!isPlainObject(extras) || Object.keys(extras).length > MAX_CUSTOM_STATES ||
+      Object.entries(extras).some(([key, rgba]) =>
+        !/^(?:[2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/.test(key) ||
+        !Array.isArray(rgba) || rgba.length !== 8 || rgba.some((v) => !Number.isInteger(v) || v < 0 || v > 255))) {
+    throw new Error("Некоректна палітра станів");
+  }
+  return {
+    0: [normalized.dayClearR, normalized.dayClearG, normalized.dayClearB, normalized.dayClearA,
+      normalized.nightClearR, normalized.nightClearG, normalized.nightClearB, normalized.nightClearA],
+    1: [normalized.dayAlertR, normalized.dayAlertG, normalized.dayAlertB, normalized.dayAlertA,
+      normalized.nightAlertR, normalized.nightAlertG, normalized.nightAlertB, normalized.nightAlertA],
+    ...JSON.parse(JSON.stringify(extras)),
+  };
+}
+
+function writeStateColors(payload, colors) {
+  payload.c = {
+    ...payload.c,
+    d: { ...payload.c?.d, a: colors[1].slice(0, 4), c: colors[0].slice(0, 4) },
+    n: { ...payload.c?.n, a: colors[1].slice(4), c: colors[0].slice(4) },
+  };
+  const extras = Object.fromEntries(Object.entries(colors).filter(([key]) => Number(key) > 1));
+  if (Object.keys(extras).length) payload.sc = JSON.parse(JSON.stringify(extras));
+  else delete payload.sc;
+}
+
+function renderStateColors() {
+  const container = $("stateColors");
+  container.replaceChildren();
+  Object.entries(customStateColors).forEach(([state, colors]) => {
+    const card = document.createElement("div");
+    card.className = "custom-state-card";
+    const heading = document.createElement("div");
+    heading.className = "settings-row";
+    const title = document.createElement("strong");
+    title.textContent = state === "0" ? "Стан 0 · Відбій" : state === "1" ? "Стан 1 · Тривога" : `Стан ${state}`;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "sidebar-action";
+    remove.textContent = "Видалити";
+    remove.setAttribute("aria-label", `Видалити колір стану ${state}`);
+    remove.onclick = () => { delete customStateColors[state]; renderStateColors(); updateDirtyState(); refreshMapPreview(); };
+    heading.appendChild(title);
+    if (Number(state) > 1) heading.appendChild(remove);
+    card.appendChild(heading);
+    ["День", "Ніч"].forEach((mode, index) => {
+      const offset = index * 4;
+      const row = document.createElement("div");
+      row.className = "settings-row";
+      const label = document.createElement("label");
+      label.textContent = mode;
+      label.htmlFor = `state-${state}-${index}-color`;
+      const controls = document.createElement("div");
+      controls.className = "color-control";
+      const color = document.createElement("input");
+      color.type = "color";
+      color.id = label.htmlFor;
+      color.value = rgbToHex(colors[offset], colors[offset + 1], colors[offset + 2]);
+      const bright = document.createElement("input");
+      bright.type = "range";
+      bright.min = "0";
+      bright.max = String(index ? (currentConfig.nightMaxBright ?? 150) : 255);
+      bright.value = String(colors[offset + 3]);
+      bright.setAttribute("aria-label", `Яскравість: стан ${state}, ${mode.toLowerCase()}`);
+      const value = document.createElement("span");
+      value.className = "brightness-label";
+      value.textContent = `${Math.round(Number(bright.value) / 2.55)}%`;
+      color.oninput = () => {
+        const rgb = hexToRgb(color.value);
+        colors.splice(offset, 3, rgb.r, rgb.g, rgb.b);
+        updateDirtyState(); refreshMapPreview();
+      };
+      bright.oninput = () => {
+        colors[offset + 3] = Number(bright.value);
+        value.textContent = `${Math.round(Number(bright.value) / 2.55)}%`;
+        updateDirtyState();
+      };
+      controls.append(color, bright, value);
+      row.append(label, controls);
+      card.appendChild(row);
+    });
+    container.appendChild(card);
+  });
+  $("addStateColor").disabled = Object.keys(customStateColors).length >= MAX_CUSTOM_STATES + 2;
+  if (customStateColors[$("newStateCode").value]) {
+    const next = Array.from({ length: 254 }, (_, i) => i + 2).find((code) => !customStateColors[code]);
+    if (next !== undefined) $("newStateCode").value = String(next);
+  }
+}
+
+function addStateColor() {
+  const state = Number($("newStateCode").value);
+  if (!Number.isInteger(state) || state < 2 || state > 255) return showToast("Введи цілий код від 2 до 255", true);
+  if (customStateColors[state]) return showToast("Цей стан уже налаштовано", true);
+  if (Object.keys(customStateColors).length >= MAX_CUSTOM_STATES + 2) return showToast("Можна налаштувати до 16 додаткових станів", true);
+  customStateColors[state] = [255, 160, 0, 255, 255, 160, 0, Math.min(24, currentConfig.nightMaxBright ?? 150)];
+  const next = Array.from({ length: 254 }, (_, i) => i + 2).find((code) => !customStateColors[code]);
+  if (next !== undefined) $("newStateCode").value = String(next);
+  renderStateColors(); updateDirtyState(); refreshMapPreview();
 }
 
 async function saveConfig(options = {}) {
@@ -1010,7 +1004,8 @@ function mergeConfigForSave(baseConfig, overrideConfig) {
   Object.keys(overrides).forEach((key) => {
     const nextValue = overrides[key];
     if (nextValue === undefined) return;
-    if (isPlainObject(nextValue) && isPlainObject(result[key])) {
+    // A palette is a complete set: removed state overrides must stay removed.
+    if (key !== "sc" && isPlainObject(nextValue) && isPlainObject(result[key])) {
       result[key] = mergeConfigForSave(result[key], nextValue);
       return;
     }
@@ -1069,6 +1064,8 @@ async function importSettings(file) {
     const importedConfig = sanitizeImportedConfig(JSON.parse(await file.text()));
     const currentFullConfig = sanitizeImportedConfig(await fetchJson("/api/config"));
     const payload = mergeConfigForSave(currentFullConfig, importedConfig);
+    if (importedConfig.c && !Object.prototype.hasOwnProperty.call(importedConfig, "sc")) delete payload.sc;
+    stateColorsFromConfig(payload);
     const response = await fetch("/api/saveSettings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1080,6 +1077,7 @@ async function importSettings(file) {
       throw new Error("Unauthorized");
     }
     if (!response.ok) throw new Error(`import failed: ${response.status}`);
+    await bootAuthenticated();
     showToast("Імпорт завершено, налаштування застосовано");
   } catch (error) {
     console.error(error);
@@ -1121,7 +1119,6 @@ function getAssignmentStats(sourceMap = gLedMap, total = MAX_LEDS) {
 }
 
 function applyPreviewClasses(svg) {
-  const alertRegions = new Set(currentAlerts.map((isAlert, index) => (isAlert ? REGIONS[index] : "")).filter(Boolean));
   svg.querySelectorAll("path[id]").forEach((path) => {
     const regionName = SVG_ID_TO_REGION[path.id];
     path.className.baseVal = "";
@@ -1129,7 +1126,15 @@ function applyPreviewClasses(svg) {
       path.classList.add("safe");
       return;
     }
-    path.classList.add(alertRegions.has(regionName) ? "map-region-alert" : "map-region-clear");
+    const state = Number(currentAlerts[REGIONS.indexOf(regionName)] || 0);
+    path.classList.add(state === 1 ? "map-region-alert" : "map-region-clear");
+    const rgba = customStateColors[state] || customStateColors[1] || [255, 0, 0, 255];
+    path.style.fill = rgba ? rgbToHex(rgba[0], rgba[1], rgba[2]) : "";
+    path.style.stroke = rgba ? path.style.fill : "";
+    path.setAttribute("aria-label", `${regionName}: стан ${state}`);
+    let title = path.querySelector("title");
+    if (!title) { title = document.createElementNS("http://www.w3.org/2000/svg", "title"); path.appendChild(title); }
+    title.textContent = `${regionName}: стан ${state}`;
   });
 }
 
@@ -1199,10 +1204,6 @@ async function updateAlertsOnWeb() {
     if (response.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
     const alerts = await response.json();
     currentAlerts = Array.isArray(alerts) ? alerts : [];
-    currentAlerts.forEach((isAlert, index) => {
-      const chip = $(`chip_${REGIONS[index]}`);
-      if (chip) chip.classList.toggle("is-alert", Boolean(isAlert));
-    });
     refreshMapPreview();
     alertPollIntervalMs = ALERT_POLL_MIN_MS;
     void updateRuntimeHealth();
@@ -1484,21 +1485,6 @@ function restartDevice() {
   }, 1000);
 }
 
-function testSubscribedAlert() {
-  fetch("/api/testRegionAlert", { credentials: "same-origin" })
-    .then((response) => {
-      if (response.status === 401) {
-        setAuthLocked(true, "Сесію завершено. Увійди ще раз.");
-        throw new Error("Unauthorized");
-      }
-      if (!response.ok) throw new Error("No subscribed regions");
-      showToast("Запущено тест: 30с тривога + 30с відбій");
-    })
-    .catch((error) => {
-      console.error(error);
-      showToast("Обери хоча б один регіон у 'Регіони сповіщень'", true);
-    });
-}
 
 function bindTabs() {
   document.querySelectorAll(".nav-tab").forEach((button) => button.addEventListener("click", () => setActiveTab(button.dataset.tab)));
@@ -1529,12 +1515,11 @@ async function bootAuthenticated() {
   $("fallbackUrl").value = info.fallbackUrl || "";
   $("fallbackToken").value = info.fallbackToken || "";
   $("mqttPort").value = info.mqttPort || 1883;
-  $("mqttTopic").value = info.mqttTopic || "alerts/status";
+  $("mqttTopic").value = info.mqttTopic || "ukraine/alarm/map/full_v2";
   $("mqttUser").value = info.mqttUser || "";
   $("mqttPass").value = info.mqttPass || "";
   applyDeviceInfo(info);
   await updateRuntimeHealth();
-  initRegionUI();
   const cfg = await fetchJson("/api/config");
   applyConfig(cfg);
   applyDeviceInfo(info);
@@ -1646,16 +1631,10 @@ window.calOpen = calOpen;
 window.calPrev = calPrev;
 window.calSave = calSave;
 window.restartDevice = restartDevice;
-window.selectAll = selectAll;
 window.exportSettings = exportSettings;
 window.triggerImportSettings = triggerImportSettings;
 window.downloadAdminLabel = downloadAdminLabel;
 window.downloadApLabel = downloadApLabel;
-window.testSubscribedAlert = testSubscribedAlert;
-window.testBuzzer = (isAlert) => {
-  fetch(`/api/testBuzzer?alert=${isAlert ? 1 : 0}`, { credentials: "same-origin" }).catch(() => {});
-  showToast(isAlert ? "Тест тривоги" : "Тест відбою");
-};
 window.runSelfTest = runSelfTest;
 window.save = async () => {
   try {

@@ -6,7 +6,6 @@
 #include "storage.h"
 #include "alerts.h"
 #include "leds.h"
-#include "buzzer.h"
 #include "startup.h"
 #include "app_webserver.h"
 #include "uart_config.h"
@@ -113,7 +112,6 @@ void setup()
     platformSetHostname(gHostname);
     generateHardwareAdminPassword();
     ledsInit();
-    buzzerInit();
     resetTraceSetStage("wifi_start");
 
     uint8_t ledCount = max((int)gConfig.ledCount, 1);
@@ -156,7 +154,6 @@ void loop()
 #endif
     alertsHandle();
     alertsFallbackTick();
-    buzzerHandle();
     if (!startupShowProvisioningEffect(gConfig.ledCount))
         ledsHandle();
     yield();

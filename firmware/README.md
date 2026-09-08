@@ -2,7 +2,15 @@
 
 AlarmMini is firmware + web tooling for a physical WS2812 Ukraine alarm map.
 
-Current firmware version: **2.0.6**
+Current firmware version: **2.1.0**
+
+MQTT and HTTP accept state codes 0..255. Configure up to 16 additional day/night
+colors alongside states 0 and 1 in **Кольори**, using **+ Додати стан**. Sound
+support is removed. New installs use `ukraine/alarm/map/full_v2`; existing backups
+preserve their MQTT topic (`ukraine/alarm/map/full` remains the legacy 0/1 feed).
+Both ESP32-C3 and
+ESP8266 builds support this. Upgrade firmware and LittleFS together, preserving
+the config. See [compatibility and migration](../docs/multistate.md).
 
 Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 

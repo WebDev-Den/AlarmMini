@@ -7,7 +7,13 @@ Production installer: [https://alarmmini.vercel.app](https://alarmmini.vercel.ap
 ## Резервний URL: формат відповіді та авторизація
 
 Резервний API має відповідати на `GET` статусом **HTTP 200** і JSON-масивом
-рівно з **25 чисел**: `0` — немає тривоги, `1` — тривога. Приклад відповіді:
+рівно з **25 цілих чисел**: `0` — немає тривоги, `1` — тривога.
+Прошивка **2.1.0+** також приймає коди **2–255** з власними кольорами.
+Старим прошивкам залишається MQTT-топік `ukraine/alarm/map/full` зі станами **0/1**.
+Новий `ukraine/alarm/map/full_v2` та резервний HTTPS підтримують стани **0–255**.
+У вебпанелі можна задати денні й нічні кольори для **0, 1 і ще 16 станів** через «+».
+Звуковий сигнал прибрано; палітра зберігається у конфігурації та резервних копіях.
+[Налаштування кольорів і сумісність](docs/multistate.md). Приклад відповіді:
 
 ```json
 [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
@@ -39,7 +45,6 @@ The project includes:
 - ESP32-C3 SuperMini, PlatformIO environment `esp32c3`.
 - ESP8266 / Wemos D1 mini, PlatformIO environment `esp8266`.
 - WS2812B addressable LED strip or PCB LEDs.
-- Optional buzzer.
 - USB connection for flashing, serial diagnostics, config import/export, and service setup.
 
 The firmware was optimized for small embedded boards: low RAM usage, non-blocking reconnect logic, compact JSON config, LittleFS storage, and safe serial recovery.

@@ -16,6 +16,13 @@ const states = JSON.stringify(Array(25).fill(0));
 
 test('response parser accepts exactly the firmware numeric contract', () => {
   validateFallbackBody(states);
+  for (const state of [2,3,4,10,255]) {
+    const payload = JSON.stringify(Array(25).fill(state));
+    validateFallbackBody(payload);
+    assert.throws(() => validateFallbackBody(payload, 1), /2.1.0/);
+  }
+  for (const state of [256, -1, 1.5, '2', true]) assert.throws(() => validateFallbackBody(JSON.stringify(Array(25).fill(state))));
+  assert.throws(() => validateFallbackBody(states.replace('0', '01')));
   validateFallbackBody(' \r\n' + JSON.stringify(Array(25).fill(1)) + '\t');
   for (const body of ['[]', '[0,1]', '{}', 'null', states + 'x', '\uFEFF' + states, states.replace('0', '-0'), states.replace('0', '0.0'), states.replace('0', '1e0'), states.replace('0', 'true'), states.replace('0', '"0"'), JSON.stringify(Array(26).fill(0)), ' '.repeat(256) + states]) {
     assert.throws(() => validateFallbackBody(body), body);
@@ -72,6 +79,10 @@ test('real HTTP parser: pinned DNS, status, redirects, stream limits and truncat
     assert.equal(await probeFallbackUrl('http://public.test/',{...dependencies,token:'test-only-token'}),'http://public.test/');
     assert.equal(seenAuthorization,'Bearer test-only-token');
     requireAuth=false;
+    body=JSON.stringify(Array(25).fill(255));
+    await assert.rejects(probeFallbackUrl('http://public.test/',{...dependencies,maxState:1}),/2.1.0/);
+    assert.equal(await probeFallbackUrl('http://public.test/',{...dependencies,maxState:255}),'http://public.test/');
+    body=states;
     status=503; await assert.rejects(probeFallbackUrl('http://public.test/',dependencies),/HTTP 503/);
     status=302; const before=connections; await assert.rejects(probeFallbackUrl('http://public.test/',dependencies),/перенаправляє/); assert.equal(connections,before+1);
     status=200; body='[0,1]'; await assert.rejects(probeFallbackUrl('http://public.test/',dependencies),/25 чисел/);
@@ -102,8 +113,8 @@ test('client only accepts validation for the exact URL, and clearing skips reque
   const original=globalThis.fetch;
   let calls=0;
   try {
-    globalThis.fetch=async(_path,options)=>{calls++;assert.equal(JSON.parse(options.body).token,'test-only-token');assert.equal(_path,'/api/fallback-validation');return Response.json({ok:true,url:JSON.parse(options.body).url});};
-    assert.equal(await verifyFallbackEndpoint(' https://example.com ','test-only-token'),'https://example.com/');
+    globalThis.fetch=async(_path,options)=>{calls++;assert.equal(JSON.parse(options.body).token,'test-only-token');assert.equal(JSON.parse(options.body).firmwareVersion,'2.1.0');assert.equal(_path,'/api/fallback-validation');return Response.json({ok:true,url:JSON.parse(options.body).url});};
+    assert.equal(await verifyFallbackEndpoint(' https://example.com ','test-only-token',undefined,'2.1.0'),'https://example.com/');
     assert.equal(await verifyFallbackEndpoint(''),'');assert.equal(calls,1);
     globalThis.fetch=async()=>Response.json({ok:true,url:'https://different.test/'});
     await assert.rejects(verifyFallbackEndpoint('https://example.com/'));

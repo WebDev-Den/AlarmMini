@@ -269,6 +269,11 @@ uint32_t retainedStateColorForLed(int ledIndex, bool night, unsigned long now, c
     }
     int logicalIndex = assignedIndexForLed(ledIndex);
 
+    if (gAlerts[region] > 1) {
+        return applyColorBrightness(capColorForAnimation(
+            colorForAlertState(gConfig, gAlerts[region], night), offlineCfg, night), 1.0f);
+    }
+
     const Color alertColor = currentAlertColor(night);
     const Color clearColor = currentClearColor(night);
 
@@ -344,7 +349,12 @@ void renderAlertClearState(bool night) {
             continue;
         }
 
-        bool alertState = gAlerts[region];
+        if (gAlerts[region] > 1) {
+            strip.setPixelColor(i, applyColorBrightness(capColorForMode(
+                colorForAlertState(gConfig, gAlerts[region], night), night), 1.0f));
+            continue;
+        }
+        bool alertState = gAlerts[region] == 1;
         bool recentClear = !alertState &&
             gRegionStateChangedAt[region] > 0 &&
             now - gRegionStateChangedAt[region] < ALERT_CLEAR_HOLD_MS;

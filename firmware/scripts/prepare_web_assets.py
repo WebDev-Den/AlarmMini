@@ -53,8 +53,8 @@ ENV_REPLACEMENTS = {
     ),
     "__ALARMMINI_MQTT_TOPIC__": _resolve_env(
         "ALARMMINI_MQTT_TOPIC",
-        "ukraine/alarm/map/full",
-        "ukraine/alarm/map/full",
+        "ukraine/alarm/map/full_v2",
+        "ukraine/alarm/map/full_v2",
     ),
     "__ALARMMINI_MQTT_USER__": _resolve_env(
         "ALARMMINI_MQTT_USER",

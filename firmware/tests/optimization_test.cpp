@@ -128,6 +128,9 @@ int main() {
     std::memset(gConfig.mqttTopic, 't', sizeof(gConfig.mqttTopic) - 1);
     std::memset(gConfig.mqttUser, 'u', sizeof(gConfig.mqttUser) - 1);
     std::memset(gConfig.mqttPass, 'p', sizeof(gConfig.mqttPass) - 1);
+    gConfig.stateColorCount = MAX_CUSTOM_STATES;
+    for (uint8_t i = 0; i < MAX_CUSTOM_STATES; ++i)
+        gConfig.stateColors[i] = {uint8_t(240 + i), {255,i,100,255}, {0,0,i,24}};
     sanitizeConfig();
     checkWireFormat();
     assert(uartcfg::calcCrc(reinterpret_cast<const uint8_t*>("123456789"), 9) == 0xCBF43926UL);

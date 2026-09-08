@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -32,12 +33,22 @@ def validate_compact_config(cfg: Any) -> list[str]:
     if not isinstance(cfg, dict):
         return ["root must be an object"]
 
-    required = ("c", "n", "z", "k", "o", "l", "m", "w", "t", "g")
+    required = ("c", "n", "k", "o", "l", "m", "w", "t", "g")
     for key in required:
         if key not in cfg:
             errors.append(f"missing key: {key}")
 
     c = cfg.get("c")
+    if "sc" in cfg:
+        sc = cfg["sc"]
+        if not isinstance(sc, dict) or len(sc) > 16:
+            errors.append("sc must be an object with at most 16 states")
+        else:
+            for key, rgba in sc.items():
+                if not re.fullmatch(r"[1-9][0-9]{0,2}", key) or not 2 <= int(key) <= 255:
+                    errors.append(f"sc.{key}: state must be 2..255 without leading zeroes")
+                if not isinstance(rgba, list) or len(rgba) != 8 or not all(type(v) is int and _is_u8(v) for v in rgba):
+                    errors.append(f"sc.{key} must contain 8 bytes: day RGBA, night RGBA")
     if not isinstance(c, dict):
         errors.append("c must be object")
     else:
@@ -68,18 +79,19 @@ def validate_compact_config(cfg: Any) -> list[str]:
         if not (isinstance(p, list) and len(p) == 2 and all(_is_bool(x) for x in p)):
             errors.append("n.p must be [bool, bool]")
 
-    z = cfg.get("z")
-    if not isinstance(z, dict):
-        errors.append("z must be object")
-    else:
-        if not _is_bool(z.get("e")):
-            errors.append("z.e must be bool")
-        zv = z.get("v")
-        if not (isinstance(zv, list) and len(zv) == 2 and all(_is_int_in(x, 0, 100) for x in zv)):
-            errors.append("z.v must be [0..100, 0..100]")
-        zr = z.get("r")
-        if not (isinstance(zr, list) and all(_is_int_in(x, 0, 24) for x in zr)):
-            errors.append("z.r must contain region indexes 0..24")
+    if "z" in cfg:
+        z = cfg.get("z")
+        if not isinstance(z, dict):
+            errors.append("z must be object")
+        else:
+            if not _is_bool(z.get("e")):
+                errors.append("z.e must be bool")
+            zv = z.get("v")
+            if not (isinstance(zv, list) and len(zv) == 2 and all(_is_int_in(x, 0, 100) for x in zv)):
+                errors.append("z.v must be [0..100, 0..100]")
+            zr = z.get("r")
+            if not (isinstance(zr, list) and all(_is_int_in(x, 0, 24) for x in zr)):
+                errors.append("z.r must contain region indexes 0..24")
 
     k = cfg.get("k")
     if not isinstance(k, dict):
