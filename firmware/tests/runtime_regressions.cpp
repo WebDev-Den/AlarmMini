@@ -360,7 +360,8 @@ int main() {
     assert(!gUsingHttpFallback);
     for (AlertState state : gAlerts) assert(state == 3);
 
-    // Live and retained rendering use the numeric state's own color and caps.
+    // Settled live/retained rendering uses the numeric state's own color and caps.
+    clockMs += ALERT_CLEAR_HOLD_MS + 1;
     gConfig.ledCount = 1; gConfig.ledRegion[0] = 0;
     gConfig.stateColorCount = 1;
     gConfig.stateColors[0] = {2, {0,255,0,255}, {0,0,255,80}};
@@ -375,5 +376,79 @@ int main() {
     renderAlertClearState(true); assert(strip.colors[0] == 0);
     gAlerts[0] = 255;
     renderAlertClearState(false); assert(strip.colors[0] == 0xFF0000);
+
+    // Real MQTT transitions, including extra -> extra, pulse the destination
+    // color without restarting on repeated messages. Retained frames follow
+    // the same transition and retain their stricter brightness cap.
+    gConfig.dayMode.clearColor = {0,255,0,180};
+    gConfig.nightMode.clearColor = {0,255,0,24};
+    gConfig.nightMode.alertColor = {255,0,0,24};
+    gConfig.night.maxBrightness = 30;
+    gConfig.night.pulseOnAlert = gConfig.night.pulseOnClear = true;
+    gConfig.stateColorCount = 4;
+    gConfig.stateColors[0] = {2, {0,0,255,160}, {0,0,255,24}};
+    gConfig.stateColors[1] = {3, {255,0,255,200}, {255,0,255,80}};
+    gConfig.stateColors[2] = {4, {255,255,0,100}, {255,255,0,20}};
+    gConfig.stateColors[3] = {5, {0,255,255,220}, {0,255,255,28}};
+    auto within = [](uint32_t actual, uint32_t limit) {
+        for (int shift : {0,8,16}) assert(((actual >> shift) & 255) <= ((limit >> shift) & 255));
+    };
+    for (const char *code : {"1","0","2","3","4","5","2","0","255"}) {
+        clockMs += ALERT_CLEAR_HOLD_MS + 1;
+        deliver(allStates(code));
+        const auto started = gRegionStateChangedAt[0];
+        assert(started == clockMs && gAlertsChanged);
+        ++clockMs;
+        deliver(allStates(code));
+        assert(!gAlertsChanged && gRegionStateChangedAt[0] == started);
+        for (bool night : {false,true}) {
+            const Color target = colorForAlertState(gConfig, gAlerts[0], night);
+            const auto liveLimit = applyColorBrightness(capColorForMode(target, night), 1.0f);
+            const auto retainedLimit = applyColorBrightness(capColorForAnimation(target, offline, night), 1.0f);
+            uint32_t previous = 0, retainedPrevious = 0;
+            bool rose = false, fell = false, retainedRose = false, retainedFell = false;
+            for (unsigned elapsed = 500; elapsed < 10000; elapsed += 41) {
+                clockMs = started + elapsed;
+                renderAlertClearState(night);
+                const auto live = strip.colors[0];
+                const auto retained = retainedStateColorForLed(0, night, clockMs, offline, 1);
+                within(live, liveLimit); within(retained, retainedLimit);
+                if (elapsed > 500) {
+                    rose |= live > previous; fell |= live < previous;
+                    retainedRose |= retained > retainedPrevious; retainedFell |= retained < retainedPrevious;
+                }
+                previous = live; retainedPrevious = retained;
+            }
+            assert(rose && fell && retainedRose && retainedFell);
+            if (gAlerts[0] != 0) {
+                clockMs = started + ALERT_CLEAR_HOLD_MS;
+                renderAlertClearState(night); assert(strip.colors[0] == liveLimit);
+                assert(retainedStateColorForLed(0, night, clockMs, offline, 1) == retainedLimit);
+            }
+        }
+    }
+
+    // An HTTP source change triggers the same effect, including between extras.
+    assert(fallbackContract::parseStates(allStates("3").c_str(), decoded, REGIONS_COUNT));
+    clockMs += ALERT_CLEAR_HOLD_MS + 1;
+    _applyEffectiveAlerts(decoded);
+    assert(gAlerts[0] == 3 && gRegionStateChangedAt[0] == clockMs);
+    renderAlertClearState(false); const auto httpFirstFrame = strip.colors[0];
+    clockMs += 600;
+    renderAlertClearState(false); assert(strip.colors[0] != httpFirstFrame);
+
+    // Night pulse-disabled mode still settles smoothly for extra states.
+    gConfig.night.pulseOnAlert = false;
+    const auto nightStarted = gRegionStateChangedAt[0];
+    uint32_t previous = 0;
+    for (unsigned elapsed = 0; elapsed <= ALERT_CLEAR_HOLD_MS; elapsed += 71) {
+        clockMs = nightStarted + elapsed;
+        renderAlertClearState(true);
+        assert(strip.colors[0] >= previous);
+        previous = strip.colors[0];
+    }
+    gConfig.stateColors[1].night.a = 0;
+    renderAlertClearState(true); assert(strip.colors[0] == 0);
+    std::puts("PASS multistate transitions: MQTT/HTTP, repeated packets, day/night pulses, 30s settle, retained caps, dark colors");
     std::printf("PASS runtime regressions: MQTT/DNS/snapshot (%d power cuts), UART, multistate MQTT/HTTP/rendering/legacy snapshot\n", snapshotOperations);
 }

@@ -1596,6 +1596,7 @@ export default function Page() {
               <p><code>ukraine/alarm/map/full</code> — старий топік: 0 — відбій, 1 — тривога. Залишається для плат зі старою прошивкою.</p>
               <p><code>ukraine/alarm/map/full_v2</code> — новий топік зі станами 0–255. Потрібна прошивка 2.1.0 або новіша. У вебпанелі плати можна задати денний і нічний колір для 0, 1 та ще 16 станів через «+».</p>
               <p className="hint">При оновленні зберігається твій поточний топік. Для нових станів після оновлення вибери full_v2 у налаштуваннях MQTT. Звук у новій прошивці прибрано.</p>
+              <p className="hint">У прошивці від 2.1.3 колір будь-якого стану пульсує 30 секунд після зміни. Уночі враховуються налаштування пульсації та яскравості.</p>
             </div>
             <details className="reserve-settings"><summary>Резервний канал даних <span>Необов’язково</span></summary>
               <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} token={installFallbackToken} onTokenChange={setInstallFallbackToken} firmwareVersion={selectedRelease?.tag_name} disabled={flashBusy || waitActive || fallbackSaving} />

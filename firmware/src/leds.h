@@ -269,12 +269,7 @@ uint32_t retainedStateColorForLed(int ledIndex, bool night, unsigned long now, c
     }
     int logicalIndex = assignedIndexForLed(ledIndex);
 
-    if (gAlerts[region] > 1) {
-        return applyColorBrightness(capColorForAnimation(
-            colorForAlertState(gConfig, gAlerts[region], night), offlineCfg, night), 1.0f);
-    }
-
-    const Color alertColor = currentAlertColor(night);
+    const Color alertColor = colorForAlertState(gConfig, gAlerts[region], night);
     const Color clearColor = currentClearColor(night);
 
     bool alertState = gAlerts[region];
@@ -349,12 +344,8 @@ void renderAlertClearState(bool night) {
             continue;
         }
 
-        if (gAlerts[region] > 1) {
-            strip.setPixelColor(i, applyColorBrightness(capColorForMode(
-                colorForAlertState(gConfig, gAlerts[region], night), night), 1.0f));
-            continue;
-        }
-        bool alertState = gAlerts[region] == 1;
+        // All nonzero codes use the same transition, with their own palette color.
+        bool alertState = gAlerts[region] != 0;
         bool recentClear = !alertState &&
             gRegionStateChangedAt[region] > 0 &&
             now - gRegionStateChangedAt[region] < ALERT_CLEAR_HOLD_MS;
@@ -362,7 +353,8 @@ void renderAlertClearState(bool night) {
         uint32_t color = 0;
         if (alertState) {
             unsigned long elapsed = gRegionStateChangedAt[region] > 0 ? now - gRegionStateChangedAt[region] : 0;
-            color = fixedAlertClearColor(alertColor, night, elapsed, true, assignedIndexForLed(i), logicalCount, 255);
+            color = fixedAlertClearColor(colorForAlertState(gConfig, gAlerts[region], night), night,
+                elapsed, true, assignedIndexForLed(i), logicalCount, 255);
         } else if (recentClear) {
             unsigned long elapsed = gRegionStateChangedAt[region] > 0 ? now - gRegionStateChangedAt[region] : 0;
             color = fixedAlertClearColor(clearColor, night, elapsed, false, assignedIndexForLed(i), logicalCount, 255);
