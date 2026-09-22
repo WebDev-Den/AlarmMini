@@ -626,7 +626,7 @@ input, .select, .config-area {
 }
 
 .modal-close {
-  min-width: 38px;
+  min-width: 44px;
   padding: 0;
 }
 
@@ -1014,3 +1014,35 @@ summary { cursor: pointer; }
 .preset-colors li { display: flex; align-items: center; gap: 8px; }
 .preset-swatch { flex: 0 0 12px; width: 12px; height: 12px; border-radius: 50%; }
 .new-device-preset code { overflow-wrap: anywhere; }
+
+/* Keep language controls and long translations usable on narrow screens. */
+html { color-scheme: dark; }
+.topbar-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; }
+.language-switcher { display: inline-flex; flex-shrink: 0; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; }
+.language-switcher button { min-width: 44px; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.language-switcher button[aria-pressed="true"] { color: #0c251c; background: var(--brand); }
+.language-switcher button:hover { box-shadow: inset 0 0 0 1px currentColor; }
+button, a, summary, input, select { touch-action: manipulation; }
+.card, .brand, .brand > div, .topbar-actions, .step-heading > div, .mode-option > span, .qr-label-card, .label-copy { min-width: 0; }
+.card, .notice, .status-pill, .help-link, .btn, .installer-footer { overflow-wrap: anywhere; }
+.preset-colors { grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); }
+.modal-card { max-height: calc(100dvh - 32px); }
+.text-button, .installer-footer a { min-height: 44px; display: inline-flex; align-items: center; }
+@media (max-width: 640px) {
+  .topbar { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .topbar-actions { justify-content: space-between; }
+  .topbar .help-link { max-width: none; min-height: 44px; display: flex; align-items: center; font-size: 13px; }
+  .topbar p { font-size: 12px; }
+  .simple-shell { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  input:not([type="radio"]):not([type="checkbox"]), select, textarea { font-size: 16px; min-height: 44px; }
+  .mode-option strong, .step-heading p, .mode-option small, .choice-card small { font-size: 13px; }
+  .qr-label-grid, .qr-label-grid.compact, .kv-grid { grid-template-columns: minmax(0, 1fr); }
+  .qr-label-card { grid-template-columns: minmax(0, 1fr); }
+  .qr-visual { justify-self: center; }
+  .asset-block li { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .asset-block li a { grid-column: 1 / -1; min-height: 44px; display: flex; align-items: center; }
+  .asset-block li > span:first-child { overflow-wrap: anywhere; }
+  .modal-overlay { padding: 12px; }
+  .modal-card { width: 100%; max-height: calc(100dvh - 24px); }
+  .installer-footer { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+}

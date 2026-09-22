@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage, LanguageSwitcher } from "./language-provider";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -441,6 +442,7 @@ function collectDiffPaths(expected: any, actual: any, path = ""): string[] {
 }
 
 export default function Page() {
+  const { t, locale } = useLanguage();
   const [serialSupported, setSerialSupported] = useState(false);
   const [portState, setPortState] = useState<PortState>("idle");
   const [status, setStatus] = useState("Плата ще не підключена");
@@ -640,14 +642,14 @@ export default function Page() {
     if (!selectedRelease?.published_at) return "";
     const dt = new Date(selectedRelease.published_at);
     if (Number.isNaN(dt.getTime())) return "";
-    return new Intl.DateTimeFormat("uk-UA", {
+    return new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "uk-UA", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     }).format(dt);
-  }, [selectedRelease]);
+  }, [selectedRelease, locale]);
 
   const canFlash = useMemo(() => {
     if (!selectedRelease) return false;
@@ -987,7 +989,7 @@ export default function Page() {
     }
     const payload = new TextEncoder().encode(JSON.stringify(configObj));
     const chunkSize = 64;
-    appendLog(`[${label}] chunked upload ${payload.length} bytes`);
+    appendLog(`[${t(label)}] chunked upload ${payload.length} bytes`);
     await sendAndWait("cmd=set_begin", (j) => j?.status === "ACK" && j?.cmd === "set_begin", 7000);
 
     for (let offset = 0; offset < payload.length; offset += chunkSize) {
@@ -1542,107 +1544,105 @@ export default function Page() {
       <header className="topbar">
         <div className="brand">
           <img src="/icon.svg" alt="" width={48} height={48} className="brand-logo" />
-          <div><div className="title-row"><span className="brand-name">AlarmMini</span><span className="version-badge">Інсталятор {SITE_VERSION}</span></div><p>Карта повітряних тривог</p></div>
+          <div><div className="title-row"><span className="brand-name">AlarmMini</span><span className="version-badge">{t("Інсталятор") + " "}{SITE_VERSION}</span></div><p>{t("Карта повітряних тривог")}</p></div>
         </div>
-        <a className="help-link" href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">Допомога у Telegram ↗</a>
+        <div className="topbar-actions"><LanguageSwitcher /><a className="help-link" href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">{t("Допомога у Telegram ↗")}</a></div>
       </header>
 
       <section className="installer-intro">
-        <div><p className="eyebrow"><span className="eyebrow-dot" /> ПРОШИВАННЯ ЧЕРЕЗ USB</p>
-        <h1>Твоя карта.<br /><span>Готова до оновлення.</span></h1>
-        <p className="intro-copy">Встанови AlarmMini або онови прошивку прямо у браузері. Три прості кроки — з підказками на кожному.</p></div>
-        <div className="intro-note"><span className="preserve-icon" aria-hidden="true">✓</span><div><strong>Твої налаштування під захистом</strong><p>У режимі оновлення спочатку збережемо копію, а після запису відновимо й перевіримо її.</p><span>Wi-Fi <i>·</i> MQTT <i>·</i> Кольори <i>·</i> Світлодіоди</span></div></div>
+        <div><p className="eyebrow"><span className="eyebrow-dot" />{" " + t("ПРОШИВАННЯ ЧЕРЕЗ USB")}</p>
+        <h1>{t("Твоя карта.")}<br /><span>{t("Готова до оновлення.")}</span></h1>
+        <p className="intro-copy">{t("Встанови AlarmMini або онови прошивку прямо у браузері. Три прості кроки — з підказками на кожному.")}</p></div>
+        <div className="intro-note"><span className="preserve-icon" aria-hidden="true">✓</span><div><strong>{t("Твої налаштування під захистом")}</strong><p>{t("У режимі оновлення спочатку збережемо копію, а після запису відновимо й перевіримо її.")}</p><span>Wi-Fi <i>·</i> MQTT <i>·</i>{" " + t("Кольори") + " "}<i>·</i>{" " + t("Світлодіоди")}</span></div></div>
       </section>
 
-      <nav aria-label="Кроки встановлення"><ol className="journey">
-        <li className={installerStep === 1 ? "current" : "done"}><a href="#choose-title" aria-current={installerStep === 1 ? "step" : undefined}><b>1</b><span>Вибери плату<small>Модель і спосіб встановлення</small></span></a></li>
-        <li className={installerStep === 2 ? "current" : portState === "connected" ? "done" : ""}><a href="#usb-title" aria-current={installerStep === 2 ? "step" : undefined}><b>{portState === "connected" ? "✓" : "2"}</b><span>Підключи USB<small>{portState === "connected" ? "Плату підключено" : "Кабель із передаванням даних"}</small></span></a></li>
-        <li className={flashOutcome === "success" ? "done" : installerStep === 3 ? "current" : ""}><a href="#flash-title" aria-current={installerStep === 3 && flashOutcome !== "success" ? "step" : undefined}><b>{flashOutcome === "success" ? "✓" : "3"}</b><span>{flashOutcome === "success" ? "Готово" : "Запусти запис"}<small>{flashBusy ? "Триває прошивання…" : "З перевіркою результату"}</small></span></a></li>
+      <nav aria-label={t("Кроки встановлення")}><ol className="journey">
+        <li className={installerStep === 1 ? "current" : "done"}><a href="#choose-title" aria-current={installerStep === 1 ? "step" : undefined}><b>1</b><span>{t("Вибери плату")}<small>{t("Модель і спосіб встановлення")}</small></span></a></li>
+        <li className={installerStep === 2 ? "current" : portState === "connected" ? "done" : ""}><a href="#usb-title" aria-current={installerStep === 2 ? "step" : undefined}><b>{portState === "connected" ? "✓" : "2"}</b><span>{t("Підключи USB")}<small>{t(portState === "connected" ? "Плату підключено" : "Кабель із передаванням даних")}</small></span></a></li>
+        <li className={flashOutcome === "success" ? "done" : installerStep === 3 ? "current" : ""}><a href="#flash-title" aria-current={installerStep === 3 && flashOutcome !== "success" ? "step" : undefined}><b>{flashOutcome === "success" ? "✓" : "3"}</b><span>{t(flashOutcome === "success" ? "Готово" : "Запусти запис")}<small>{t(flashBusy ? "Триває прошивання…" : "З перевіркою результату")}</small></span></a></li>
       </ol></nav>
 
-      {!serialSupported ? <div className="notice warning" role="status"><strong>Для прошивання відкрий сайт на комп’ютері в Chrome або Edge.</strong><p>Цей браузер не надає доступу до USB-порту. На телефоні можна переглянути інструкцію, а прошити плату — з комп’ютера.</p></div> : null}
+      {!serialSupported ? <div className="notice warning" role="status"><strong>{t("Для прошивання відкрий сайт на комп’ютері в Chrome або Edge.")}</strong><p>{t("Цей браузер не надає доступу до USB-порту. На телефоні можна переглянути інструкцію, а прошити плату — з комп’ютера.")}</p></div> : null}
 
       <div className="installer-layout">
         <div className="installer-steps">
           <section className="card step-card" aria-labelledby="choose-title">
-            <div className="step-heading"><span className="step-number">1</span><div><h2 id="choose-title">Яка в тебе плата?</h2><p className="hint">Подивись на напис на платі. ESP32-C3 та ESP8266 мають різні прошивки.</p></div></div>
-            <fieldset className="choice-grid" disabled={flashBusy || waitActive}><legend className="sr-only">Тип плати</legend>
+            <div className="step-heading"><span className="step-number">1</span><div><h2 id="choose-title">{t("Яка в тебе плата?")}</h2><p className="hint">{t("Подивись на напис на платі. ESP32-C3 та ESP8266 мають різні прошивки.")}</p></div></div>
+            <fieldset className="choice-grid" disabled={flashBusy || waitActive}><legend className="sr-only">{t("Тип плати")}</legend>
               {BOARD_TARGETS.map((board) => <label key={board.id} className={`choice-card ${selectedBoardId === board.id ? "selected" : ""}`}>
                 <input type="radio" name="board" value={board.id} checked={selectedBoardId === board.id} onChange={() => {setSelectedBoardId(board.id);setFlashOutcome("idle");}} />
                 <BoardIllustration compact={board.id === "esp8266"} />
-                <span className="board-copy"><strong>{board.id === "esp32c3" ? "ESP32-C3" : "ESP8266"}</strong><small>{board.id === "esp32c3" ? "SuperMini · зазвичай USB-C" : "Wemos D1 mini · зазвичай micro-USB"}</small><span className="board-selection" aria-hidden="true">{selectedBoardId === board.id ? "Обрано ✓" : "Вибрати плату"}</span></span>
+                <span className="board-copy"><strong>{board.id === "esp32c3" ? "ESP32-C3" : "ESP8266"}</strong><small>{t(board.id === "esp32c3" ? "SuperMini · зазвичай USB-C" : "Wemos D1 mini · зазвичай micro-USB")}</small><span className="board-selection" aria-hidden="true">{t(selectedBoardId === board.id ? "Обрано ✓" : "Вибрати плату")}</span></span>
               </label>)}
             </fieldset>
-            <fieldset className="install-options" disabled={flashBusy || waitActive}><legend>Що потрібно зробити?</legend>
-              <label className={`mode-option ${!newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={!newDeviceMode} onChange={() => {setNewDeviceMode(false);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Оновлення зі збереженням налаштувань</strong><small>Для карти, на якій уже працює AlarmMini. Рекомендовано.</small></span></label>
-              <label className={`mode-option ${newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={newDeviceMode} onChange={() => {setNewDeviceMode(true);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>Перше встановлення</strong><small>Для порожньої плати. Наявні налаштування буде видалено.</small></span></label>
+            <fieldset className="install-options" disabled={flashBusy || waitActive}><legend>{t("Що потрібно зробити?")}</legend>
+              <label className={`mode-option ${!newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={!newDeviceMode} onChange={() => {setNewDeviceMode(false);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>{t("Оновлення зі збереженням налаштувань")}</strong><small>{t("Для карти, на якій уже працює AlarmMini. Рекомендовано.")}</small></span></label>
+              <label className={`mode-option ${newDeviceMode ? "selected" : ""}`}><input type="radio" name="install-mode" checked={newDeviceMode} onChange={() => {setNewDeviceMode(true);setFreshInstallConfirmed(false);setFlashOutcome("idle");}} /><span><strong>{t("Перше встановлення")}</strong><small>{t("Для порожньої плати. Наявні налаштування буде видалено.")}</small></span></label>
             </fieldset>
-            {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>Розумію: наявні налаштування цієї плати буде видалено.</span></label> : null}
+            {newDeviceMode ? <label className="erase-confirm"><input type="checkbox" checked={freshInstallConfirmed} disabled={flashBusy} onChange={(e) => setFreshInstallConfirmed(e.target.checked)} /><span>{t("Розумію: наявні налаштування цієї плати буде видалено.")}</span></label> : null}
             {newDeviceMode ? <div className="new-device-preset">
-              <label className="preset-toggle"><input type="checkbox" checked={useAirPreset} disabled={flashBusy || waitActive} onChange={(event) => setUseAirPreset(event.target.checked)} /><span><strong>Шаблон UkraineAlarm AIR · 6 станів</strong><small>Записати готові налаштування після прошивки. Потрібна версія 2.1.0 або новіша.</small></span></label>
-              <ul className="preset-colors" aria-label="Кольори шести станів">{AIR_STATE_LABELS.map((label, state) => <li key={state}><span className="preset-swatch" style={{ backgroundColor: `rgb(${AIR_STATE_COLORS[state].slice(0, 3).join(",")})` }} aria-hidden="true" /><span>{state} · {label}</span></li>)}</ul>
-              <p>Денні й нічні кольори, нічний режим 22:00–07:00, стандартна прив’язка 27 LED, ефекти та топік <code>ukraine/alarm/map/full_v2</code>.</p>
-              <p className="hint">Wi-Fi, адреса брокера MQTT, логіни, паролі, резервний URL і токени порожні. Заповниш їх для свого пристрою. Прив’язку LED можна змінити в калібруванні.</p>
-              <a className="text-button" href="/profiles/ukrainealarm-air-6-states.json" download>Завантажити шаблон JSON</a>
-              {presetUnsupported ? <p className="notice warning" role="alert">Вибери прошивку 2.1.0 або новішу для шести станів, або вимкни шаблон.</p> : null}
+              <label className="preset-toggle"><input type="checkbox" checked={useAirPreset} disabled={flashBusy || waitActive} onChange={(event) => setUseAirPreset(event.target.checked)} /><span><strong>{t("Шаблон UkraineAlarm AIR · 6 станів")}</strong><small>{t("Записати готові налаштування після прошивки. Потрібна версія 2.1.0 або новіша.")}</small></span></label>
+              <ul className="preset-colors" aria-label={t("Кольори шести станів")}>{AIR_STATE_LABELS.map((label, state) => <li key={state}><span className="preset-swatch" style={{ backgroundColor: `rgb(${AIR_STATE_COLORS[state].slice(0, 3).join(",")})` }} aria-hidden="true" /><span>{state} · {t(label)}</span></li>)}</ul>
+              <p>{t("Денні й нічні кольори, нічний режим 22:00–07:00, стандартна прив’язка 27 LED, ефекти та топік") + " "}<code>ukraine/alarm/map/full_v2</code>.</p>
+              <p className="hint">{t("Wi-Fi, адреса брокера MQTT, логіни, паролі, резервний URL і токени порожні. Заповниш їх для свого пристрою. Прив’язку LED можна змінити в калібруванні.")}</p>
+              <a className="text-button" href="/profiles/ukrainealarm-air-6-states.json" download>{t("Завантажити шаблон JSON")}</a>
+              {presetUnsupported ? <p className="notice warning" role="alert">{t("Вибери прошивку 2.1.0 або новішу для шести станів, або вимкни шаблон.")}</p> : null}
             </div> : null}
             <div className="mqtt-topics">
-              <strong>MQTT: два топіки для різних прошивок</strong>
-              <p><code>ukraine/alarm/map/full</code> — старий топік: 0 — відбій, 1 — тривога. Залишається для плат зі старою прошивкою.</p>
-              <p><code>ukraine/alarm/map/full_v2</code> — новий топік зі станами 0–255. Потрібна прошивка 2.1.0 або новіша. У вебпанелі плати можна задати денний і нічний колір для 0, 1 та ще 16 станів через «+».</p>
-              <p className="hint">При оновленні зберігається твій поточний топік. Для нових станів після оновлення вибери full_v2 у налаштуваннях MQTT. Звук у новій прошивці прибрано.</p>
-              <p className="hint">У прошивці від 2.1.3 колір будь-якого стану пульсує 30 секунд після зміни. Уночі враховуються налаштування пульсації та яскравості.</p>
+              <strong>{t("MQTT: два топіки для різних прошивок")}</strong>
+              <p><code>ukraine/alarm/map/full</code>{" " + t("— старий топік: 0 — відбій, 1 — тривога. Залишається для плат зі старою прошивкою.")}</p>
+              <p><code>ukraine/alarm/map/full_v2</code>{" " + t("— новий топік зі станами 0–255. Потрібна прошивка 2.1.0 або новіша. У вебпанелі плати можна задати денний і нічний колір для 0, 1 та ще 16 станів через «+».")}</p>
+              <p className="hint">{t("При оновленні зберігається твій поточний топік. Для нових станів після оновлення вибери full_v2 у налаштуваннях MQTT. Звук у новій прошивці прибрано.")}</p>
+              <p className="hint">{t("У прошивці від 2.1.3 колір будь-якого стану пульсує 30 секунд після зміни. Уночі враховуються налаштування пульсації та яскравості.")}</p>
             </div>
-            <details className="reserve-settings"><summary>Резервний канал даних <span>Необов’язково</span></summary>
+            <details className="reserve-settings"><summary>{t("Резервний канал даних") + " "}<span>{t("Необов’язково")}</span></summary>
               <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} token={installFallbackToken} onTokenChange={setInstallFallbackToken} firmwareVersion={selectedRelease?.tag_name} disabled={flashBusy || waitActive || fallbackSaving} />
-              <p className="hint">JSON-масив із 25 чисел у порядку областей MQTT: 0/1 для старих прошивок, 0–255 починаючи з 2.1.0. Опитування кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.</p>
-              <p className="hint">Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.</p>
-              <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">Порядок областей і приклад відповіді ↗</a>
+              <p className="hint">{t("JSON-масив із 25 чисел у порядку областей MQTT: 0/1 для старих прошивок, 0–255 починаючи з 2.1.0. Опитування кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.")}</p>
+              <p className="hint">{t("Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.")}</p>
+              <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">{t("Порядок областей і приклад відповіді ↗")}</a>
             </details>
             <div className="release-summary" aria-live="polite">
-              {releasesLoading ? <span>Завантажуємо актуальну версію…</span> : releasesError ? <><span>{releasesError}</span><button className="btn" onClick={() => setReleasesAttempt((v) => v + 1)}>Спробувати ще раз</button></> : !selectedRelease ? <span>Опублікованих версій поки немає.</span> : <><span>Версія <strong>{selectedRelease.tag_name}</strong> · актуальна</span><small>{selectedReleaseUpdatedAt}</small></>}
+              {releasesLoading ? <span>{t("Завантажуємо актуальну версію…")}</span> : releasesError ? <><span>{t(releasesError)}</span><button className="btn" onClick={() => setReleasesAttempt((v) => v + 1)}>{t("Спробувати ще раз")}</button></> : !selectedRelease ? <span>{t("Опублікованих версій поки немає.")}</span> : <><span>{t("Версія") + " "}<strong>{selectedRelease.tag_name}</strong>{" " + t("· актуальна")}</span><small>{selectedReleaseUpdatedAt}</small></>}
             </div>
-            <p className="hint">Підтримується лише актуальна версія. Старі прошивки більше не доступні для встановлення; налаштування з них можна перенести під час оновлення.</p>
+            <p className="hint">{t("Підтримується лише актуальна версія. Старі прошивки більше не доступні для встановлення; налаштування з них можна перенести під час оновлення.")}</p>
           </section>
 
           <section className="card step-card" aria-labelledby="usb-title">
-            <div className="step-heading"><span className="step-number">2</span><div><h2 id="usb-title">Підключи плату через USB</h2><p className="hint">Потрібен кабель із передаванням даних. Закрий Serial Monitor, Arduino IDE та інші програми, які використовують порт.</p></div></div>
-            <div className="row gap"><button className="btn primary" disabled={!serialSupported || portState === "connecting" || flashBusy || waitActive} onClick={() => void onConnectClick()}>{portState === "connecting" || waitActive ? "Підключаємо…" : portState === "connected" ? "Перевірити підключення" : "Підключити через USB"}</button>{portState === "connected" ? <button className="btn" disabled={flashBusy || waitActive} onClick={() => void disconnectPort(true)}>Вибрати інший пристрій</button> : null}</div>
-            <p className="hint">У вікні браузера вибери USB Serial, USB JTAG/serial, CP210x або CH340 — назва залежить від плати — і натисни «Підключити».</p>
-            <div className="connection-status" role="status" aria-live="polite"><span className={`connection-dot ${portState === "connected" ? "connected" : ""}`} aria-hidden="true" />{status}</div>
-            {waitActive ? <div className="wait-mini"><span>{waitLabel}</span><progress aria-label="Очікування відповіді плати" /></div> : null}
+            <div className="step-heading"><span className="step-number">2</span><div><h2 id="usb-title">{t("Підключи плату через USB")}</h2><p className="hint">{t("Потрібен кабель із передаванням даних. Закрий Serial Monitor, Arduino IDE та інші програми, які використовують порт.")}</p></div></div>
+            <div className="row gap"><button className="btn primary" disabled={!serialSupported || portState === "connecting" || flashBusy || waitActive} onClick={() => void onConnectClick()}>{t(portState === "connecting" || waitActive ? "Підключаємо…" : portState === "connected" ? "Перевірити підключення" : "Підключити через USB")}</button>{portState === "connected" ? <button className="btn" disabled={flashBusy || waitActive} onClick={() => void disconnectPort(true)}>{t("Вибрати інший пристрій")}</button> : null}</div>
+            <p className="hint">{t("У вікні браузера вибери USB Serial, USB JTAG/serial, CP210x або CH340 — назва залежить від плати — і натисни «Підключити».")}</p>
+            <div className="connection-status" role="status" aria-live="polite"><span className={`connection-dot ${portState === "connected" ? "connected" : ""}`} aria-hidden="true" />{t(status)}</div>
+            {waitActive ? <div className="wait-mini"><span>{t(waitLabel)}</span><progress aria-label={t("Очікування відповіді плати")} /></div> : null}
           </section>
 
           <section className="card step-card flash-card" aria-labelledby="flash-title" aria-busy={flashBusy}>
-            <div className="step-heading"><span className="step-number">3</span><div><h2 id="flash-title">{newDeviceMode ? "Встанови AlarmMini" : "Онови прошивку"}</h2><p className="hint">{newDeviceMode ? "Після встановлення підключиш карту до домашнього Wi-Fi." : "Wi-Fi, MQTT, кольори та відповідність світлодіодів збережуться. Якщо прочитати налаштування не вдасться, запис не почнеться."}</p></div></div>
-            <button className="btn primary flash-primary" disabled={!serialSupported || !canFlash || presetUnsupported || flashBusy || fallbackSaving || waitActive || portState !== "connected" || (newDeviceMode && !freshInstallConfirmed)} onClick={() => void onFlashClick(!newDeviceMode)}>{flashBusy ? "Триває прошивання…" : newDeviceMode ? "Встановити AlarmMini" : "Оновити й зберегти налаштування"}</button>
-            <p className="hint">{portState !== "connected" ? "Спочатку підключи плату в кроці 2." : !canFlash ? "Для обраної плати немає повного набору файлів. Вибери іншу версію." : presetUnsupported ? "Для шаблону шести станів потрібна прошивка 2.1.0 або новіша.": newDeviceMode && !freshInstallConfirmed ? "Підтвердь скидання налаштувань у кроці 1." : "Залиш цю вкладку відкритою та не відключай USB до повідомлення про завершення."}</p>
+            <div className="step-heading"><span className="step-number">3</span><div><h2 id="flash-title">{t(newDeviceMode ? "Встанови AlarmMini" : "Онови прошивку")}</h2><p className="hint">{t(newDeviceMode ? "Після встановлення підключиш карту до домашнього Wi-Fi." : "Wi-Fi, MQTT, кольори та відповідність світлодіодів збережуться. Якщо прочитати налаштування не вдасться, запис не почнеться.")}</p></div></div>
+            <button className="btn primary flash-primary" disabled={!serialSupported || !canFlash || presetUnsupported || flashBusy || fallbackSaving || waitActive || portState !== "connected" || (newDeviceMode && !freshInstallConfirmed)} onClick={() => void onFlashClick(!newDeviceMode)}>{t(flashBusy ? "Триває прошивання…" : newDeviceMode ? "Встановити AlarmMini" : "Оновити й зберегти налаштування")}</button>
+            <p className="hint">{t(portState !== "connected" ? "Спочатку підключи плату в кроці 2." : !canFlash ? "Для обраної плати немає повного набору файлів. Вибери іншу версію." : presetUnsupported ? "Для шаблону шести станів потрібна прошивка 2.1.0 або новіша.": newDeviceMode && !freshInstallConfirmed ? "Підтвердь скидання налаштувань у кроці 1." : "Залиш цю вкладку відкритою та не відключай USB до повідомлення про завершення.")}</p>
             {flashBusy || flashOutcome !== "idle" ? <>
-              <ol className="pipeline-grid" aria-label="Стан прошивання">{PIPELINE_STEPS.filter((step) => pipelineState[step.id] !== "skipped").map((step) => <li key={step.id} className={`pipeline-step ${pipelineState[step.id]}`} aria-current={pipelineState[step.id] === "active" ? "step" : undefined}><span aria-hidden="true">{pipelineState[step.id] === "done" ? "✓ " : pipelineState[step.id] === "error" ? "! " : ""}</span>{step.id === "restoreConfig" && newDeviceMode ? "Запис шаблону" : step.label}<span className="sr-only">: {pipelineState[step.id]}</span></li>)}</ol>
-              {flashProgress !== null ? <progress value={flashProgress} max={100} aria-label="Запис прошивки" /> : flashBusy ? <progress aria-label="Підготовка або відновлення налаштувань" /> : null}
+              <ol className="pipeline-grid" aria-label={t("Стан прошивання")}>{PIPELINE_STEPS.filter((step) => pipelineState[step.id] !== "skipped").map((step) => <li key={step.id} className={`pipeline-step ${pipelineState[step.id]}`} aria-current={pipelineState[step.id] === "active" ? "step" : undefined}><span aria-hidden="true">{pipelineState[step.id] === "done" ? "✓ " : pipelineState[step.id] === "error" ? "! " : ""}</span>{t(step.id === "restoreConfig" && newDeviceMode ? "Запис шаблону" : step.label)}<span className="sr-only">: {pipelineState[step.id]}</span></li>)}</ol>
+              {flashProgress !== null ? <progress value={flashProgress} max={100} aria-label={t("Запис прошивки")} /> : flashBusy ? <progress aria-label={t("Підготовка або відновлення налаштувань")} /> : null}
             </> : null}
-            {flashStatus ? <div className={`notice ${flashOutcome === "error" ? "warning" : flashOutcome === "success" ? "success" : ""}`} role={flashOutcome === "error" ? "alert" : "status"} aria-live="polite">{flashStatus}</div> : null}
-            {backupAvailable ? <div className="backup-actions"><button className="text-button" disabled={flashBusy && pipelineState.backup !== "done"} onClick={() => {try {downloadBackupConfigFile();} catch(error) {showActionError(error);}}}>Завантажити резервну копію налаштувань</button><small>Файл містить паролі. Зберігай його у себе.</small>{flashOutcome === "error" ? <button className="btn" disabled={flashBusy} onClick={() => void runRecoveryWizard().catch(showActionError)}>Відновити налаштування з копії</button> : null}</div> : null}
+            {flashStatus ? <div className={`notice ${flashOutcome === "error" ? "warning" : flashOutcome === "success" ? "success" : ""}`} role={flashOutcome === "error" ? "alert" : "status"} aria-live="polite">{t(flashStatus)}</div> : null}
+            {backupAvailable ? <div className="backup-actions"><button className="text-button" disabled={flashBusy && pipelineState.backup !== "done"} onClick={() => {try {downloadBackupConfigFile();} catch(error) {showActionError(error);}}}>{t("Завантажити резервну копію налаштувань")}</button><small>{t("Файл містить паролі. Зберігай його у себе.")}</small>{flashOutcome === "error" ? <button className="btn" disabled={flashBusy} onClick={() => void runRecoveryWizard().catch(showActionError)}>{t("Відновити налаштування з копії")}</button> : null}</div> : null}
           </section>
 
-          {flashOutcome === "success" ? <section className="card step-card completion" aria-labelledby="done-title"><h2 id="done-title">Готово. Підключи карту до мережі</h2>{newDeviceMode && useAirPreset ? <p>Шаблон шести станів уже на платі. Після Wi-Fi відкрий «Додаткові налаштування» → MQTT і введи адресу брокера та свої облікові дані.</p> : null}<p>Якщо Wi-Fi вже був налаштований, карта спробує підключитися автоматично. Якщо роутер недоступний, з’явиться мережа <strong>{info.apSsid}</strong>.</p><p>Підключись телефоном до цієї мережі та відкрий <strong>192.168.4.1</strong>. Або введи домашній Wi-Fi тут, поки USB підключено.</p><form onSubmit={(event) => {event.preventDefault();void cmdSetWifi().catch(showActionError);}}><label>Назва домашньої Wi-Fi мережі<input name="wifi-ssid" value={wifiSsid} onChange={(event) => setWifiSsid(event.target.value)} autoComplete="off" spellCheck={false} required /></label><label>Пароль Wi-Fi<input name="wifi-password" type="password" autoComplete="new-password" value={wifiPassword} onChange={(event) => setWifiPassword(event.target.value)} /></label><button className="btn" disabled={portState !== "connected" || flashBusy}>Зберегти Wi-Fi на платі</button></form>{ipWebUrl && !isApModeIp ? <a className="btn primary" href={ipWebUrl} target="_blank" rel="noreferrer">Відкрити свою карту ↗</a> : null}</section> : null}
+          {flashOutcome === "success" ? <section className="card step-card completion" aria-labelledby="done-title"><h2 id="done-title">{t("Готово. Підключи карту до мережі")}</h2>{newDeviceMode && useAirPreset ? <p>{t("Шаблон шести станів уже на платі. Після Wi-Fi відкрий «Додаткові налаштування» → MQTT і введи адресу брокера та свої облікові дані.")}</p> : null}<p>{t("Якщо Wi-Fi вже був налаштований, карта спробує підключитися автоматично. Якщо роутер недоступний, з’явиться мережа") + " "}<strong>{info.apSsid}</strong>.</p><p>{t("Підключись телефоном до цієї мережі та відкрий") + " "}<strong>192.168.4.1</strong>{t(". Або введи домашній Wi-Fi тут, поки USB підключено.")}</p><form onSubmit={(event) => {event.preventDefault();void cmdSetWifi().catch(showActionError);}}><label>{t("Назва домашньої Wi-Fi мережі")}<input name="wifi-ssid" value={wifiSsid} onChange={(event) => setWifiSsid(event.target.value)} autoComplete="off" spellCheck={false} required /></label><label>{t("Пароль Wi-Fi")}<input name="wifi-password" type="password" autoComplete="new-password" value={wifiPassword} onChange={(event) => setWifiPassword(event.target.value)} /></label><button className="btn" disabled={portState !== "connected" || flashBusy}>{t("Зберегти Wi-Fi на платі")}</button></form>{ipWebUrl && !isApModeIp ? <a className="btn primary" href={ipWebUrl} target="_blank" rel="noreferrer">{t("Відкрити свою карту ↗")}</a> : null}</section> : null}
         </div>
 
         <aside className="installer-sidebar" aria-labelledby="help-title">
-          <section className="card install-summary" aria-labelledby="summary-title"><span className="eyebrow">ТВІЙ ВИБІР</span><h2 id="summary-title">Усе готове до старту?</h2><dl><div><dt>Плата</dt><dd>{selectedBoardId === "esp32c3" ? "ESP32-C3" : "ESP8266"}</dd></div><div><dt>Прошивка</dt><dd>{selectedRelease?.tag_name ?? "Очікуємо версію"}</dd></div><div><dt>Режим</dt><dd>{newDeviceMode ? "Перше встановлення" : "Оновлення"}</dd></div></dl><div className={`summary-note ${newDeviceMode ? "erase-note" : ""}`}><span aria-hidden="true">{newDeviceMode ? "!" : "✓"}</span>{newDeviceMode ? "Плата буде очищена. Wi-Fi налаштуєш після встановлення." : "Налаштування буде збережено та відновлено автоматично."}</div></section>
-          <section className="card installer-help"><h2 id="help-title">Перед початком</h2><ul className="checklist"><li>Chrome або Edge на комп’ютері</li><li>USB-кабель із передаванням даних</li><li>Стабільне живлення та інтернет</li></ul><h3 className="faq-title">Потрібна підказка?</h3><details><summary>Плата не з’являється у списку</summary><p>Спробуй інший USB-кабель та порт комп’ютера. Якщо використовується CH340 або CP210x, може знадобитися драйвер від виробника плати.</p></details><details><summary>Не починається запис</summary><p>Закрий інші програми з COM-портом. На ESP32-C3 затисни BOOT, коротко натисни RESET, відпусти BOOT і повтори запис. Якщо порт змінився, вибери пристрій знову.</p></details><details><summary>Оновлення перервалося</summary><p>Не перемикайся на перше встановлення. Перепідключи плату, повтори оновлення або віднови налаштування з резервної копії.</p></details><details><summary>Карта ще не підключилася до Wi-Fi</summary><p>Дочекайся запуску роутера. Для зміни мережі підключись до точки AlarmMap-Setup та відкрий 192.168.4.1. Потрібна мережа 2,4 ГГц.</p></details><a className="community-link" href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">Допомога у спільноті <span aria-hidden="true">↗</span></a></section>
+          <section className="card install-summary" aria-labelledby="summary-title"><span className="eyebrow">{t("ТВІЙ ВИБІР")}</span><h2 id="summary-title">{t("Усе готове до старту?")}</h2><dl><div><dt>{t("Плата")}</dt><dd>{selectedBoardId === "esp32c3" ? "ESP32-C3" : "ESP8266"}</dd></div><div><dt>{t("Прошивка")}</dt><dd>{t(selectedRelease?.tag_name ?? "Очікуємо версію")}</dd></div><div><dt>{t("Режим")}</dt><dd>{t(newDeviceMode ? "Перше встановлення" : "Оновлення")}</dd></div></dl><div className={`summary-note ${newDeviceMode ? "erase-note" : ""}`}><span aria-hidden="true">{newDeviceMode ? "!" : "✓"}</span>{t(newDeviceMode ? "Плата буде очищена. Wi-Fi налаштуєш після встановлення." : "Налаштування буде збережено та відновлено автоматично.")}</div></section>
+          <section className="card installer-help"><h2 id="help-title">{t("Перед початком")}</h2><ul className="checklist"><li>{t("Chrome або Edge на комп’ютері")}</li><li>{t("USB-кабель із передаванням даних")}</li><li>{t("Стабільне живлення та інтернет")}</li></ul><h3 className="faq-title">{t("Потрібна підказка?")}</h3><details><summary>{t("Плата не з’являється у списку")}</summary><p>{t("Спробуй інший USB-кабель та порт комп’ютера. Якщо використовується CH340 або CP210x, може знадобитися драйвер від виробника плати.")}</p></details><details><summary>{t("Не починається запис")}</summary><p>{t("Закрий інші програми з COM-портом. На ESP32-C3 затисни BOOT, коротко натисни RESET, відпусти BOOT і повтори запис. Якщо порт змінився, вибери пристрій знову.")}</p></details><details><summary>{t("Оновлення перервалося")}</summary><p>{t("Не перемикайся на перше встановлення. Перепідключи плату, повтори оновлення або віднови налаштування з резервної копії.")}</p></details><details><summary>{t("Карта ще не підключилася до Wi-Fi")}</summary><p>{t("Дочекайся запуску роутера. Для зміни мережі підключись до точки AlarmMap-Setup та відкрий 192.168.4.1. Потрібна мережа 2,4 ГГц.")}</p></details><a className="community-link" href={TELEGRAM_GROUP_URL} target="_blank" rel="noreferrer">{t("Допомога у спільноті") + " "}<span aria-hidden="true">↗</span></a></section>
         </aside>
       </div>
 
-      <details className="card advanced-settings" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}><summary>Додаткові налаштування та діагностика<span>MQTT, редактор конфігурації, QR-коди, файли прошивки та журнал</span></summary>
+      <details className="card advanced-settings" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}><summary>{t("Додаткові налаштування та діагностика")}<span>{t("MQTT, редактор конфігурації, QR-коди, файли прошивки та журнал")}</span></summary>
         {advancedOpen ? <div className="advanced-content">
       <section className="grid two">
         <div className="card">
-          <h2>Інформація про пристрій</h2>
+          <h2>{t("Інформація про пристрій")}</h2>
           <div className="row gap">
-            <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdGetInfo().catch(showActionError)}>
-              Оновити інформацію
-            </button>
+            <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdGetInfo().catch(showActionError)}>{" " + t("Оновити інформацію") + " "}</button>
           </div>
           <div className="kv-grid">
             <div><span>FW</span><strong>{info.fw}</strong></div>
@@ -1650,7 +1650,7 @@ export default function Page() {
             <div><span>mDNS</span><strong>{info.mdns}</strong></div>
             <div><span>Hostname</span><strong>{info.hostname}</strong></div>
             <div><span>MQTT Client ID</span><strong>{info.mqttClientId}</strong></div>
-            <div><span>Admin пароль</span><strong>{info.adminPassword}</strong></div>
+            <div><span>{t("Admin пароль")}</span><strong>{info.adminPassword}</strong></div>
             <div><span>AP SSID</span><strong>{info.apSsid}</strong></div>
             <div><span>Reset reason</span><strong>{info.resetReason}</strong></div>
             <div><span>Last stage</span><strong>{info.lastStage}</strong></div>
@@ -1659,37 +1659,25 @@ export default function Page() {
           <div className="service-qr-panel qr-print-panel">
             <div className="section-head">
               <div>
-                <h3>QR / Друк наклейок</h3>
-                <p className="hint">Готові наклейки для корпусу: окремо web-доступ і окремо AP налаштування.</p>
+                <h3>{t("QR / Друк наклейок")}</h3>
+                <p className="hint">{t("Готові наклейки для корпусу: окремо web-доступ і окремо AP налаштування.")}</p>
               </div>
               <div className="qr-actions no-print">
-                <button className="btn primary" disabled={portState !== "connected" || flashBusy} onClick={() => void refreshInfoAndLabels().catch(showActionError)}>
-                  Прочитати з плати
-                </button>
-                <button className="btn" disabled={!adminQrSrc} onClick={printQrLabels}>
-                  Друк QR
-                </button>
+                <button className="btn primary" disabled={portState !== "connected" || flashBusy} onClick={() => void refreshInfoAndLabels().catch(showActionError)}>{" " + t("Прочитати з плати") + " "}</button>
+                <button className="btn" disabled={!adminQrSrc} onClick={printQrLabels}>{" " + t("Друк QR") + " "}</button>
               </div>
             </div>
 
             <div className="qr-toolbelt no-print">
               <div className="qr-tool-actions">
-                <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void checkWebInterface().catch(showActionError)}>
-                  Перевірити web UI
-                </button>
-                <a className="btn" href={adminUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!adminUrl}>
-                  Відкрити web panel
-                </a>
-                <a className="btn" href={healthUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!healthUrl}>
-                  Відкрити /health
-                </a>
+                <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void checkWebInterface().catch(showActionError)}>{" " + t("Перевірити web UI") + " "}</button>
+                <a className="btn" href={adminUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!adminUrl}>{" " + t("Відкрити web panel") + " "}</a>
+                <a className="btn" href={healthUrl || "#"} target="_blank" rel="noreferrer" aria-disabled={!healthUrl}>{" " + t("Відкрити /health") + " "}</a>
                 {ipWebUrl ? (
-                  <a className="btn" href={ipWebUrl} target="_blank" rel="noreferrer">
-                    Відкрити по IP
-                  </a>
+                  <a className="btn" href={ipWebUrl} target="_blank" rel="noreferrer">{" " + t("Відкрити по IP") + " "}</a>
                 ) : null}
               </div>
-              <div className={`qr-status ${isApModeIp ? "warn" : ""}`}>{webCheckStatus}</div>
+              <div className={`qr-status ${isApModeIp ? "warn" : ""}`}>{t(webCheckStatus)}</div>
             </div>
 
             <div className="qr-label-grid compact">
@@ -1697,14 +1685,14 @@ export default function Page() {
                 <div className="label-copy">
                   <span>Admin</span>
                   <h3>{isApModeIp ? "Wi‑Fi setup" : "Web panel"}</h3>
-                  <p className="label-note">Адмін-доступ для власника карти</p>
+                  <p className="label-note">{t("Адмін-доступ для власника карти")}</p>
                   <dl>
                     <div><dt>URL</dt><dd>{deviceBaseUrl || "-"}</dd></div>
                     <div><dt>Password</dt><dd>{isApModeIp ? "Setup portal" : info.adminPassword}</dd></div>
                   </dl>
                 </div>
                 <div className="qr-visual">
-                  {adminQrSrc ? <img src={adminQrSrc} alt="QR вебпанелі" width={178} height={178} className="label-qr" /> : <div className="qr-placeholder">QR</div>}
+                  {adminQrSrc ? <img src={adminQrSrc} alt={t("QR вебпанелі")} width={178} height={178} className="label-qr" /> : <div className="qr-placeholder">QR</div>}
                   <button className="btn" disabled={!adminQrSrc} onClick={() => downloadQrPng(adminQrSrc, `${info.hostname || "alarmmini"}-admin.png`)}>
                     PNG
                   </button>
@@ -1715,14 +1703,14 @@ export default function Page() {
                 <div className="label-copy">
                   <span>AP</span>
                   <h3>Access point</h3>
-                  <p className="label-note">Швидке підключення до режиму налаштування</p>
+                  <p className="label-note">{t("Швидке підключення до режиму налаштування")}</p>
                   <dl>
                     <div><dt>SSID</dt><dd>{info.apSsid}</dd></div>
-                    <div><dt>Password</dt><dd>{info.apPassword || "Без пароля"}</dd></div>
+                    <div><dt>Password</dt><dd>{t(info.apPassword || "Без пароля")}</dd></div>
                   </dl>
                 </div>
                 <div className="qr-visual">
-                  {apQrSrc ? <img src={apQrSrc} alt="QR точки налаштування" width={178} height={178} className="label-qr" /> : <div className="qr-placeholder">QR</div>}
+                  {apQrSrc ? <img src={apQrSrc} alt={t("QR точки налаштування")} width={178} height={178} className="label-qr" /> : <div className="qr-placeholder">QR</div>}
                   <button className="btn" disabled={!apQrSrc} onClick={() => downloadQrPng(apQrSrc, `${info.hostname || "alarmmini"}-ap.png`)}>
                     PNG
                   </button>
@@ -1733,10 +1721,19 @@ export default function Page() {
         </div>
 
         <div className="card">
-          <h2>Мережеві налаштування</h2>
-          <div className="tabs" role="tablist" aria-label="Мережеві налаштування">
+          <h2>{t("Мережеві налаштування")}</h2>
+          <div className="tabs" role="tablist" aria-label={t("Мережеві налаштування")} onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? "wifi" : event.key === "End" ? "mqtt" : networkTab === "wifi" ? "mqtt" : "wifi";
+            setNetworkTab(next);
+            event.currentTarget.querySelector<HTMLButtonElement>(`#network-tab-${next}`)?.focus();
+          }}>
             <button
               role="tab"
+              id="network-tab-wifi"
+              aria-controls="network-panel"
+              tabIndex={networkTab === "wifi" ? 0 : -1}
               aria-selected={networkTab === "wifi"}
               className={`tab-btn ${networkTab === "wifi" ? "active" : ""}`}
               onClick={() => setNetworkTab("wifi")}
@@ -1745,6 +1742,9 @@ export default function Page() {
             </button>
             <button
               role="tab"
+              id="network-tab-mqtt"
+              aria-controls="network-panel"
+              tabIndex={networkTab === "mqtt" ? 0 : -1}
               aria-selected={networkTab === "mqtt"}
               className={`tab-btn ${networkTab === "mqtt" ? "active" : ""}`}
               onClick={() => setNetworkTab("mqtt")}
@@ -1754,7 +1754,7 @@ export default function Page() {
           </div>
 
           {networkTab === "wifi" ? (
-            <div className="tab-panel">
+            <div className="tab-panel" id="network-panel" role="tabpanel" aria-labelledby="network-tab-wifi">
               <label>
                 SSID
                 <input value={wifiSsid} onChange={(e) => setWifiSsid(e.target.value)} />
@@ -1764,13 +1764,11 @@ export default function Page() {
                 <input type="password" autoComplete="new-password" name="advanced-wifi-password" value={wifiPassword} onChange={(e) => setWifiPassword(e.target.value)} />
               </label>
               <div className="row gap">
-                <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetWifi().catch(showActionError)}>
-                  Зберегти Wi‑Fi
-                </button>
+                <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetWifi().catch(showActionError)}>{" " + t("Зберегти Wi‑Fi") + " "}</button>
               </div>
             </div>
           ) : (
-            <div className="tab-panel">
+            <div className="tab-panel" id="network-panel" role="tabpanel" aria-labelledby="network-tab-mqtt">
               <label>
                 Host
                 <input value={mqttHost} onChange={(e) => setMqttHost(e.target.value)} placeholder="broker.example.com" />
@@ -1782,7 +1780,7 @@ export default function Page() {
               <label>
                 Topic
                 <input value={mqttTopic} onChange={(e) => setMqttTopic(e.target.value)} placeholder="ukraine/alarm/map/full_v2" />
-                <span className="hint">Старий: ukraine/alarm/map/full (0/1). Новий: ukraine/alarm/map/full_v2 (0–255, прошивка від 2.1.0).</span>
+                <span className="hint">{t("Старий: ukraine/alarm/map/full (0/1). Новий: ukraine/alarm/map/full_v2 (0–255, прошивка від 2.1.0).")}</span>
               </label>
               <label>
                 Username
@@ -1793,41 +1791,33 @@ export default function Page() {
                 <input type="password" autoComplete="new-password" name="mqtt-password" value={mqttPassword} onChange={(e) => setMqttPassword(e.target.value)} />
               </label>
               <div className="row gap">
-                <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetMqtt().catch(showActionError)}>
-                  Зберегти MQTT
-                </button>
+                <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetMqtt().catch(showActionError)}>{" " + t("Зберегти MQTT") + " "}</button>
               </div>
               <FallbackUrlField id="fallback-url" value={fallbackUrl} onChange={setFallbackUrl} token={fallbackToken} onTokenChange={setFallbackToken} firmwareVersion={info.fw} disabled={flashBusy || waitActive || fallbackSaving} />
-              <p className="hint">25 значень у порядку MQTT: 0/1 або 0–255 з прошивкою 2.1.0+. Очисти поле й збережи, щоб вимкнути резерв.</p>
-              <button className="btn" disabled={flashBusy || fallbackSaving || portState !== "connected"} onClick={() => void cmdSetFallbackUrl().catch(showActionError)}>{fallbackSaving ? "Перевіряємо й зберігаємо…" : "Зберегти резервний URL"}</button>
+              <p className="hint">{t("25 значень у порядку MQTT: 0/1 або 0–255 з прошивкою 2.1.0+. Очисти поле й збережи, щоб вимкнути резерв.")}</p>
+              <button className="btn" disabled={flashBusy || fallbackSaving || portState !== "connected"} onClick={() => void cmdSetFallbackUrl().catch(showActionError)}>{t(fallbackSaving ? "Перевіряємо й зберігаємо…" : "Зберегти резервний URL")}</button>
             </div>
           )}
         </div>
       </section>
 
       <section className="card">
-        <h2>Редактор конфігурації</h2>
+        <h2>{t("Редактор конфігурації")}</h2>
         <div className="row gap">
-          <button className="btn primary" onClick={() => setConfigModalOpen(true)}>
-            Відкрити редактор конфігу
-          </button>
-          <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void cmdGetConfig().catch(showActionError)}>
-            Зчитати конфігурацію
-          </button>
-          <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetConfig().catch(showActionError)}>
-            Зберегти конфігурацію
-          </button>
-          <div className="status-pill">{backupAvailable ? "Backup: знайдено" : "Backup: відсутній"}</div>
-          {dangerousWriteArmed ? <div className="status-pill">Підтвердження порожнього JSON: увімкнено</div> : null}
+          <button className="btn primary" onClick={() => setConfigModalOpen(true)}>{" " + t("Відкрити редактор конфігу") + " "}</button>
+          <button className="btn" disabled={portState !== "connected" || flashBusy} onClick={() => void cmdGetConfig().catch(showActionError)}>{" " + t("Зчитати конфігурацію") + " "}</button>
+          <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetConfig().catch(showActionError)}>{" " + t("Зберегти конфігурацію") + " "}</button>
+          <div className="status-pill">{t(backupAvailable ? "Backup: знайдено" : "Backup: відсутній")}</div>
+          {dangerousWriteArmed ? <div className="status-pill">{t("Підтвердження порожнього JSON: увімкнено")}</div> : null}
         </div>
       </section>
 
       {configModalOpen ? (
         <div className="modal-overlay" onClick={() => setConfigModalOpen(false)}>
-          <div className="modal-card card" ref={modalRef} role="dialog" aria-modal="true" aria-label="Редактор конфігурації" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card card" ref={modalRef} role="dialog" aria-modal="true" aria-label={t("Редактор конфігурації")} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <h2>Редактор конфігурації</h2>
-              <button className="btn modal-close" onClick={() => setConfigModalOpen(false)} aria-label="Закрити">
+              <h2>{t("Редактор конфігурації")}</h2>
+              <button className="btn modal-close" onClick={() => setConfigModalOpen(false)} aria-label={t("Закрити")}>
                 x
               </button>
             </div>
@@ -1841,15 +1831,9 @@ export default function Page() {
                     setStatus(`Помилка перевірки: ${message}`);
                   })
                 }
-              >
-                Перевірити сумісність конфігу
-              </button>
-              <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetConfig().catch(showActionError)}>
-                Зберегти конфігурацію
-              </button>
-              <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void downloadBackupConfigFile()}>
-                Завантажити backup JSON
-              </button>
+              >{" " + t("Перевірити сумісність конфігу") + " "}</button>
+              <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetConfig().catch(showActionError)}>{" " + t("Зберегти конфігурацію") + " "}</button>
+              <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void downloadBackupConfigFile()}>{" " + t("Завантажити backup JSON") + " "}</button>
               <button className="btn" disabled={!backupAvailable || flashBusy} onClick={() => void cmdSafeRestoreNetworkFromBackup().catch((e) => {
                 const message = e instanceof Error ? e.message : String(e);
                 setStatus(`Safe restore помилка: ${message}`);
@@ -1863,9 +1847,7 @@ export default function Page() {
                   const message = error instanceof Error ? error.message : String(error);
                   setStatus(`Помилка backup restore: ${message}`);
                 })}
-              >
-                Відновити backup JSON
-              </button>
+              >{" " + t("Відновити backup JSON") + " "}</button>
               <button
                 className="btn"
                 disabled={flashBusy}
@@ -1874,19 +1856,15 @@ export default function Page() {
                     setConfigText(JSON.stringify(safeParseJsonObject(configText), null, 2));
                   } catch {}
                 }}
-              >
-                Форматувати JSON
-              </button>
+              >{" " + t("Форматувати JSON") + " "}</button>
               {dangerousWriteArmed ? (
-                <button className="btn" disabled={flashBusy} onClick={() => setDangerousWriteArmed(false)}>
-                  Скасувати небезпечний запис
-                </button>
+                <button className="btn" disabled={flashBusy} onClick={() => setDangerousWriteArmed(false)}>{" " + t("Скасувати небезпечний запис") + " "}</button>
               ) : null}
             </div>
             {configValidationErrors.length > 0 ? (
               <div className="validation-box">
                 {configValidationErrors.map((err, idx) => (
-                  <div key={`${idx}-${err}`}>• {err}</div>
+                  <div key={`${idx}-${t(err)}`}>• {t(err)}</div>
                 ))}
               </div>
             ) : null}
@@ -1910,11 +1888,11 @@ export default function Page() {
       ) : null}
 
 
-          <section className="card"><h2>Файли прошивки</h2><div className="asset-block"><ul>{boardAssetList.map((asset) => <li key={asset.id}><span>{asset.name}</span><span>{formatBytes(asset.size)}</span><a href={asset.browser_download_url} target="_blank" rel="noreferrer">Завантажити</a></li>)}</ul></div></section>
-          <section className="card"><h2>Журнал пристрою</h2><div className="log-box">{serialLines.length === 0 ? <div className="log-empty">Підключи плату, щоб побачити повідомлення.</div> : serialLines.map((line, index) => <div key={`${index}-${line}`}>{line}</div>)}</div></section>
+          <section className="card"><h2>{t("Файли прошивки")}</h2><div className="asset-block"><ul>{boardAssetList.map((asset) => <li key={asset.id}><span>{asset.name}</span><span>{formatBytes(asset.size)}</span><a href={asset.browser_download_url} target="_blank" rel="noreferrer">{t("Завантажити")}</a></li>)}</ul></div></section>
+          <section className="card"><h2>{t("Журнал пристрою")}</h2><div className="log-box">{serialLines.length === 0 ? <div className="log-empty">{t("Підключи плату, щоб побачити повідомлення.")}</div> : serialLines.map((line, index) => <div key={`${index}-${line}`}>{line}</div>)}</div></section>
         </div> : null}
       </details>
-      <footer className="installer-footer"><span>AlarmMini · Зроблено для своєї карти</span><a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer">Код проєкту ↗</a><a href={SUPPORT_AUTHOR_URL} target="_blank" rel="noreferrer">Підтримати автора ↗</a></footer>
+      <footer className="installer-footer"><span>{t("AlarmMini · Зроблено для своєї карти")}</span><a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer">{t("Код проєкту ↗")}</a><a href={SUPPORT_AUTHOR_URL} target="_blank" rel="noreferrer">{t("Підтримати автора ↗")}</a></footer>
     </main>
   );
 }

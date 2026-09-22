@@ -13,6 +13,7 @@
 #include "logger.h"
 #include "reset_trace.h"
 #include "wifi_recovery.h"
+#include "provision_i18n.h"
 
 void serialProtocolHandle();
 
@@ -391,12 +392,12 @@ static const char PROVISION_SCRIPT[] PROGMEM = R"portaljs(<script>
 const s=document.getElementById('s'),f=document.getElementById('f'),ssid=document.getElementById('ssid'),pass=document.getElementById('password'),nets=document.getElementById('nets');
 let lastIp='',submitting=false,scanBusy=false;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-function status(kind,text){s.className='status '+kind;s.textContent=text}
+function status(kind,text){s.className='status '+kind;window.AlarmI18n.text(s,text)}
 function esc(v){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 async function request(url,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6000);try{const r=await fetch(url,{...options,cache:'no-store',signal:controller.signal});const j=await r.json();if(!r.ok||j.ok===false)throw new Error(j.error||('HTTP '+r.status));return j}finally{clearTimeout(timer)}}
 async function poll(){try{const j=await request('/api/provision/status');const info='AP: '+j.apSsid+'\nIP налаштування: '+j.apIp;if(j.error){const errors={connect_timeout_or_bad_password:'Не вдалося підключитися. Перевір SSID і пароль.',config_save_failed:'Не вдалося зберегти налаштування. Попередні дані збережено.'};status('err',errors[j.error]||j.error)}else if(j.wifiConnected&&!j.connecting&&j.ip&&j.ip!=='0.0.0.0'){lastIp=j.ip;status('ok','Підключено. Відкрий: http://'+lastIp+'/\nТочка налаштування вимкнеться після 30 секунд стабільного зʼєднання.')}else{status('busy',info+'\n\n'+(j.connecting?'Підключення до Wi-Fi…':'Вибери або введи Wi-Fi мережу.'))}}catch(e){if(!lastIp)status('busy','Очікую звʼязок із платою. За потреби підключись знову до точки налаштування.')}finally{setTimeout(poll,2000)}}
 f.onsubmit=async e=>{e.preventDefault();if(submitting)return;const body={ssid:ssid.value,password:pass.value};if(!body.ssid){status('err','Введи SSID.');return}submitting=true;lastIp='';status('busy','Перевіряю Wi-Fi…');try{await request('/api/provision/wifi',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});status('busy','Підключаю плату. Налаштування збережуться після успішного зʼєднання.')}catch(e){status('err','Запит не підтверджено: '+e.message+'. Перевіряю стан плати…')}finally{submitting=false}};
-async function scan(){if(!nets||scanBusy)return;scanBusy=true;const button=document.getElementById('scan');button.disabled=true;nets.textContent='Сканую Wi-Fi…';const deadline=Date.now()+35000;try{let j;do{try{j=await request('/api/provision/networks')}catch(e){if(e.message==='wifi_connecting'&&Date.now()<deadline){await pause(1500);continue}throw e}if(!j.scanning)break;await pause(700)}while(Date.now()<deadline);if(!j||j.scanning)throw new Error('Час сканування вичерпано');nets.innerHTML=(j.networks||[]).map(n=>`<button class="net" type="button" data-ssid="${esc(n.ssid)}"><b>${esc(n.ssid)}</b><span>${n.rssi} dBm · ${esc(n.auth)}</span></button>`).join('');if(!nets.children.length)nets.textContent='Мережі не знайдено. Введи SSID вручну.';nets.querySelectorAll('.net').forEach(b=>b.onclick=()=>{ssid.value=b.dataset.ssid;pass.focus()})}catch(e){nets.textContent='Сканування: '+e.message+'. Можна ввести SSID вручну.'}finally{scanBusy=false;button.disabled=false}}
+async function scan(){if(!nets||scanBusy)return;scanBusy=true;const button=document.getElementById('scan');button.disabled=true;window.AlarmI18n.text(nets,'Сканую Wi-Fi…');const deadline=Date.now()+35000;try{let j;do{try{j=await request('/api/provision/networks')}catch(e){if(e.message==='wifi_connecting'&&Date.now()<deadline){await pause(1500);continue}throw e}if(!j.scanning)break;await pause(700)}while(Date.now()<deadline);if(!j||j.scanning)throw new Error('Час сканування вичерпано');nets.innerHTML=(j.networks||[]).map(n=>`<button class="net" type="button" data-ssid="${esc(n.ssid)}"><b translate="no">${esc(n.ssid)}</b><span>${n.rssi} dBm · ${esc(n.auth)}</span></button>`).join('');if(!nets.children.length)window.AlarmI18n.text(nets,'Мережі не знайдено. Введи SSID вручну.');nets.querySelectorAll('.net').forEach(b=>b.onclick=()=>{ssid.value=b.dataset.ssid;pass.focus()})}catch(e){window.AlarmI18n.text(nets,'Сканування: '+e.message+'. Можна ввести SSID вручну.')}finally{scanBusy=false;button.disabled=false}}
 if(nets){document.getElementById('scan').onclick=scan;document.getElementById('manual').onclick=()=>ssid.focus();scan()}poll();
 </script>)portaljs";
 
@@ -421,14 +422,15 @@ static void _sendProvisionPage(AlarmWebServer& server)
                          ".status{margin-top:14px;padding:10px;border:1px solid #28476e;border-radius:12px;white-space:pre-wrap;color:#9ab4d6;font-family:Consolas,monospace;font-size:12px}"
                          ".ok{border-color:#46e68b;color:#a9ffc9}.err{border-color:#ff6b6b;color:#ffc5c5}"
                          "</style></head><body><main><h1>AlarmMini Wi-Fi</h1>"
-                         "<p class='hint'>ESP8266 setup mode. Enter Wi-Fi SSID and password, then wait for device IP.</p>"
-                         "<p class='pill'>AP: <b>"));
+                         "<p class='hint'>Налаштування ESP8266. Введи SSID та пароль Wi-Fi й дочекайся IP-адреси пристрою.</p>"
+                         "<p class='pill'>AP: <b translate='no'>"));
     server.sendContent(_htmlEscape(_provisioningApSsid()));
-    server.sendContent(F("</b></p><form id='f'><label>SSID</label><input id='ssid' name='ssid' required value=\""));
+    server.sendContent(F("</b></p><form id='f'><label for='ssid'>SSID</label><input id='ssid' name='ssid' required value=\""));
     server.sendContent(savedSsid);
-    server.sendContent(F("\" autocomplete='off'><label>Password</label><input id='password' name='password' type='password'>"
-                         "<button>Save Wi-Fi</button></form><div class='status' id='s'>Ready</div>"
+    server.sendContent(F("\" autocomplete='off'><label for='password'>Пароль Wi-Fi</label><input id='password' name='password' type='password'>"
+                         "<button>Зберегти Wi‑Fi</button></form><div class='status' id='s'>Готово</div>"
                          "</main>"));
+    server.sendContent(FPSTR(PROVISION_I18N_SCRIPT));
     server.sendContent(FPSTR(PROVISION_SCRIPT));
     server.sendContent(F("</body></html>"));
     server.sendContent(""); // Finish the chunked response so fetch/navigation completes.
@@ -451,17 +453,21 @@ h1{margin:0 0 6px;font-size:28px}.lead{margin:0 0 18px;color:var(--muted);line-h
 label{display:block;margin:14px 0 7px;color:var(--muted);font-size:13px}input{width:100%;min-height:48px;border-radius:14px;border:1px solid var(--line);background:#07172c;color:var(--text);padding:0 14px;font-size:16px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.btn{width:100%;min-height:48px;border:0;border-radius:14px;background:linear-gradient(135deg,var(--blue),var(--accent));font-weight:800;color:#06101f;font-size:15px}.ghost{background:#07172c;color:var(--text);border:1px solid var(--line)}.status{margin-top:16px;padding:12px;border:1px solid var(--line);border-radius:14px;color:var(--muted);font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;overflow:auto}.status.ok{border-color:rgba(70,230,139,.7);background:rgba(70,230,139,.12);color:#a9ffc9}.status.err{border-color:rgba(255,107,107,.75);background:rgba(255,107,107,.12);color:#ffc5c5}.status.busy{border-color:rgba(255,212,71,.65);background:rgba(255,212,71,.1);color:#ffeaa0}.hint{margin:6px 0 0;color:var(--muted);font-size:12px}
 @media(max-width:560px){main{padding:18px}.row{grid-template-columns:1fr}}
-</style></head><body><main><h1>AlarmMini Wi-Fi</h1><p class='lead'>Вибери домашню Wi-Fi мережу зі списку або введи SSID вручну. Пароль пристрою тут не потрібен.</p><div class='pill'>Точка налаштування: <b>)rawliteral";
+</style></head><body><main><h1>AlarmMini Wi-Fi</h1><p class='lead'>Вибери домашню Wi-Fi мережу зі списку або введи SSID вручну. Пароль пристрою тут не потрібен.</p><div class='pill'>Точка налаштування: <b translate='no'>)rawliteral";
     page += _htmlEscape(_provisioningApSsid());
-    page += R"rawliteral(</b></div><section class='grid'><div class='row'><button class='btn ghost' id='scan' type='button'>Оновити список Wi-Fi</button><button class='btn ghost' id='manual' type='button'>Ввести SSID вручну</button></div><div class='nets' id='nets'><div class='status'>Сканую мережі...</div></div><form id='f'><label>SSID</label><input id='ssid' name='ssid' value=")rawliteral";
+    page += R"rawliteral(</b></div><section class='grid'><div class='row'><button class='btn ghost' id='scan' type='button'>Оновити список Wi-Fi</button><button class='btn ghost' id='manual' type='button'>Ввести SSID вручну</button></div><div class='nets' id='nets'><div class='status'>Сканую мережі...</div></div><form id='f'><label for='ssid'>SSID</label><input id='ssid' name='ssid' value=")rawliteral";
     page += savedSsid;
-    page += R"rawliteral(" autocomplete='off' required><label>Пароль Wi-Fi <span style='color:var(--muted)'>(залиш порожнім для відкритої мережі)</span></label><input id='password' name='password' type='password' autocomplete='current-password'><button class='btn'>Підключити плату</button></form><div class='status' id='s'>Очікування...</div></section>
+    page += R"rawliteral(" autocomplete='off' required><label for='password'>Пароль Wi-Fi <span style='color:var(--muted)'>(залиш порожнім для відкритої мережі)</span></label><input id='password' name='password' type='password' autocomplete='current-password'><button class='btn'>Підключити плату</button></form><div class='status' id='s'>Очікування...</div></section>
 )rawliteral";
-    page += FPSTR(PROVISION_SCRIPT);
-    page += R"rawliteral(</main></body></html>)rawliteral";
-
     server.sendHeader("Cache-Control", "no-store");
-    server.send(200, "text/html; charset=utf-8", page);
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "text/html; charset=utf-8", "");
+    server.sendContent(page);
+    page = String();
+    server.sendContent(FPSTR(PROVISION_I18N_SCRIPT));
+    server.sendContent(FPSTR(PROVISION_SCRIPT));
+    server.sendContent(F("</main></body></html>"));
+    server.sendContent("");
 #endif
 }
 static void _startProvisioningDns()

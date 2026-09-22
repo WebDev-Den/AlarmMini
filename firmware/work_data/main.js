@@ -10,6 +10,7 @@ const MAX_CUSTOM_STATES = 16;
 let currentSessionReady = false;
 let adminLabelDownloadName = "alarmmini-admin.png";
 let apLabelDownloadName = "alarmmini-ap.png";
+const labelRenderOptions = new Map();
 let activeTab = "overview";
 let dirtySnapshot = "";
 
@@ -52,7 +53,7 @@ const getLangText = (path) => path.split(".").reduce((value, key) => (value && v
 function applyStaticLang() {
   const set = (selector, value) => {
     const el = document.querySelector(selector);
-    if (el) el.textContent = value;
+    if (el) window.AlarmI18n.text(el, value);
   };
   const setAttr = (selector, name, value) => {
     const el = document.querySelector(selector);
@@ -60,15 +61,15 @@ function applyStaticLang() {
   };
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     const value = getLangText(el.dataset.i18n);
-    if (value !== "") el.textContent = value;
+    if (value !== "") window.AlarmI18n.text(el, value);
   });
   document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
     const value = getLangText(el.dataset.i18nPlaceholder);
-    if (value !== "") el.setAttribute("placeholder", value);
+    if (value !== "") window.AlarmI18n.attribute(el, "placeholder", value);
   });
   document.querySelectorAll("[data-i18n-title]").forEach((el) => {
     const value = getLangText(el.dataset.i18nTitle);
-    if (value !== "") el.setAttribute("title", value);
+    if (value !== "") window.AlarmI18n.attribute(el, "title", value);
   });
 
   set(".loading-subtitle", UI_LANG.loading.subtitle);
@@ -99,7 +100,7 @@ function applyStaticLang() {
   set("#tab-label .panel-text", UI_LANG.labels.text);
   set("#tab-label .label-card:first-child .label-card-title", UI_LANG.labels.adminTitle);
   set("#tab-label .label-card:last-child .label-card-title", UI_LANG.labels.apTitle);
-  document.querySelectorAll("#tab-label .inline-btn").forEach((btn) => btn.textContent = UI_LANG.actions.downloadPng);
+  document.querySelectorAll("#tab-label .inline-btn").forEach((btn) => window.AlarmI18n.text(btn, UI_LANG.actions.downloadPng));
   set("#tab-colors .panel-label", UI_LANG.tabs.colors.eyebrow);
   set("#tab-colors .panel-title", UI_LANG.colors.title);
   set("#tab-night .panel-label", UI_LANG.tabs.night.eyebrow);
@@ -118,7 +119,7 @@ function applyStaticLang() {
   Object.entries(systemLabelMap).forEach(([labelId, text]) => {
     const target = document.querySelector(`[data-label-id="${labelId}"]`);
     const label = target?.closest(".settings-row")?.querySelector(".row-label");
-    if (label) label.textContent = text;
+    if (label) window.AlarmI18n.text(label, text);
   });
   set("#tab-system .form-stack .row-label", UI_LANG.system.ntpTitle);
   set("#tab-system .form-stack .row-sub", UI_LANG.system.ntpHint);
@@ -252,8 +253,8 @@ function normalizeConfig(cfg) {
 
 function showToast(message, isError = false) {
   const toast = $("toast");
-  $("toastIcon").textContent = isError ? "×" : "✓";
-  $("toastMsg").textContent = message;
+  window.AlarmI18n.text($("toastIcon"), isError ? "×" : "✓");
+  window.AlarmI18n.text($("toastMsg"), message);
   toast.className = "toast show " + (isError ? "err" : "ok");
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => toast.classList.remove("show"), 2600);
@@ -267,7 +268,7 @@ function setLoading(done) {
 function setAuthLocked(locked, errorMessage = "") {
   document.body.classList.toggle("auth-locked", locked);
   $("loginOverlay").classList.toggle("hidden", !locked);
-  $("loginError").textContent = errorMessage;
+  window.AlarmI18n.text($("loginError"), errorMessage);
   if (locked) {
   }
   if (locked) {
@@ -388,7 +389,7 @@ async function tryAutoLoginFromStorage() {
 
 function applySliderValue(id, labelId, value, formatter) {
   $(id).value = value;
-  $(labelId).textContent = formatter(value);
+  window.AlarmI18n.text($(labelId), formatter(value));
 }
 
 function applyColor(colorId, swatchId, r, g, b) {
@@ -402,7 +403,7 @@ function setDirtyState(isDirty) {
   const saveBtn = $("saveBtn");
   if (!saveBtn) return;
   saveBtn.disabled = !isDirty;
-  saveBtn.textContent = UI_LANG.actions.save;
+  window.AlarmI18n.text(saveBtn, UI_LANG.actions.save);
   saveBtn.classList.toggle("hidden", !isDirty);
 }
 
@@ -419,7 +420,7 @@ function storeDirtySnapshot() {
 function setActiveTab(tabId) {
   if (!TAB_META[tabId]) return;
   if (tabId !== "calibration" && calibrationActive) {
-    if (!confirm("Калібрування ще активне. Точно вийти з вкладки?")) return;
+    if (!confirm(window.AlarmI18n.t("Калібрування ще активне. Точно вийти з вкладки?"))) return;
     calClose();
   }
 
@@ -427,8 +428,8 @@ function setActiveTab(tabId) {
   document.querySelector(".content-header")?.classList.toggle("settings-header", ["colors", "night", "mqtt"].includes(tabId));
   document.querySelectorAll(".nav-tab").forEach((button) => button.classList.toggle("active", button.dataset.tab === tabId));
   document.querySelectorAll(".content-pane").forEach((pane) => pane.classList.toggle("active", pane.id === `tab-${tabId}`));
-  $("contentEyebrow").textContent = TAB_META[tabId].eyebrow;
-  $("contentTitle").textContent = TAB_META[tabId].title;
+  window.AlarmI18n.text($("contentEyebrow"), TAB_META[tabId].eyebrow);
+  window.AlarmI18n.text($("contentTitle"), TAB_META[tabId].title);
   if (tabId === "calibration") updateCalibrationMobilePanels();
   if (tabId === "logs") refreshLogs();
 }
@@ -489,10 +490,10 @@ function renderLogs(entries = []) {
   const feed = $("logsFeed");
   if (!feed) return;
   if (!entries.length) {
-    feed.innerHTML = `<div class="logs-empty">${UI_LANG.logs.empty}</div>`;
+    window.AlarmI18n.html(feed, `<div class="logs-empty">${UI_LANG.logs.empty}</div>`);
     return;
   }
-  feed.innerHTML = entries.map((entry) => `
+  window.AlarmI18n.html(feed, entries.map((entry) => `
     <article class="log-entry">
       <div class="log-entry-head">
         <div class="log-entry-meta">
@@ -504,7 +505,7 @@ function renderLogs(entries = []) {
       </div>
       <div class="log-entry-message">${entry.message || ""}</div>
     </article>
-  `).join("");
+  `).join(""));
 }
 
 async function refreshLogs() {
@@ -627,6 +628,7 @@ async function createQrRenderable(text, size) {
 async function renderSingleLabel(canvasId, options) {
   const canvas = $(canvasId);
   if (!canvas) return;
+  labelRenderOptions.set(canvasId, options);
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
@@ -648,7 +650,7 @@ async function renderSingleLabel(canvasId, options) {
 
   ctx.fillStyle = "#0b2a4f";
   ctx.font = "700 26px Manrope, sans-serif";
-  ctx.fillText(options.title || "", padding, 40, textWidth);
+  ctx.fillText(window.AlarmI18n.t(options.title || ""), padding, 40, textWidth);
 
   const qrX = width - padding - qrSize;
   const qrY = Math.round((height - qrSize) / 2);
@@ -663,11 +665,12 @@ async function renderSingleLabel(canvasId, options) {
   (options.lines || []).forEach(([label, value]) => {
     ctx.fillStyle = "#6b7f97";
     ctx.font = "700 10px JetBrains Mono, monospace";
-    ctx.fillText(String(label).toUpperCase(), padding, lineY);
+    ctx.fillText(window.AlarmI18n.t(String(label)).toUpperCase(), padding, lineY);
     lineY += 24;
     ctx.fillStyle = "#102c4b";
     ctx.font = "700 16px Manrope, sans-serif";
-    ctx.fillText(String(value || "-"), padding, lineY, textWidth);
+    const displayValue = options.noPassword && label === "Пароль" ? window.AlarmI18n.t("Без пароля") : String(value || "-");
+    ctx.fillText(displayValue, padding, lineY, textWidth);
     lineY += 48;
   });
 
@@ -720,7 +723,14 @@ function applyDeviceInfo(info) {
   setText("labelIp", ip);
   setText("labelAdminPassword", adminPassword);
   setText("labelApSsid", apSsid);
-  setText("labelApPassword", apPasswordLabel);
+  if (apPassword) {
+    $("labelApPassword")?.setAttribute("translate", "no");
+    setText("labelApPassword", apPassword);
+  }
+  else {
+    $("labelApPassword")?.removeAttribute("translate");
+    window.AlarmI18n.text($("labelApPassword"), "Без пароля");
+  }
   setText("ledPinValue", String(ledPin));
   setValue("adminPassword", adminPassword);
 
@@ -744,16 +754,17 @@ function applyDeviceInfo(info) {
 
   renderSingleLabel("adminLabelCanvas", {
     badge: "admin",
-    title: "Web panel",
+    title: "Веб-панель",
     qrText: adminQrUrl,
-    lines: [["URL", mdnsUrl], ["Password", adminPassword]],
+    lines: [["URL", mdnsUrl], ["Пароль", adminPassword]],
   }).catch((error) => console.error("[label-admin]", error));
 
   renderSingleLabel("apLabelCanvas", {
     badge: "ap",
-    title: "Access point",
+    title: "Точка доступу",
     qrText: apQrText,
-    lines: [["SSID", apSsid], ["Password", apPasswordLabel]],
+    noPassword: !apPassword,
+    lines: [["SSID", apSsid], ["Пароль", apPasswordLabel]],
   }).catch((error) => console.error("[label-ap]", error));
 }
 
@@ -896,13 +907,13 @@ function renderStateColors() {
     const heading = document.createElement("div");
     heading.className = "state-heading";
     const title = document.createElement("strong");
-    title.textContent = state === "0" ? "Стан 0 · Відбій" : state === "1" ? "Стан 1 · Тривога" : `Стан ${state}`;
+    window.AlarmI18n.text(title, state === "0" ? "Стан 0 · Відбій" : state === "1" ? "Стан 1 · Тривога" : `Стан ${state}`);
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "state-remove";
-    remove.textContent = "×";
+    window.AlarmI18n.text(remove, "×");
     remove.title = `Видалити колір стану ${state}`;
-    remove.setAttribute("aria-label", `Видалити колір стану ${state}`);
+    window.AlarmI18n.attribute(remove, "aria-label", `Видалити колір стану ${state}`);
     remove.onclick = () => { delete customStateColors[state]; renderStateColors(); updateDirtyState(); refreshMapPreview(); };
     heading.appendChild(title);
     if (Number(state) > 1) heading.appendChild(remove);
@@ -912,7 +923,7 @@ function renderStateColors() {
       const row = document.createElement("div");
       row.className = "state-mode";
       const label = document.createElement("label");
-      label.textContent = mode;
+      window.AlarmI18n.text(label, mode);
       label.htmlFor = `state-${state}-${index}-color`;
       const controls = document.createElement("div");
       controls.className = "color-control";
@@ -925,10 +936,10 @@ function renderStateColors() {
       bright.min = "0";
       bright.max = String(index ? (currentConfig.nightMaxBright ?? 150) : 255);
       bright.value = String(colors[offset + 3]);
-      bright.setAttribute("aria-label", `Яскравість: стан ${state}, ${mode.toLowerCase()}`);
+      window.AlarmI18n.attribute(bright, "aria-label", `Яскравість: стан ${state}, ${mode.toLowerCase()}`);
       const value = document.createElement("span");
       value.className = "brightness-label";
-      value.textContent = `${Math.round(Number(bright.value) / 2.55)}%`;
+      window.AlarmI18n.text(value, `${Math.round(Number(bright.value) / 2.55)}%`);
       const rgba = document.createElement("input");
       rgba.type = "text";
       rgba.className = "state-rgba field-input";
@@ -938,15 +949,15 @@ function renderStateColors() {
       rgba.autocomplete = "off";
       rgba.value = formatRgba(colors, offset);
       rgba.placeholder = "rgba(255, 160, 0, 0.5)";
-      rgba.setAttribute("aria-label", `RGBA: стан ${state}, ${mode.toLowerCase()}`);
+      window.AlarmI18n.attribute(rgba, "aria-label", `RGBA: стан ${state}, ${mode.toLowerCase()}`);
       const feedback = document.createElement("span");
       feedback.id = `${rgba.id}-hint`;
       feedback.className = "state-rgba-feedback";
       rgba.setAttribute("aria-describedby", feedback.id);
       function validity(message = "") {
-        rgba.setCustomValidity(message);
+        rgba.setCustomValidity(window.AlarmI18n.t(message));
         rgba.setAttribute("aria-invalid", String(Boolean(message)));
-        feedback.textContent = message;
+        window.AlarmI18n.text(feedback, message);
       }
       function syncRgba() {
         rgba.value = formatRgba(colors, offset);
@@ -964,8 +975,8 @@ function renderStateColors() {
         colors.splice(offset, 4, ...parsed);
         color.value = rgbToHex(...parsed);
         bright.value = String(parsed[3]);
-        value.textContent = `${Math.round(parsed[3] / 2.55)}%`;
-        if (requestedAlpha > parsed[3]) feedback.textContent = `Нічне обмеження: ${value.textContent}.`;
+        window.AlarmI18n.text(value, `${Math.round(parsed[3] / 2.55)}%`);
+        if (requestedAlpha > parsed[3]) window.AlarmI18n.text(feedback, `Нічне обмеження: ${value.textContent}.`);
         updateDirtyState(); refreshMapPreview();
       };
       rgba.onchange = () => {
@@ -980,7 +991,7 @@ function renderStateColors() {
       };
       bright.oninput = () => {
         colors[offset + 3] = Number(bright.value);
-        value.textContent = `${Math.round(Number(bright.value) / 2.55)}%`;
+        window.AlarmI18n.text(value, `${Math.round(Number(bright.value) / 2.55)}%`);
         syncRgba();
         updateDirtyState();
       };
@@ -1158,7 +1169,7 @@ async function ensureMapLoaded() {
     return;
   }
 
-  $("mapStatusText").textContent = UI_LANG.overview.loading;
+  window.AlarmI18n.text($("mapStatusText"), UI_LANG.overview.loading);
   const response = await fetch("/map.svg", { cache: "no-store", credentials: "same-origin" });
   if (!response.ok) throw new Error(`map.svg -> ${response.status}`);
   const doc = new DOMParser().parseFromString(await response.text(), "image/svg+xml");
@@ -1170,7 +1181,7 @@ async function ensureMapLoaded() {
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   store.replaceChildren(svg);
   refreshMapPreview();
-  $("mapStatusText").textContent = UI_LANG.overview.ready;
+  window.AlarmI18n.text($("mapStatusText"), UI_LANG.overview.ready);
 }
 
 function getAssignmentStats(sourceMap = gLedMap, total = MAX_LEDS) {
@@ -1195,17 +1206,17 @@ function applyPreviewClasses(svg) {
     const rgba = customStateColors[state] || customStateColors[1] || [255, 0, 0, 255];
     path.style.fill = rgba ? rgbToHex(rgba[0], rgba[1], rgba[2]) : "";
     path.style.stroke = rgba ? path.style.fill : "";
-    path.setAttribute("aria-label", `${regionName}: стан ${state}`);
+    window.AlarmI18n.attribute(path, "aria-label", `${regionName}: стан ${state}`);
     let title = path.querySelector("title");
     if (!title) { title = document.createElementNS("http://www.w3.org/2000/svg", "title"); path.appendChild(title); }
-    title.textContent = `${regionName}: стан ${state}`;
+    window.AlarmI18n.text(title, `${regionName}: стан ${state}`);
   });
 }
 
 function setHealthChip(id, ok, text) {
   const el = $(id);
   if (!el) return;
-  el.textContent = text;
+  window.AlarmI18n.text(el, text);
   el.style.borderColor = ok ? "rgba(123,228,149,.45)" : "rgba(255,107,107,.45)";
   el.style.color = ok ? "var(--green)" : "var(--danger)";
 }
@@ -1292,8 +1303,8 @@ function updateCalibrationLedButtons(ensureVisible = false) {
     button.classList.toggle("assigned", Boolean(region));
     button.classList.toggle("empty", !region);
 
-    if (label) label.textContent = `LED ${index + 1}`;
-    if (meta) meta.textContent = region || UI_LANG.calibration.unassigned;
+    if (label) window.AlarmI18n.text(label, `LED ${index + 1}`);
+    if (meta) window.AlarmI18n.text(meta, region || UI_LANG.calibration.unassigned);
     if (dot) dot.classList.toggle("assigned", Boolean(region));
 
     if (ensureVisible && isActive) {
@@ -1304,27 +1315,27 @@ function updateCalibrationLedButtons(ensureVisible = false) {
 
 function updateSelectedLabel(ensureLedVisible = false) {
   const value = calTemp[calCurrent] || "";
-  $("calSelectedRegion").textContent = value || UI_LANG.calibration.unassigned;
-  $("calCurrentChoice").textContent = value || UI_LANG.calibration.unassigned;
+  window.AlarmI18n.text($("calSelectedRegion"), value || UI_LANG.calibration.unassigned);
+  window.AlarmI18n.text($("calCurrentChoice"), value || UI_LANG.calibration.unassigned);
   document.querySelectorAll(".cal-region-item").forEach((button) => button.classList.toggle("active", button.dataset.region === value));
   updateCalibrationLedButtons(ensureLedVisible);
 }
 
 function renderCalibrationLedList() {
   const grid = $("calLedGrid");
-  grid.innerHTML = "";
+  window.AlarmI18n.html(grid, "");
   for (let index = 0; index < calTotal; index += 1) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "cal-led-grid-btn";
     button.dataset.index = String(index);
-    button.innerHTML = `
+    window.AlarmI18n.html(button, `
       <span class="cal-led-grid-head">
         <span class="cal-led-grid-dot"></span>
         <span class="cal-led-grid-label">LED ${index + 1}</span>
       </span>
       <span class="cal-led-grid-meta">${UI_LANG.calibration.unassigned}</span>
-    `;
+    `);
     button.addEventListener("click", () => {
       calCurrent = index;
       calShowStep(true);
@@ -1338,14 +1349,14 @@ function renderCalibrationLedList() {
 function renderCalibrationRegionList() {
   const list = $("calRegionList");
   const assigned = new Set(Object.keys(calTemp).map((key) => Number(key)).filter((key) => key !== calCurrent).map((key) => calTemp[key]).filter(Boolean));
-  list.innerHTML = "";
+  window.AlarmI18n.html(list, "");
 
   REGIONS.forEach((region) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "cal-region-item";
     button.dataset.region = region;
-    button.textContent = region;
+    window.AlarmI18n.text(button, region);
     if (assigned.has(region)) button.classList.add("assigned");
     button.addEventListener("click", () => {
       calTemp[calCurrent] = calTemp[calCurrent] === region ? "" : region;
@@ -1363,7 +1374,7 @@ function renderCalibrationRegionList() {
 function filterCalibrationRegionList() {
   const query = $("calRegionSearch").value.trim().toLowerCase();
   document.querySelectorAll(".cal-region-item").forEach((button) => {
-    const visible = !query || button.dataset.region.toLowerCase().includes(query);
+    const visible = !query || button.dataset.region.toLowerCase().includes(query) || window.AlarmI18n.t(button.dataset.region).toLowerCase().includes(query);
     button.classList.toggle("hidden", !visible);
   });
 }
@@ -1399,7 +1410,7 @@ function bindCalibrationMap(svg) {
       updateSelectedLabel();
     });
     path.addEventListener("mouseenter", () => {
-      tooltip.textContent = regionName;
+      window.AlarmI18n.text(tooltip, regionName);
       tooltip.classList.add("show");
     });
     path.addEventListener("mouseleave", () => tooltip.classList.remove("show"));
@@ -1424,10 +1435,10 @@ function calShowStep(ensureLedVisible = false) {
   $("calStepMain").classList.remove("hidden");
   $("calStepFinal").classList.add("hidden");
   $("calProgressFill").style.width = `${((calCurrent + 1) / calTotal) * 100}%`;
-  $("calStepLabel").textContent = `LED ${calCurrent + 1} / ${calTotal}`;
-  $("calLedName").textContent = `Світлодіод №${calCurrent + 1}`;
+  window.AlarmI18n.text($("calStepLabel"), `LED ${calCurrent + 1} / ${calTotal}`);
+  window.AlarmI18n.text($("calLedName"), `Світлодіод №${calCurrent + 1}`);
   $("calPrevBtn").disabled = calCurrent === 0;
-  $("calNextBtn").textContent = calCurrent === calTotal - 1 ? UI_LANG.actions.finish : UI_LANG.actions.next;
+  window.AlarmI18n.text($("calNextBtn"), calCurrent === calTotal - 1 ? UI_LANG.actions.finish : UI_LANG.actions.next);
   renderCalibrationRegionList();
   updateCalibrationMap();
   updateSelectedLabel(ensureLedVisible);
@@ -1478,12 +1489,12 @@ function calShowFinal() {
   $("calStepMain").classList.add("hidden");
   $("calStepFinal").classList.remove("hidden");
   const summary = $("calSummary");
-  summary.innerHTML = "";
+  window.AlarmI18n.html(summary, "");
   for (let index = 0; index < calTotal; index += 1) {
     const value = calTemp[index] || "";
     const item = document.createElement("div");
     item.className = "cal-summary-item";
-    item.innerHTML = `<span class="cal-summary-num">LED ${index + 1}</span><span class="${value ? "cal-summary-region" : "cal-summary-empty"}">${value || UI_LANG.calibration.unassigned}</span>`;
+    window.AlarmI18n.html(item, `<span class="cal-summary-num">LED ${index + 1}</span><span class="${value ? "cal-summary-region" : "cal-summary-empty"}">${value || UI_LANG.calibration.unassigned}</span>`);
     summary.appendChild(item);
   }
 }
@@ -1514,12 +1525,12 @@ async function calSave() {
 function setRestartBusy(isBusy) {
   document.querySelectorAll(".restart-trigger").forEach((button) => {
     button.disabled = isBusy;
-    button.textContent = isBusy ? "Перезавантаження..." : UI_LANG.actions.restart;
+    window.AlarmI18n.text(button, isBusy ? "Перезавантаження..." : UI_LANG.actions.restart);
   });
 }
 
 function restartDevice() {
-  if (!confirm("Перезавантажити пристрій?")) return;
+  if (!confirm(window.AlarmI18n.t("Перезавантажити пристрій?"))) return;
   setRestartBusy(true);
   $("deviceDot").classList.remove("online");
   fetch("/api/restart", { credentials: "same-origin" }).catch(() => {});
@@ -1552,6 +1563,16 @@ function restartDevice() {
 
 function bindTabs() {
   document.querySelectorAll(".nav-tab").forEach((button) => button.addEventListener("click", () => setActiveTab(button.dataset.tab)));
+}
+
+function bindSidebarTools() {
+  const tools = document.querySelector(".sidebar-tools");
+  const desktop = window.matchMedia("(min-width: 992px)");
+  let mobileOpen = false;
+  const sync = () => { tools.open = desktop.matches || mobileOpen; };
+  tools.addEventListener("toggle", () => { if (!desktop.matches) mobileOpen = tools.open; });
+  desktop.addEventListener("change", sync);
+  sync();
 }
 
 function bindDirtyTracking() {
@@ -1606,13 +1627,13 @@ function bindAuthUi() {
   $("loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const password = $("loginPassword").value.trim();
-    $("loginError").textContent = "";
+    window.AlarmI18n.text($("loginError"), "");
     try {
       await login(password);
       await bootAuthenticated();
     } catch (error) {
       console.error(error);
-      $("loginError").textContent = "Невірний пароль або помилка авторизації";
+      window.AlarmI18n.text($("loginError"), "Невірний пароль або помилка авторизації");
     } finally {
       setLoading(true);
     }
@@ -1638,7 +1659,16 @@ function bindAuthUi() {
 }
 
 async function boot() {
+  bindSidebarTools();
+  await window.AlarmI18n.init();
   applyStaticLang();
+  window.AlarmI18n.localize();
+  document.addEventListener("languagechange", filterCalibrationRegionList);
+  document.addEventListener("languagechange", () => {
+    labelRenderOptions.forEach((options, canvasId) => {
+      void renderSingleLabel(canvasId, options).catch(error => console.error("[label-language]", error));
+    });
+  });
   bindAuthUi();
   bindTabs();
   bindDirtyTracking();
@@ -1682,7 +1712,7 @@ async function boot() {
   } catch (error) {
     console.error("[boot]", error);
     setAuthLocked(true, "Не вдалося підключитися до пристрою");
-    $("mapStatusText").textContent = "Помилка підключення";
+    window.AlarmI18n.text($("mapStatusText"), "Помилка підключення");
   } finally {
     setLoading(true);
   }

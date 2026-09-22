@@ -16,6 +16,7 @@ function fixture(withScan = false) {
   const scanResponses = [{ ok: true, scanning: true }, { ok: true, scanning: false, networks: [] }];
   let failStatus = false;
   const context = vm.createContext({
+    window: { AlarmI18n: { text(element, value) { element.textContent = value; } } },
     document: { getElementById: id => elements[id] || null }, AbortController,
     setTimeout: (fn, ms) => { if (ms === 700 || ms === 1500) queueMicrotask(fn); return 1; },
     clearTimeout() {},

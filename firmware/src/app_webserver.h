@@ -143,6 +143,10 @@ void checkWebAssets()
         "/index.html",
         "/style.css",
         "/main.js",
+        "/i18n-core.js",
+        "/i18n.js",
+        "/locales/ua.json",
+        "/locales/en.json",
         "/map.svg",
         "/config.json",
     };

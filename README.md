@@ -4,6 +4,9 @@ AlarmMini is a commercial firmware and web-installer project for a compact physi
 
 Production installer: [https://alarmmini.vercel.app](https://alarmmini.vercel.app)
 
+Інсталятор, панель пристрою та Wi-Fi налаштування підтримують **UA / EN**.
+[JSON-словники, редагування перекладу та мобільний інтерфейс](docs/localization.md).
+
 ## Актуальна версія
 
 Єдина робоча гілка — **main**. Підтримується лише найновіший стабільний реліз,

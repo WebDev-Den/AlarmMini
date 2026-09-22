@@ -25,6 +25,7 @@ const context = vm.createContext({ console: {...console, error: error => errors.
   loadConfig: async () => clone(stored), didReload: () => reloads++, base: clone(base), assert,
 });
 vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
+vm.runInContext(fs.readFileSync(path.join(web, 'i18n.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(web, 'main.js'), 'utf8').replace(/\bboot\(\);\s*$/, ''), context);
 vm.runInContext(`
   refreshMapPreview = () => {}; updateDirtyState = () => {}; storeDirtySnapshot = () => {};

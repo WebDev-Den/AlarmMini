@@ -186,6 +186,7 @@
 
   <div class="auth-overlay" id="loginOverlay">
     <div class="auth-card">
+      <div class="language-switcher" role="group" aria-label="Мова / Language" translate="no"><button type="button" data-locale="ua" lang="uk" aria-label="Українська" aria-pressed="true">UA</button><button type="button" data-locale="en" lang="en" aria-label="English" aria-pressed="false">EN</button></div>
       <div class="auth-mark">AM</div>
       <h1 class="auth-title">Вхід в адмін-панель</h1>
       <p class="auth-subtitle">Введи пароль адміністратора, щоб відкрити налаштування мапи, LED та системних функцій.
@@ -204,6 +205,7 @@
     <div class="row g-3 align-items-start">
       <aside class="sidebar col-12 col-lg-4 col-xl-3">
         <div class="sidebar-top">
+          <div class="language-switcher" role="group" aria-label="Мова / Language" translate="no"><button type="button" data-locale="ua" lang="uk" aria-label="Українська" aria-pressed="true">UA</button><button type="button" data-locale="en" lang="en" aria-label="English" aria-pressed="false">EN</button></div>
           <div class="brand-row">
             <div class="brand-mark">AM</div>
             <div class="brand-copy">
@@ -213,7 +215,7 @@
           </div>
           <a class="device-chip" id="deviceBadge" href="#" title="Відкрити пристрій за mDNS-адресою">
             <span class="device-dot" id="deviceDot"></span>
-            <span class="device-chip-text" id="deviceName">connecting...</span>
+            <span class="device-chip-text" id="deviceName" translate="no">connecting...</span>
           </a>
         </div>
 
@@ -227,7 +229,9 @@
           <button class="nav-tab nav-tab-accent" type="button" data-tab="calibration">Калібрування</button>
         </nav>
 
-        <div class="sidebar-bottom">
+        <details class="sidebar-tools" open>
+          <summary>Дії пристрою</summary>
+          <div class="sidebar-bottom">
           <a class="sidebar-action sidebar-action-primary sidebar-action-support" id="supportAuthorBtn"
             href="__ALARMMINI_SUPPORT_URL__" target="_blank" rel="noreferrer"
             data-i18n="actions.support"></a>
@@ -242,12 +246,10 @@
               onclick="restartDevice()" type="button">Перезавантажити</button>
             <button class="sidebar-action" id="logoutBtn" type="button">Вийти</button>
           </div>
-          <button class="sidebar-action sidebar-action-primary hidden" id="saveBtn" onclick="save()" type="button"
-            disabled>
-            Зберегти
-          </button>
           <input type="file" id="importSettingsInput" accept="application/json,.json" hidden>
-        </div>
+          </div>
+        </details>
+        <button class="sidebar-action sidebar-action-primary hidden" id="saveBtn" onclick="save()" type="button" disabled>Зберегти</button>
       </aside>
 
       <section class="content-area col-12 col-lg-8 col-xl-9">
@@ -309,11 +311,11 @@
                   <div class="label-meta label-meta-compact">
                     <div class="label-line">
                       <span class="label-key">URL</span>
-                      <span class="label-value" id="labelMdns">-</span>
+                      <span class="label-value" id="labelMdns" translate="no">-</span>
                     </div>
                     <div class="label-line">
                       <span class="label-key">Пароль</span>
-                      <span class="label-value" id="labelAdminPassword">-</span>
+                      <span class="label-value" id="labelAdminPassword" translate="no">-</span>
                     </div>
                   </div>
                 </div>
@@ -333,11 +335,11 @@
                   <div class="label-meta label-meta-compact">
                     <div class="label-line">
                       <span class="label-key">SSID</span>
-                      <span class="label-value" id="labelApSsid">-</span>
+                      <span class="label-value" id="labelApSsid" translate="no">-</span>
                     </div>
                     <div class="label-line">
                       <span class="label-key">Пароль</span>
-                      <span class="label-value" id="labelApPassword">-</span>
+                      <span class="label-value" id="labelApPassword" translate="no">-</span>
                     </div>
                   </div>
                 </div>
@@ -464,7 +466,7 @@
                   <div class="row-label">mDNS адреса</div>
                   <div class="row-sub">LOCAL HOSTNAME</div>
                 </div>
-                <a id="mdnsLink" href="#" class="inline-link" target="_blank" rel="noreferrer"
+                <a id="mdnsLink" translate="no" href="#" class="inline-link" target="_blank" rel="noreferrer"
                   data-label-id="systemMdnsLabel"></a>
               </div>
               <div class="settings-row">
@@ -472,14 +474,14 @@
                   <div class="row-label">IP адреса</div>
                   <div class="row-sub">DEVICE IP</div>
                 </div>
-                <span id="deviceIp" class="inline-value" data-label-id="systemIpLabel">-</span>
+                <span id="deviceIp" translate="no" class="inline-value" data-label-id="systemIpLabel">-</span>
               </div>
               <div class="settings-row">
                 <div>
                   <div class="row-label">URL для наклейки</div>
                   <div class="row-sub">PRINT LABEL LINK</div>
                 </div>
-                <span id="labelMdnsMirror" class="inline-value" data-label-id="systemLabelUrlLabel">-</span>
+                <span id="labelMdnsMirror" translate="no" class="inline-value" data-label-id="systemLabelUrlLabel">-</span>
               </div>
               <div class="settings-row">
                 <div>
@@ -666,6 +668,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/i18n-core.js"></script>
+  <script src="/i18n.js"></script>
   <script src="/main.js"></script>
 </body>
 

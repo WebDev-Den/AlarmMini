@@ -8,6 +8,7 @@ import shutil
 
 from SCons.Script import COMMAND_LINE_TARGETS
 from env_loader import load_dotenv
+from prepare_i18n import write_portal_header
 
 
 FS_TARGETS = {"buildfs", "uploadfs", "uploadfsota"}
@@ -21,6 +22,10 @@ PROJECT_DIR = env.subst("$PROJECT_DIR")
 IS_RELEASE_BUILD = CONFIG_MODE == "release"
 
 load_dotenv(PROJECT_DIR)
+
+I18N_INCLUDE_DIR = os.path.join(env.subst("$BUILD_DIR"), "generated")
+write_portal_header(PROJECT_DIR, I18N_INCLUDE_DIR)
+env.Append(CPPPATH=[I18N_INCLUDE_DIR])
 
 
 def _resolve_env(public_name, fallback, release_fallback=None):
@@ -193,6 +198,9 @@ def _prepare_assets():
     for root, _, files in os.walk(OUTPUT_DIR):
         for name in files:
             path = os.path.join(root, name)
+            if name.endswith(".d.ts") or name == "provision-keys.json":
+                os.remove(path)
+                continue
             ext = os.path.splitext(name)[1].lower()
 
             _apply_env_replacements(path)
