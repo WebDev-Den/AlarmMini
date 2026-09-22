@@ -3,9 +3,6 @@ name: Build And Attach Firmware Assets
 on:
   release:
     types: [published]
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -46,7 +43,7 @@ jobs:
           python tests/optimization_test.py
 
       - name: Upload release assets
-        if: ${{ github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ github.event_name == 'release' }}
         uses: softprops/action-gh-release@v2
         with:
           files: |
