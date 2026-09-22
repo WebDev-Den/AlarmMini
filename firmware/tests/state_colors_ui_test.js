@@ -30,6 +30,7 @@ vm.runInContext(fs.readFileSync(path.join(web, 'i18n.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(web, 'main.js'), 'utf8').replace(/\bboot\(\);\s*$/, ''), context);
 vm.runInContext(`
   refreshMapPreview = () => {}; updateDirtyState = () => {}; storeDirtySnapshot = () => {};
+  renderTimeZones = selected => { $('timeZone').value = selected; };
   setLogMaskInputs = () => {}; readLogMaskInputs = () => currentConfigSource.g;
   fetchJson = loadConfig;
   bootAuthenticated = async () => { didReload(); applyConfig(await loadConfig()); };

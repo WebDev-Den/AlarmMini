@@ -9,6 +9,7 @@ import shutil
 from SCons.Script import COMMAND_LINE_TARGETS
 from env_loader import load_dotenv
 from prepare_i18n import write_portal_header
+from prepare_timezones import generate as generate_timezones
 
 
 FS_TARGETS = {"buildfs", "uploadfs", "uploadfsota"}
@@ -22,6 +23,7 @@ PROJECT_DIR = env.subst("$PROJECT_DIR")
 IS_RELEASE_BUILD = CONFIG_MODE == "release"
 
 load_dotenv(PROJECT_DIR)
+generate_timezones(PROJECT_DIR)
 
 I18N_INCLUDE_DIR = os.path.join(env.subst("$BUILD_DIR"), "generated")
 write_portal_header(PROJECT_DIR, I18N_INCLUDE_DIR)

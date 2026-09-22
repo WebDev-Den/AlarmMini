@@ -1,0 +1,104 @@
+AlarmMini Non-Commercial License 1.0
+Copyright (c) 2026 WebDev-Den. All rights reserved except as granted below.
+
+ENGLISH — authoritative terms
+
+1. Scope. This licence applies to original AlarmMini source code, firmware,
+web interface, documentation and design files supplied by WebDev-Den (the
+Author), unless a file states different terms. It does not relicense third-party
+components, libraries, data, trademarks or materials. Those retain their own
+licences and notices. Rights previously granted under a different licence are
+not revoked by this licence.
+
+2. Non-commercial permission. You may use, copy, study, modify and distribute
+these materials and build devices for personal, educational and other
+non-commercial purposes, without a fee. Giving an assembled device as a genuine
+unpaid personal gift is permitted. Keep this licence and attribution to the
+Author with redistributed materials; identify your modifications. Recipients
+receive these same non-commercial permissions.
+
+3. Commercial permission required. Without the Author's prior written consent,
+you may not use these materials or derivatives for commercial purposes. This
+includes selling or renting devices containing AlarmMini, bundling it with paid
+products, paid installation or support services, paid hosted services, or use
+primarily intended to obtain commercial advantage or monetary compensation.
+A separate written agreement with the Author may grant these rights. Silence,
+public repository access and availability of downloadable firmware do not
+constitute commercial permission.
+
+4. Purchased devices. A customer may operate and update a device lawfully
+supplied by the Author or an authorized seller for its intended end-user use.
+This does not grant rights to manufacture, distribute or offer commercial
+AlarmMini products or services.
+
+5. Attribution and identity. Do not remove copyright or licence notices or
+claim the Author endorses a modified product. No trademark licence is granted.
+Third-party service credentials included in an authorized profile do not grant
+ownership of, or unrestricted rights to use or resell, those external services;
+their providers' terms continue to apply.
+
+6. No warranty. To the extent permitted by applicable law, the materials are
+provided "AS IS", without warranties, including merchantability, fitness for a
+particular purpose or non-infringement. The Author is not liable for damages
+arising from use of the materials. Mandatory statutory rights and obligations
+that cannot lawfully be excluded remain unaffected. AlarmMini is a supplementary
+alert display, not a substitute for official emergency notifications.
+
+7. Termination. Permission under this licence ends if you breach its terms.
+After termination, cease use and distribution not otherwise lawfully authorized.
+The Author may grant reinstatement in writing. Rights granted by third-party
+licences are unaffected.
+
+8. Contact. Request commercial permission from WebDev-Den via
+https://t.me/+j3zFZHE5gGoyNGYy or https://github.com/WebDev-Den.
+This is a source-available, non-commercial licence, not an OSI open-source licence.
+The English text controls in case of a conflict with the Ukrainian translation.
+
+УКРАЇНСЬКА — переклад умов
+
+1. Сфера дії. Ліцензія поширюється на оригінальний код, прошивку, вебінтерфейс,
+документацію та файли конструкції AlarmMini від WebDev-Den (Автор), якщо файл
+не містить інших умов. Сторонні компоненти, бібліотеки, дані, торговельні марки
+та матеріали зберігають власні ліцензії й повідомлення. Раніше надані права
+за іншими ліцензіями не скасовуються.
+
+2. Некомерційний дозвіл. Дозволено безоплатно використовувати, копіювати,
+вивчати, змінювати й поширювати матеріали та виготовляти пристрої для особистих,
+навчальних та інших некомерційних цілей. Справжній безоплатний особистий
+подарунок готового пристрою дозволений. Під час поширення зберігайте цю
+ліцензію та ім'я Автора, зазначайте свої зміни. Одержувачі отримують ті самі
+некомерційні права.
+
+3. Комерційне використання. Без попередньої письмової згоди Автора заборонено
+комерційне використання матеріалів і похідних робіт, зокрема продаж або оренду
+пристроїв з AlarmMini, включення до платних продуктів, платне встановлення
+чи підтримку, платні мережеві послуги або використання переважно для отримання
+комерційної вигоди чи грошової винагороди. Ці права можуть бути надані окремою
+письмовою угодою. Мовчання Автора, відкритий репозиторій і доступна прошивка
+не є комерційним дозволом.
+
+4. Придбані пристрої. Покупець може використовувати й оновлювати пристрій,
+законно отриманий від Автора або уповноваженого продавця, за його призначенням.
+Це не надає права виготовляти, поширювати чи пропонувати комерційні продукти
+або послуги AlarmMini.
+
+5. Авторство. Не видаляйте повідомлення про авторство й ліцензію та не
+стверджуйте, що Автор схвалює змінений продукт. Права на торговельні марки
+не надаються. Облікові дані зовнішніх сервісів у дозволеному профілі не
+надають права власності чи необмеженого використання або перепродажу цих
+сервісів; продовжують діяти умови їхніх постачальників.
+
+6. Гарантії. У межах, дозволених законом, матеріали надаються «ЯК Є», без
+гарантій товарної придатності, відповідності певній меті чи відсутності
+порушень чужих прав. Автор не відповідає за збитки від використання матеріалів.
+Обов'язкові права й обов'язки, які закон не дозволяє виключити, зберігаються.
+AlarmMini є допоміжним індикатором і не замінює офіційні екстрені сповіщення.
+
+7. Припинення. Дозвіл припиняється в разі порушення умов. Після цього припиніть
+використання й поширення, що не мають іншого законного дозволу. Автор може
+письмово поновити дозвіл. Права за сторонніми ліцензіями не змінюються.
+
+8. Зв'язок. Комерційний дозвіл: WebDev-Den,
+https://t.me/+j3zFZHE5gGoyNGYy або https://github.com/WebDev-Den.
+Це ліцензія з доступним кодом для некомерційного використання, а не ліцензія
+open source за визначенням OSI. У разі розбіжностей переважає англійський текст.

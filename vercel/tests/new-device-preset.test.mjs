@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import timeZones from '../../firmware/work_data/timezone-utils.js';
 
 const page = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
 const preset = JSON.parse(readFileSync(new URL('../public/profiles/ukrainealarm-air-6-states.json', import.meta.url), 'utf8'));
@@ -18,7 +19,7 @@ function fixture(options = {}) {
   const backup = {...clone(preset), w:{s:'Existing WiFi',p:'existing-only'}, m:{h:'existing.example',p:1883,t:'custom/states',u:'existing-user',s:'existing-only'}};
   let deviceConfig = clone(backup);
   const context = vm.createContext({
-    ...fallback, structuredClone, airPreset:clone(preset), useAirPreset:options.enabled ?? true,
+    ...fallback, ...timeZones, installTimeZone: options.timeZone ?? timeZones.defaultZone, structuredClone, airPreset:clone(preset), useAirPreset:options.enabled ?? true,
     selectedRelease:{tag_name:options.version ?? 'v2.1.2'}, serialSupported:true, canFlash:true,
     manifest:{builds:[]}, freshInstallConfirmed:true, rememberedPortRef:{current:{}},
     installFallbackUrl:options.reserveUrl ?? '', installFallbackToken:'',
@@ -31,6 +32,7 @@ function fixture(options = {}) {
     applyConfigToUi:cfg=>calls.push(['ui',clone(cfg)]),
     verifyFallbackEndpoint:async url=>{calls.push(['probe',url]);return url;},
     saveFallbackUrl:async(url,token)=>{calls.push(['reserve',url]);deviceConfig.fu=url;deviceConfig.ft=token;},
+    saveTimeZone:async id=>{calls.push(['timezone',id]);deviceConfig.tz=id;},
     restoreBackupConfigWithRetry:async cfg=>{calls.push(['restore',clone(cfg)]);deviceConfig=clone(cfg);},
     writeFirmware:async()=>{calls.push(['flash']);if(options.flashError)throw new Error('flash failed');deviceConfig={};},
     sendConfigChunked:async(cfg,label)=>{
@@ -71,6 +73,25 @@ test('first installation writes preset after flashing and checks actual firmware
   assert.deepEqual(calls.filter(c=>['flash','reconnect','preset','outcome'].includes(c[0])&&c[1]!=='idle').map(c=>c[0]),['flash','reconnect','preset','outcome']);
   assert.deepEqual(calls.find(c=>c[0]==='preset')[1],preset);
   assert.deepEqual(calls.at(-2),['outcome','success']);
+});
+
+test('new firmware writes and verifies the selected timezone with the first-install profile', async () => {
+  const { run, calls } = fixture({ version: 'v2.1.5', timeZone: 'America/Los_Angeles' });
+  await run(false);
+  assert.equal(calls.find(c => c[0] === 'preset')[1].tz, 'America/Los_Angeles');
+});
+
+test('a non-default timezone cannot silently be lost when flashing older firmware', async () => {
+  const { run, calls } = fixture({ version: 'v2.1.4', timeZone: 'Asia/Kathmandu' });
+  await assert.rejects(run(false), /2.1.5/);
+  assert.equal(calls.length, 0);
+});
+
+test('installation without a profile still saves the selected timezone', async () => {
+  const { run, calls } = fixture({ version: 'v2.1.5', enabled: false, timeZone: 'Asia/Kathmandu' });
+  await run(false);
+  assert.deepEqual(calls.find(c => c[0] === 'timezone'), ['timezone', 'Asia/Kathmandu']);
+  assert.equal(calls.some(c => c[0] === 'preset'), false);
 });
 
 test('update preserves existing credentials and configuration even with preset checkbox selected', async () => {

@@ -1,0 +1,5772 @@
+{
+  "version": "2026d",
+  "default": "Europe/Kyiv",
+  "zones": [
+    {
+      "id": "Africa/Abidjan",
+      "countries": [
+        "CI"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Accra",
+      "countries": [
+        "GH"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Addis_Ababa",
+      "countries": [
+        "ET"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Africa/Algiers",
+      "countries": [
+        "DZ"
+      ],
+      "rule": "CET-1"
+    },
+    {
+      "id": "Africa/Asmara",
+      "countries": [
+        "ER"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Africa/Asmera",
+      "countries": [
+        "KE",
+        "DJ",
+        "ER",
+        "ET",
+        "KM",
+        "MG",
+        "SO",
+        "TZ",
+        "UG",
+        "YT"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Africa/Bamako",
+      "countries": [
+        "ML"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Bangui",
+      "countries": [
+        "CF"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Banjul",
+      "countries": [
+        "GM"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Bissau",
+      "countries": [
+        "GW"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Blantyre",
+      "countries": [
+        "MW"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Brazzaville",
+      "countries": [
+        "CG"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Bujumbura",
+      "countries": [
+        "BI"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Cairo",
+      "countries": [
+        "EG"
+      ],
+      "rule": "EET-2EEST,M4.5.5/0,M10.5.4/24"
+    },
+    {
+      "id": "Africa/Casablanca",
+      "countries": [
+        "MA"
+      ],
+      "rule": "<+00>0",
+      "transitions": [
+        [
+          1767225600,
+          3600
+        ],
+        [
+          1771120800,
+          0
+        ],
+        [
+          1774144800,
+          3600
+        ],
+        [
+          1789866000,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "Africa/Ceuta",
+      "countries": [
+        "ES"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Africa/Conakry",
+      "countries": [
+        "GN"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Dakar",
+      "countries": [
+        "SN"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Dar_es_Salaam",
+      "countries": [
+        "TZ"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Africa/Djibouti",
+      "countries": [
+        "DJ"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Africa/Douala",
+      "countries": [
+        "CM"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/El_Aaiun",
+      "countries": [
+        "EH"
+      ],
+      "rule": "<+00>0",
+      "transitions": [
+        [
+          1767225600,
+          3600
+        ],
+        [
+          1771120800,
+          0
+        ],
+        [
+          1774144800,
+          3600
+        ],
+        [
+          1789866000,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "Africa/Freetown",
+      "countries": [
+        "SL"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Gaborone",
+      "countries": [
+        "BW"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Harare",
+      "countries": [
+        "ZW"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Johannesburg",
+      "countries": [
+        "ZA"
+      ],
+      "rule": "SAST-2"
+    },
+    {
+      "id": "Africa/Juba",
+      "countries": [
+        "SS"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Kampala",
+      "countries": [
+        "UG"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Africa/Khartoum",
+      "countries": [
+        "SD"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Kigali",
+      "countries": [
+        "RW"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Kinshasa",
+      "countries": [
+        "CD"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Lagos",
+      "countries": [
+        "NG"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Libreville",
+      "countries": [
+        "GA"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Lome",
+      "countries": [
+        "TG"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Luanda",
+      "countries": [
+        "AO"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Lubumbashi",
+      "countries": [
+        "CD"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Lusaka",
+      "countries": [
+        "ZM"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Malabo",
+      "countries": [
+        "GQ"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Maputo",
+      "countries": [
+        "MZ"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "Africa/Maseru",
+      "countries": [
+        "LS"
+      ],
+      "rule": "SAST-2"
+    },
+    {
+      "id": "Africa/Mbabane",
+      "countries": [
+        "SZ"
+      ],
+      "rule": "SAST-2"
+    },
+    {
+      "id": "Africa/Mogadishu",
+      "countries": [
+        "SO"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Africa/Monrovia",
+      "countries": [
+        "LR"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Nairobi",
+      "countries": [
+        "KE"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Africa/Ndjamena",
+      "countries": [
+        "TD"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Niamey",
+      "countries": [
+        "NE"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Nouakchott",
+      "countries": [
+        "MR"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Ouagadougou",
+      "countries": [
+        "BF"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Porto-Novo",
+      "countries": [
+        "BJ"
+      ],
+      "rule": "WAT-1"
+    },
+    {
+      "id": "Africa/Sao_Tome",
+      "countries": [
+        "ST"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Timbuktu",
+      "countries": [
+        "CI",
+        "BF",
+        "GH",
+        "GM",
+        "GN",
+        "IS",
+        "ML",
+        "MR",
+        "SH",
+        "SL",
+        "SN",
+        "TG"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Africa/Tripoli",
+      "countries": [
+        "LY"
+      ],
+      "rule": "EET-2"
+    },
+    {
+      "id": "Africa/Tunis",
+      "countries": [
+        "TN"
+      ],
+      "rule": "CET-1"
+    },
+    {
+      "id": "Africa/Windhoek",
+      "countries": [
+        "NA"
+      ],
+      "rule": "CAT-2"
+    },
+    {
+      "id": "America/Adak",
+      "countries": [
+        "US"
+      ],
+      "rule": "HST10HDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Anchorage",
+      "countries": [
+        "US"
+      ],
+      "rule": "AKST9AKDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Anguilla",
+      "countries": [
+        "AI"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Antigua",
+      "countries": [
+        "AG"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Araguaina",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Buenos_Aires",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Catamarca",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/ComodRivadavia",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Cordoba",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Jujuy",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/La_Rioja",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Mendoza",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Rio_Gallegos",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Salta",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/San_Juan",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/San_Luis",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Tucuman",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Argentina/Ushuaia",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Aruba",
+      "countries": [
+        "AW"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Asuncion",
+      "countries": [
+        "PY"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Atikokan",
+      "countries": [
+        "CA"
+      ],
+      "rule": "EST5"
+    },
+    {
+      "id": "America/Atka",
+      "countries": [
+        "US"
+      ],
+      "rule": "HST10HDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Bahia",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Bahia_Banderas",
+      "countries": [
+        "MX"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Barbados",
+      "countries": [
+        "BB"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Belem",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Belize",
+      "countries": [
+        "BZ"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Blanc-Sablon",
+      "countries": [
+        "CA"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Boa_Vista",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "America/Bogota",
+      "countries": [
+        "CO"
+      ],
+      "rule": "<-05>5"
+    },
+    {
+      "id": "America/Boise",
+      "countries": [
+        "US"
+      ],
+      "rule": "MST7MDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Buenos_Aires",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Cambridge_Bay",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7MDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Campo_Grande",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "America/Cancun",
+      "countries": [
+        "MX"
+      ],
+      "rule": "EST5"
+    },
+    {
+      "id": "America/Caracas",
+      "countries": [
+        "VE"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "America/Catamarca",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Cayenne",
+      "countries": [
+        "GF"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Cayman",
+      "countries": [
+        "KY"
+      ],
+      "rule": "EST5"
+    },
+    {
+      "id": "America/Chicago",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Chihuahua",
+      "countries": [
+        "MX"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Ciudad_Juarez",
+      "countries": [
+        "MX"
+      ],
+      "rule": "MST7MDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Coral_Harbour",
+      "countries": [
+        "PA",
+        "CA",
+        "KY"
+      ],
+      "rule": "EST5"
+    },
+    {
+      "id": "America/Cordoba",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Costa_Rica",
+      "countries": [
+        "CR"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Coyhaique",
+      "countries": [
+        "CL"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Creston",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "America/Cuiaba",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "America/Curacao",
+      "countries": [
+        "CW"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Danmarkshavn",
+      "countries": [
+        "GL"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "America/Dawson",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "America/Dawson_Creek",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "America/Denver",
+      "countries": [
+        "US"
+      ],
+      "rule": "MST7MDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Detroit",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Dominica",
+      "countries": [
+        "DM"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Edmonton",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6",
+      "transitions": [
+        [
+          1767225600,
+          -25200
+        ],
+        [
+          1772960400,
+          -21600
+        ],
+        [
+          1793520000,
+          -21600
+        ]
+      ]
+    },
+    {
+      "id": "America/Eirunepe",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-05>5"
+    },
+    {
+      "id": "America/El_Salvador",
+      "countries": [
+        "SV"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Ensenada",
+      "countries": [
+        "MX"
+      ],
+      "rule": "PST8PDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Fort_Nelson",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "America/Fort_Wayne",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Fortaleza",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Glace_Bay",
+      "countries": [
+        "CA"
+      ],
+      "rule": "AST4ADT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Godthab",
+      "countries": [
+        "GL"
+      ],
+      "rule": "<-02>2<-01>,M3.5.0/-1,M10.5.0/0"
+    },
+    {
+      "id": "America/Goose_Bay",
+      "countries": [
+        "CA"
+      ],
+      "rule": "AST4ADT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Grand_Turk",
+      "countries": [
+        "TC"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Grenada",
+      "countries": [
+        "GD"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Guadeloupe",
+      "countries": [
+        "GP"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Guatemala",
+      "countries": [
+        "GT"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Guayaquil",
+      "countries": [
+        "EC"
+      ],
+      "rule": "<-05>5"
+    },
+    {
+      "id": "America/Guyana",
+      "countries": [
+        "GY"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "America/Halifax",
+      "countries": [
+        "CA"
+      ],
+      "rule": "AST4ADT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Havana",
+      "countries": [
+        "CU"
+      ],
+      "rule": "CST5CDT,M3.2.0/0,M11.1.0/1"
+    },
+    {
+      "id": "America/Hermosillo",
+      "countries": [
+        "MX"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "America/Indiana/Indianapolis",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Indiana/Knox",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Indiana/Marengo",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Indiana/Petersburg",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Indiana/Tell_City",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Indiana/Vevay",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Indiana/Vincennes",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Indiana/Winamac",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Indianapolis",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Inuvik",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6",
+      "transitions": [
+        [
+          1767225600,
+          -25200
+        ],
+        [
+          1772960400,
+          -21600
+        ],
+        [
+          1793520000,
+          -21600
+        ]
+      ]
+    },
+    {
+      "id": "America/Iqaluit",
+      "countries": [
+        "CA"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Jamaica",
+      "countries": [
+        "JM"
+      ],
+      "rule": "EST5"
+    },
+    {
+      "id": "America/Jujuy",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Juneau",
+      "countries": [
+        "US"
+      ],
+      "rule": "AKST9AKDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Kentucky/Louisville",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Kentucky/Monticello",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Knox_IN",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Kralendijk",
+      "countries": [
+        "BQ"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/La_Paz",
+      "countries": [
+        "BO"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "America/Lima",
+      "countries": [
+        "PE"
+      ],
+      "rule": "<-05>5"
+    },
+    {
+      "id": "America/Los_Angeles",
+      "countries": [
+        "US"
+      ],
+      "rule": "PST8PDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Louisville",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Lower_Princes",
+      "countries": [
+        "SX"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Maceio",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Managua",
+      "countries": [
+        "NI"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Manaus",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "America/Marigot",
+      "countries": [
+        "MF"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Martinique",
+      "countries": [
+        "MQ"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Matamoros",
+      "countries": [
+        "MX"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Mazatlan",
+      "countries": [
+        "MX"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "America/Mendoza",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Menominee",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Merida",
+      "countries": [
+        "MX"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Metlakatla",
+      "countries": [
+        "US"
+      ],
+      "rule": "AKST9AKDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Mexico_City",
+      "countries": [
+        "MX"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Miquelon",
+      "countries": [
+        "PM"
+      ],
+      "rule": "<-03>3<-02>,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Moncton",
+      "countries": [
+        "CA"
+      ],
+      "rule": "AST4ADT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Monterrey",
+      "countries": [
+        "MX"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Montevideo",
+      "countries": [
+        "UY"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Montreal",
+      "countries": [
+        "CA",
+        "BS"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Montserrat",
+      "countries": [
+        "MS"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Nassau",
+      "countries": [
+        "BS"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/New_York",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Nipigon",
+      "countries": [
+        "CA",
+        "BS"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Nome",
+      "countries": [
+        "US"
+      ],
+      "rule": "AKST9AKDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Noronha",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-02>2"
+    },
+    {
+      "id": "America/North_Dakota/Beulah",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/North_Dakota/Center",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/North_Dakota/New_Salem",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Nuuk",
+      "countries": [
+        "GL"
+      ],
+      "rule": "<-02>2<-01>,M3.5.0/-1,M10.5.0/0"
+    },
+    {
+      "id": "America/Ojinaga",
+      "countries": [
+        "MX"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Panama",
+      "countries": [
+        "PA"
+      ],
+      "rule": "EST5"
+    },
+    {
+      "id": "America/Pangnirtung",
+      "countries": [
+        "CA"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Paramaribo",
+      "countries": [
+        "SR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Phoenix",
+      "countries": [
+        "US"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "America/Port-au-Prince",
+      "countries": [
+        "HT"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Port_of_Spain",
+      "countries": [
+        "TT"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Porto_Acre",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-05>5"
+    },
+    {
+      "id": "America/Porto_Velho",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "America/Puerto_Rico",
+      "countries": [
+        "PR"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Punta_Arenas",
+      "countries": [
+        "CL"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Rainy_River",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Rankin_Inlet",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Recife",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Regina",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Resolute",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Rio_Branco",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-05>5"
+    },
+    {
+      "id": "America/Rosario",
+      "countries": [
+        "AR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Santa_Isabel",
+      "countries": [
+        "MX"
+      ],
+      "rule": "PST8PDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Santarem",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Santiago",
+      "countries": [
+        "CL"
+      ],
+      "rule": "<-04>4<-03>,M9.1.6/24,M4.1.6/24"
+    },
+    {
+      "id": "America/Santo_Domingo",
+      "countries": [
+        "DO"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Sao_Paulo",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "America/Scoresbysund",
+      "countries": [
+        "GL"
+      ],
+      "rule": "<-02>2<-01>,M3.5.0/-1,M10.5.0/0"
+    },
+    {
+      "id": "America/Shiprock",
+      "countries": [
+        "US"
+      ],
+      "rule": "MST7MDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Sitka",
+      "countries": [
+        "US"
+      ],
+      "rule": "AKST9AKDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/St_Barthelemy",
+      "countries": [
+        "BL"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/St_Johns",
+      "countries": [
+        "CA"
+      ],
+      "rule": "NST3:30NDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/St_Kitts",
+      "countries": [
+        "KN"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/St_Lucia",
+      "countries": [
+        "LC"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/St_Thomas",
+      "countries": [
+        "VI"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/St_Vincent",
+      "countries": [
+        "VC"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Swift_Current",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Tegucigalpa",
+      "countries": [
+        "HN"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "America/Thule",
+      "countries": [
+        "GL"
+      ],
+      "rule": "AST4ADT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Thunder_Bay",
+      "countries": [
+        "CA",
+        "BS"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Tijuana",
+      "countries": [
+        "MX"
+      ],
+      "rule": "PST8PDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Toronto",
+      "countries": [
+        "CA"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Tortola",
+      "countries": [
+        "VG"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Vancouver",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7",
+      "transitions": [
+        [
+          1767225600,
+          -28800
+        ],
+        [
+          1772964000,
+          -25200
+        ],
+        [
+          1793523600,
+          -25200
+        ]
+      ]
+    },
+    {
+      "id": "America/Virgin",
+      "countries": [
+        "PR",
+        "AG",
+        "CA",
+        "AI",
+        "AW",
+        "BL",
+        "BQ",
+        "CW",
+        "DM",
+        "GD",
+        "GP",
+        "KN",
+        "LC",
+        "MF",
+        "MS",
+        "SX",
+        "TT",
+        "VC",
+        "VG",
+        "VI"
+      ],
+      "rule": "AST4"
+    },
+    {
+      "id": "America/Whitehorse",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "America/Winnipeg",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Yakutat",
+      "countries": [
+        "US"
+      ],
+      "rule": "AKST9AKDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "America/Yellowknife",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6",
+      "transitions": [
+        [
+          1767225600,
+          -25200
+        ],
+        [
+          1772960400,
+          -21600
+        ],
+        [
+          1793520000,
+          -21600
+        ]
+      ]
+    },
+    {
+      "id": "Antarctica/Casey",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Antarctica/Davis",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Antarctica/DumontDUrville",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<+10>-10"
+    },
+    {
+      "id": "Antarctica/Macquarie",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Antarctica/Mawson",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Antarctica/McMurdo",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "NZST-12NZDT,M9.5.0,M4.1.0/3"
+    },
+    {
+      "id": "Antarctica/Palmer",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "Antarctica/Rothera",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "Antarctica/South_Pole",
+      "countries": [
+        "NZ",
+        "AQ"
+      ],
+      "rule": "NZST-12NZDT,M9.5.0,M4.1.0/3"
+    },
+    {
+      "id": "Antarctica/Syowa",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Antarctica/Troll",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<+00>0<+02>-2,M3.5.0/1,M10.5.0/3"
+    },
+    {
+      "id": "Antarctica/Vostok",
+      "countries": [
+        "AQ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Arctic/Longyearbyen",
+      "countries": [
+        "SJ"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Asia/Aden",
+      "countries": [
+        "YE"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Almaty",
+      "countries": [
+        "KZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Amman",
+      "countries": [
+        "JO"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Anadyr",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Asia/Aqtau",
+      "countries": [
+        "KZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Aqtobe",
+      "countries": [
+        "KZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Ashgabat",
+      "countries": [
+        "TM"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Ashkhabad",
+      "countries": [
+        "TM"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Atyrau",
+      "countries": [
+        "KZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Baghdad",
+      "countries": [
+        "IQ"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Bahrain",
+      "countries": [
+        "BH"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Baku",
+      "countries": [
+        "AZ"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Asia/Bangkok",
+      "countries": [
+        "TH"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Barnaul",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Beirut",
+      "countries": [
+        "LB"
+      ],
+      "rule": "EET-2EEST,M3.5.0/0,M10.5.0/0"
+    },
+    {
+      "id": "Asia/Bishkek",
+      "countries": [
+        "KG"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Asia/Brunei",
+      "countries": [
+        "BN"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Asia/Calcutta",
+      "countries": [
+        "IN"
+      ],
+      "rule": "IST-5:30"
+    },
+    {
+      "id": "Asia/Chita",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+09>-9"
+    },
+    {
+      "id": "Asia/Choibalsan",
+      "countries": [
+        "MN"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Asia/Chongqing",
+      "countries": [
+        "CN"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "Asia/Chungking",
+      "countries": [
+        "CN"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "Asia/Colombo",
+      "countries": [
+        "LK"
+      ],
+      "rule": "<+0530>-5:30"
+    },
+    {
+      "id": "Asia/Dacca",
+      "countries": [
+        "BD"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Asia/Damascus",
+      "countries": [
+        "SY"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Dhaka",
+      "countries": [
+        "BD"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Asia/Dili",
+      "countries": [
+        "TL"
+      ],
+      "rule": "<+09>-9"
+    },
+    {
+      "id": "Asia/Dubai",
+      "countries": [
+        "AE"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Asia/Dushanbe",
+      "countries": [
+        "TJ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Famagusta",
+      "countries": [
+        "CY"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Asia/Gaza",
+      "countries": [
+        "PS"
+      ],
+      "rule": "EET-2EEST,M3.4.4/50,M10.4.4/50",
+      "transitions": [
+        [
+          1767225600,
+          7200
+        ],
+        [
+          1774656000,
+          10800
+        ],
+        [
+          1792796400,
+          7200
+        ],
+        [
+          1806105600,
+          10800
+        ],
+        [
+          1824850800,
+          7200
+        ],
+        [
+          1837555200,
+          10800
+        ],
+        [
+          1856300400,
+          7200
+        ],
+        [
+          1869004800,
+          10800
+        ],
+        [
+          1887750000,
+          7200
+        ],
+        [
+          1901059200,
+          10800
+        ],
+        [
+          1919199600,
+          7200
+        ],
+        [
+          1932508800,
+          10800
+        ],
+        [
+          1950649200,
+          7200
+        ],
+        [
+          1963958400,
+          10800
+        ],
+        [
+          1982703600,
+          7200
+        ],
+        [
+          1995408000,
+          10800
+        ],
+        [
+          2014153200,
+          7200
+        ],
+        [
+          2026857600,
+          10800
+        ],
+        [
+          2045602800,
+          7200
+        ],
+        [
+          2058307200,
+          10800
+        ],
+        [
+          2077052400,
+          7200
+        ],
+        [
+          2090361600,
+          10800
+        ],
+        [
+          2107897200,
+          7200
+        ],
+        [
+          2121811200,
+          10800
+        ],
+        [
+          2138742000,
+          7200
+        ],
+        [
+          2153260800,
+          10800
+        ],
+        [
+          2168982000,
+          7200
+        ],
+        [
+          2184710400,
+          10800
+        ],
+        [
+          2199826800,
+          7200
+        ],
+        [
+          2216160000,
+          10800
+        ],
+        [
+          2230066800,
+          7200
+        ],
+        [
+          2234304000,
+          10800
+        ],
+        [
+          2234905200,
+          7200
+        ],
+        [
+          2248214400,
+          10800
+        ],
+        [
+          2260911600,
+          7200
+        ],
+        [
+          2264544000,
+          10800
+        ],
+        [
+          2266354800,
+          7200
+        ],
+        [
+          2279664000,
+          10800
+        ],
+        [
+          2291756400,
+          7200
+        ],
+        [
+          2295388800,
+          10800
+        ],
+        [
+          2297804400,
+          7200
+        ],
+        [
+          2311113600,
+          10800
+        ],
+        [
+          2321996400,
+          7200
+        ],
+        [
+          2326233600,
+          10800
+        ],
+        [
+          2329254000,
+          7200
+        ],
+        [
+          2342563200,
+          10800
+        ],
+        [
+          2352841200,
+          7200
+        ],
+        [
+          2356473600,
+          10800
+        ],
+        [
+          2361308400,
+          7200
+        ],
+        [
+          2374012800,
+          10800
+        ],
+        [
+          2383686000,
+          7200
+        ],
+        [
+          2387318400,
+          10800
+        ],
+        [
+          2392758000,
+          7200
+        ],
+        [
+          2405462400,
+          10800
+        ],
+        [
+          2413926000,
+          7200
+        ],
+        [
+          2418163200,
+          10800
+        ],
+        [
+          2424207600,
+          7200
+        ],
+        [
+          2437516800,
+          10800
+        ],
+        [
+          2444770800,
+          7200
+        ],
+        [
+          2448403200,
+          10800
+        ],
+        [
+          2455657200,
+          7200
+        ],
+        [
+          2468966400,
+          10800
+        ],
+        [
+          2475010800,
+          7200
+        ],
+        [
+          2479248000,
+          10800
+        ],
+        [
+          2487106800,
+          7200
+        ],
+        [
+          2500416000,
+          10800
+        ],
+        [
+          2505855600,
+          7200
+        ],
+        [
+          2509488000,
+          10800
+        ],
+        [
+          2519161200,
+          7200
+        ],
+        [
+          2531865600,
+          10800
+        ],
+        [
+          2536700400,
+          7200
+        ],
+        [
+          2540332800,
+          10800
+        ],
+        [
+          2550610800,
+          7200
+        ],
+        [
+          2563315200,
+          10800
+        ],
+        [
+          2566940400,
+          7200
+        ],
+        [
+          2571177600,
+          10800
+        ],
+        [
+          2582060400,
+          7200
+        ],
+        [
+          2595369600,
+          10800
+        ],
+        [
+          2597785200,
+          7200
+        ],
+        [
+          2601417600,
+          10800
+        ],
+        [
+          2613510000,
+          7200
+        ],
+        [
+          2626819200,
+          10800
+        ],
+        [
+          2628025200,
+          7200
+        ],
+        [
+          2632262400,
+          10800
+        ],
+        [
+          2644959600,
+          7200
+        ],
+        [
+          2658268800,
+          10800
+        ],
+        [
+          2658870000,
+          7200
+        ],
+        [
+          2663107200,
+          10800
+        ],
+        [
+          2676409200,
+          7200
+        ],
+        [
+          2693347200,
+          10800
+        ],
+        [
+          2708463600,
+          7200
+        ],
+        [
+          2724192000,
+          10800
+        ],
+        [
+          2739913200,
+          7200
+        ],
+        [
+          2754432000,
+          10800
+        ],
+        [
+          2771362800,
+          7200
+        ],
+        [
+          2785276800,
+          10800
+        ],
+        [
+          2802812400,
+          7200
+        ],
+        [
+          2816121600,
+          10800
+        ],
+        [
+          2834262000,
+          7200
+        ],
+        [
+          2847571200,
+          10800
+        ],
+        [
+          2866316400,
+          7200
+        ],
+        [
+          2879020800,
+          10800
+        ],
+        [
+          2897766000,
+          7200
+        ],
+        [
+          2910470400,
+          10800
+        ],
+        [
+          2929215600,
+          7200
+        ],
+        [
+          2941920000,
+          10800
+        ],
+        [
+          2960665200,
+          7200
+        ],
+        [
+          2973974400,
+          10800
+        ],
+        [
+          2992114800,
+          7200
+        ],
+        [
+          3005424000,
+          10800
+        ],
+        [
+          3023564400,
+          7200
+        ],
+        [
+          3036873600,
+          10800
+        ],
+        [
+          3055618800,
+          7200
+        ],
+        [
+          3068323200,
+          10800
+        ],
+        [
+          3087068400,
+          7200
+        ],
+        [
+          3099772800,
+          10800
+        ],
+        [
+          3117913200,
+          7200
+        ],
+        [
+          3131827200,
+          10800
+        ],
+        [
+          3148758000,
+          7200
+        ],
+        [
+          3163276800,
+          10800
+        ],
+        [
+          3179602800,
+          7200
+        ],
+        [
+          3194726400,
+          10800
+        ],
+        [
+          3209842800,
+          7200
+        ],
+        [
+          3226176000,
+          10800
+        ],
+        [
+          3240687600,
+          7200
+        ],
+        [
+          3244320000,
+          10800
+        ],
+        [
+          3244921200,
+          7200
+        ],
+        [
+          3257625600,
+          10800
+        ],
+        [
+          3271532400,
+          7200
+        ],
+        [
+          3275164800,
+          10800
+        ],
+        [
+          3276370800,
+          7200
+        ],
+        [
+          3289075200,
+          10800
+        ],
+        [
+          3301772400,
+          7200
+        ],
+        [
+          3306009600,
+          10800
+        ],
+        [
+          3307820400,
+          7200
+        ],
+        [
+          3321129600,
+          10800
+        ],
+        [
+          3332617200,
+          7200
+        ],
+        [
+          3336249600,
+          10800
+        ],
+        [
+          3339270000,
+          7200
+        ],
+        [
+          3352579200,
+          10800
+        ],
+        [
+          3362857200,
+          7200
+        ],
+        [
+          3367094400,
+          10800
+        ],
+        [
+          3370719600,
+          7200
+        ],
+        [
+          3384028800,
+          10800
+        ],
+        [
+          3393702000,
+          7200
+        ],
+        [
+          3397939200,
+          10800
+        ],
+        [
+          3402774000,
+          7200
+        ],
+        [
+          3415478400,
+          10800
+        ],
+        [
+          3424546800,
+          7200
+        ],
+        [
+          3428179200,
+          10800
+        ],
+        [
+          3434223600,
+          7200
+        ],
+        [
+          3446928000,
+          10800
+        ],
+        [
+          3454786800,
+          7200
+        ],
+        [
+          3459024000,
+          10800
+        ],
+        [
+          3465673200,
+          7200
+        ],
+        [
+          3478982400,
+          10800
+        ],
+        [
+          3485631600,
+          7200
+        ],
+        [
+          3489264000,
+          10800
+        ],
+        [
+          3497122800,
+          7200
+        ],
+        [
+          3510432000,
+          10800
+        ],
+        [
+          3516476400,
+          7200
+        ],
+        [
+          3520108800,
+          10800
+        ],
+        [
+          3528572400,
+          7200
+        ],
+        [
+          3541881600,
+          10800
+        ],
+        [
+          3546716400,
+          7200
+        ],
+        [
+          3550953600,
+          10800
+        ],
+        [
+          3560022000,
+          7200
+        ],
+        [
+          3573331200,
+          10800
+        ],
+        [
+          3577561200,
+          7200
+        ],
+        [
+          3581193600,
+          10800
+        ],
+        [
+          3592076400,
+          7200
+        ],
+        [
+          3604780800,
+          10800
+        ],
+        [
+          3607801200,
+          7200
+        ],
+        [
+          3612038400,
+          10800
+        ],
+        [
+          3623526000,
+          7200
+        ],
+        [
+          3636230400,
+          10800
+        ],
+        [
+          3638646000,
+          7200
+        ],
+        [
+          3642883200,
+          10800
+        ],
+        [
+          3654975600,
+          7200
+        ],
+        [
+          3668284800,
+          10800
+        ],
+        [
+          3669490800,
+          7200
+        ],
+        [
+          3673123200,
+          10800
+        ],
+        [
+          3686425200,
+          7200
+        ]
+      ]
+    },
+    {
+      "id": "Asia/Harbin",
+      "countries": [
+        "CN"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "Asia/Hebron",
+      "countries": [
+        "PS"
+      ],
+      "rule": "EET-2EEST,M3.4.4/50,M10.4.4/50",
+      "transitions": [
+        [
+          1767225600,
+          7200
+        ],
+        [
+          1774656000,
+          10800
+        ],
+        [
+          1792796400,
+          7200
+        ],
+        [
+          1806105600,
+          10800
+        ],
+        [
+          1824850800,
+          7200
+        ],
+        [
+          1837555200,
+          10800
+        ],
+        [
+          1856300400,
+          7200
+        ],
+        [
+          1869004800,
+          10800
+        ],
+        [
+          1887750000,
+          7200
+        ],
+        [
+          1901059200,
+          10800
+        ],
+        [
+          1919199600,
+          7200
+        ],
+        [
+          1932508800,
+          10800
+        ],
+        [
+          1950649200,
+          7200
+        ],
+        [
+          1963958400,
+          10800
+        ],
+        [
+          1982703600,
+          7200
+        ],
+        [
+          1995408000,
+          10800
+        ],
+        [
+          2014153200,
+          7200
+        ],
+        [
+          2026857600,
+          10800
+        ],
+        [
+          2045602800,
+          7200
+        ],
+        [
+          2058307200,
+          10800
+        ],
+        [
+          2077052400,
+          7200
+        ],
+        [
+          2090361600,
+          10800
+        ],
+        [
+          2107897200,
+          7200
+        ],
+        [
+          2121811200,
+          10800
+        ],
+        [
+          2138742000,
+          7200
+        ],
+        [
+          2153260800,
+          10800
+        ],
+        [
+          2168982000,
+          7200
+        ],
+        [
+          2184710400,
+          10800
+        ],
+        [
+          2199826800,
+          7200
+        ],
+        [
+          2216160000,
+          10800
+        ],
+        [
+          2230066800,
+          7200
+        ],
+        [
+          2234304000,
+          10800
+        ],
+        [
+          2234905200,
+          7200
+        ],
+        [
+          2248214400,
+          10800
+        ],
+        [
+          2260911600,
+          7200
+        ],
+        [
+          2264544000,
+          10800
+        ],
+        [
+          2266354800,
+          7200
+        ],
+        [
+          2279664000,
+          10800
+        ],
+        [
+          2291756400,
+          7200
+        ],
+        [
+          2295388800,
+          10800
+        ],
+        [
+          2297804400,
+          7200
+        ],
+        [
+          2311113600,
+          10800
+        ],
+        [
+          2321996400,
+          7200
+        ],
+        [
+          2326233600,
+          10800
+        ],
+        [
+          2329254000,
+          7200
+        ],
+        [
+          2342563200,
+          10800
+        ],
+        [
+          2352841200,
+          7200
+        ],
+        [
+          2356473600,
+          10800
+        ],
+        [
+          2361308400,
+          7200
+        ],
+        [
+          2374012800,
+          10800
+        ],
+        [
+          2383686000,
+          7200
+        ],
+        [
+          2387318400,
+          10800
+        ],
+        [
+          2392758000,
+          7200
+        ],
+        [
+          2405462400,
+          10800
+        ],
+        [
+          2413926000,
+          7200
+        ],
+        [
+          2418163200,
+          10800
+        ],
+        [
+          2424207600,
+          7200
+        ],
+        [
+          2437516800,
+          10800
+        ],
+        [
+          2444770800,
+          7200
+        ],
+        [
+          2448403200,
+          10800
+        ],
+        [
+          2455657200,
+          7200
+        ],
+        [
+          2468966400,
+          10800
+        ],
+        [
+          2475010800,
+          7200
+        ],
+        [
+          2479248000,
+          10800
+        ],
+        [
+          2487106800,
+          7200
+        ],
+        [
+          2500416000,
+          10800
+        ],
+        [
+          2505855600,
+          7200
+        ],
+        [
+          2509488000,
+          10800
+        ],
+        [
+          2519161200,
+          7200
+        ],
+        [
+          2531865600,
+          10800
+        ],
+        [
+          2536700400,
+          7200
+        ],
+        [
+          2540332800,
+          10800
+        ],
+        [
+          2550610800,
+          7200
+        ],
+        [
+          2563315200,
+          10800
+        ],
+        [
+          2566940400,
+          7200
+        ],
+        [
+          2571177600,
+          10800
+        ],
+        [
+          2582060400,
+          7200
+        ],
+        [
+          2595369600,
+          10800
+        ],
+        [
+          2597785200,
+          7200
+        ],
+        [
+          2601417600,
+          10800
+        ],
+        [
+          2613510000,
+          7200
+        ],
+        [
+          2626819200,
+          10800
+        ],
+        [
+          2628025200,
+          7200
+        ],
+        [
+          2632262400,
+          10800
+        ],
+        [
+          2644959600,
+          7200
+        ],
+        [
+          2658268800,
+          10800
+        ],
+        [
+          2658870000,
+          7200
+        ],
+        [
+          2663107200,
+          10800
+        ],
+        [
+          2676409200,
+          7200
+        ],
+        [
+          2693347200,
+          10800
+        ],
+        [
+          2708463600,
+          7200
+        ],
+        [
+          2724192000,
+          10800
+        ],
+        [
+          2739913200,
+          7200
+        ],
+        [
+          2754432000,
+          10800
+        ],
+        [
+          2771362800,
+          7200
+        ],
+        [
+          2785276800,
+          10800
+        ],
+        [
+          2802812400,
+          7200
+        ],
+        [
+          2816121600,
+          10800
+        ],
+        [
+          2834262000,
+          7200
+        ],
+        [
+          2847571200,
+          10800
+        ],
+        [
+          2866316400,
+          7200
+        ],
+        [
+          2879020800,
+          10800
+        ],
+        [
+          2897766000,
+          7200
+        ],
+        [
+          2910470400,
+          10800
+        ],
+        [
+          2929215600,
+          7200
+        ],
+        [
+          2941920000,
+          10800
+        ],
+        [
+          2960665200,
+          7200
+        ],
+        [
+          2973974400,
+          10800
+        ],
+        [
+          2992114800,
+          7200
+        ],
+        [
+          3005424000,
+          10800
+        ],
+        [
+          3023564400,
+          7200
+        ],
+        [
+          3036873600,
+          10800
+        ],
+        [
+          3055618800,
+          7200
+        ],
+        [
+          3068323200,
+          10800
+        ],
+        [
+          3087068400,
+          7200
+        ],
+        [
+          3099772800,
+          10800
+        ],
+        [
+          3117913200,
+          7200
+        ],
+        [
+          3131827200,
+          10800
+        ],
+        [
+          3148758000,
+          7200
+        ],
+        [
+          3163276800,
+          10800
+        ],
+        [
+          3179602800,
+          7200
+        ],
+        [
+          3194726400,
+          10800
+        ],
+        [
+          3209842800,
+          7200
+        ],
+        [
+          3226176000,
+          10800
+        ],
+        [
+          3240687600,
+          7200
+        ],
+        [
+          3244320000,
+          10800
+        ],
+        [
+          3244921200,
+          7200
+        ],
+        [
+          3257625600,
+          10800
+        ],
+        [
+          3271532400,
+          7200
+        ],
+        [
+          3275164800,
+          10800
+        ],
+        [
+          3276370800,
+          7200
+        ],
+        [
+          3289075200,
+          10800
+        ],
+        [
+          3301772400,
+          7200
+        ],
+        [
+          3306009600,
+          10800
+        ],
+        [
+          3307820400,
+          7200
+        ],
+        [
+          3321129600,
+          10800
+        ],
+        [
+          3332617200,
+          7200
+        ],
+        [
+          3336249600,
+          10800
+        ],
+        [
+          3339270000,
+          7200
+        ],
+        [
+          3352579200,
+          10800
+        ],
+        [
+          3362857200,
+          7200
+        ],
+        [
+          3367094400,
+          10800
+        ],
+        [
+          3370719600,
+          7200
+        ],
+        [
+          3384028800,
+          10800
+        ],
+        [
+          3393702000,
+          7200
+        ],
+        [
+          3397939200,
+          10800
+        ],
+        [
+          3402774000,
+          7200
+        ],
+        [
+          3415478400,
+          10800
+        ],
+        [
+          3424546800,
+          7200
+        ],
+        [
+          3428179200,
+          10800
+        ],
+        [
+          3434223600,
+          7200
+        ],
+        [
+          3446928000,
+          10800
+        ],
+        [
+          3454786800,
+          7200
+        ],
+        [
+          3459024000,
+          10800
+        ],
+        [
+          3465673200,
+          7200
+        ],
+        [
+          3478982400,
+          10800
+        ],
+        [
+          3485631600,
+          7200
+        ],
+        [
+          3489264000,
+          10800
+        ],
+        [
+          3497122800,
+          7200
+        ],
+        [
+          3510432000,
+          10800
+        ],
+        [
+          3516476400,
+          7200
+        ],
+        [
+          3520108800,
+          10800
+        ],
+        [
+          3528572400,
+          7200
+        ],
+        [
+          3541881600,
+          10800
+        ],
+        [
+          3546716400,
+          7200
+        ],
+        [
+          3550953600,
+          10800
+        ],
+        [
+          3560022000,
+          7200
+        ],
+        [
+          3573331200,
+          10800
+        ],
+        [
+          3577561200,
+          7200
+        ],
+        [
+          3581193600,
+          10800
+        ],
+        [
+          3592076400,
+          7200
+        ],
+        [
+          3604780800,
+          10800
+        ],
+        [
+          3607801200,
+          7200
+        ],
+        [
+          3612038400,
+          10800
+        ],
+        [
+          3623526000,
+          7200
+        ],
+        [
+          3636230400,
+          10800
+        ],
+        [
+          3638646000,
+          7200
+        ],
+        [
+          3642883200,
+          10800
+        ],
+        [
+          3654975600,
+          7200
+        ],
+        [
+          3668284800,
+          10800
+        ],
+        [
+          3669490800,
+          7200
+        ],
+        [
+          3673123200,
+          10800
+        ],
+        [
+          3686425200,
+          7200
+        ]
+      ]
+    },
+    {
+      "id": "Asia/Ho_Chi_Minh",
+      "countries": [
+        "VN"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Hong_Kong",
+      "countries": [
+        "HK"
+      ],
+      "rule": "HKT-8"
+    },
+    {
+      "id": "Asia/Hovd",
+      "countries": [
+        "MN"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Irkutsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Asia/Istanbul",
+      "countries": [
+        "TR"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Jakarta",
+      "countries": [
+        "ID"
+      ],
+      "rule": "WIB-7"
+    },
+    {
+      "id": "Asia/Jayapura",
+      "countries": [
+        "ID"
+      ],
+      "rule": "WIT-9"
+    },
+    {
+      "id": "Asia/Jerusalem",
+      "countries": [
+        "IL"
+      ],
+      "rule": "IST-2IDT,M3.4.4/26,M10.5.0"
+    },
+    {
+      "id": "Asia/Kabul",
+      "countries": [
+        "AF"
+      ],
+      "rule": "<+0430>-4:30"
+    },
+    {
+      "id": "Asia/Kamchatka",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Asia/Karachi",
+      "countries": [
+        "PK"
+      ],
+      "rule": "PKT-5"
+    },
+    {
+      "id": "Asia/Kashgar",
+      "countries": [
+        "CN"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Asia/Kathmandu",
+      "countries": [
+        "NP"
+      ],
+      "rule": "<+0545>-5:45"
+    },
+    {
+      "id": "Asia/Katmandu",
+      "countries": [
+        "NP"
+      ],
+      "rule": "<+0545>-5:45"
+    },
+    {
+      "id": "Asia/Khandyga",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+09>-9"
+    },
+    {
+      "id": "Asia/Kolkata",
+      "countries": [
+        "IN"
+      ],
+      "rule": "IST-5:30"
+    },
+    {
+      "id": "Asia/Krasnoyarsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Kuala_Lumpur",
+      "countries": [
+        "MY"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Asia/Kuching",
+      "countries": [
+        "MY"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Asia/Kuwait",
+      "countries": [
+        "KW"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Macao",
+      "countries": [
+        "MO"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "Asia/Macau",
+      "countries": [
+        "MO"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "Asia/Magadan",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Asia/Makassar",
+      "countries": [
+        "ID"
+      ],
+      "rule": "WITA-8"
+    },
+    {
+      "id": "Asia/Manila",
+      "countries": [
+        "PH"
+      ],
+      "rule": "PST-8"
+    },
+    {
+      "id": "Asia/Muscat",
+      "countries": [
+        "OM"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Asia/Nicosia",
+      "countries": [
+        "CY"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Asia/Novokuznetsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Novosibirsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Omsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Asia/Oral",
+      "countries": [
+        "KZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Phnom_Penh",
+      "countries": [
+        "KH"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Pontianak",
+      "countries": [
+        "ID"
+      ],
+      "rule": "WIB-7"
+    },
+    {
+      "id": "Asia/Pyongyang",
+      "countries": [
+        "KP"
+      ],
+      "rule": "KST-9"
+    },
+    {
+      "id": "Asia/Qatar",
+      "countries": [
+        "QA"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Qostanay",
+      "countries": [
+        "KZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Qyzylorda",
+      "countries": [
+        "KZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Rangoon",
+      "countries": [
+        "MM",
+        "CC"
+      ],
+      "rule": "<+0630>-6:30"
+    },
+    {
+      "id": "Asia/Riyadh",
+      "countries": [
+        "SA"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Asia/Saigon",
+      "countries": [
+        "VN"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Sakhalin",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Asia/Samarkand",
+      "countries": [
+        "UZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Seoul",
+      "countries": [
+        "KR"
+      ],
+      "rule": "KST-9"
+    },
+    {
+      "id": "Asia/Shanghai",
+      "countries": [
+        "CN"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "Asia/Singapore",
+      "countries": [
+        "SG"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Asia/Srednekolymsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Asia/Taipei",
+      "countries": [
+        "TW"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "Asia/Tashkent",
+      "countries": [
+        "UZ"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Tbilisi",
+      "countries": [
+        "GE"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Asia/Tehran",
+      "countries": [
+        "IR"
+      ],
+      "rule": "<+0330>-3:30"
+    },
+    {
+      "id": "Asia/Tel_Aviv",
+      "countries": [
+        "IL"
+      ],
+      "rule": "IST-2IDT,M3.4.4/26,M10.5.0"
+    },
+    {
+      "id": "Asia/Thimbu",
+      "countries": [
+        "BT"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Asia/Thimphu",
+      "countries": [
+        "BT"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Asia/Tokyo",
+      "countries": [
+        "JP"
+      ],
+      "rule": "JST-9"
+    },
+    {
+      "id": "Asia/Tomsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Ujung_Pandang",
+      "countries": [
+        "ID"
+      ],
+      "rule": "WITA-8"
+    },
+    {
+      "id": "Asia/Ulaanbaatar",
+      "countries": [
+        "MN"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Asia/Ulan_Bator",
+      "countries": [
+        "MN"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Asia/Urumqi",
+      "countries": [
+        "CN"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Asia/Ust-Nera",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+10>-10"
+    },
+    {
+      "id": "Asia/Vientiane",
+      "countries": [
+        "LA"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Asia/Vladivostok",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+10>-10"
+    },
+    {
+      "id": "Asia/Yakutsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+09>-9"
+    },
+    {
+      "id": "Asia/Yangon",
+      "countries": [
+        "MM"
+      ],
+      "rule": "<+0630>-6:30"
+    },
+    {
+      "id": "Asia/Yekaterinburg",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Asia/Yerevan",
+      "countries": [
+        "AM"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Atlantic/Azores",
+      "countries": [
+        "PT"
+      ],
+      "rule": "<-01>1<+00>,M3.5.0/0,M10.5.0/1"
+    },
+    {
+      "id": "Atlantic/Bermuda",
+      "countries": [
+        "BM"
+      ],
+      "rule": "AST4ADT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Atlantic/Canary",
+      "countries": [
+        "ES"
+      ],
+      "rule": "WET0WEST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Atlantic/Cape_Verde",
+      "countries": [
+        "CV"
+      ],
+      "rule": "<-01>1"
+    },
+    {
+      "id": "Atlantic/Faeroe",
+      "countries": [
+        "FO"
+      ],
+      "rule": "WET0WEST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Atlantic/Faroe",
+      "countries": [
+        "FO"
+      ],
+      "rule": "WET0WEST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Atlantic/Jan_Mayen",
+      "countries": [
+        "DE",
+        "DK",
+        "NO",
+        "SE",
+        "SJ"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Atlantic/Madeira",
+      "countries": [
+        "PT"
+      ],
+      "rule": "WET0WEST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Atlantic/Reykjavik",
+      "countries": [
+        "IS"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Atlantic/South_Georgia",
+      "countries": [
+        "GS"
+      ],
+      "rule": "<-02>2"
+    },
+    {
+      "id": "Atlantic/St_Helena",
+      "countries": [
+        "SH"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Atlantic/Stanley",
+      "countries": [
+        "FK"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "Australia/ACT",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/Adelaide",
+      "countries": [
+        "AU"
+      ],
+      "rule": "ACST-9:30ACDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/Brisbane",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10"
+    },
+    {
+      "id": "Australia/Broken_Hill",
+      "countries": [
+        "AU"
+      ],
+      "rule": "ACST-9:30ACDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/Canberra",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/Currie",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/Darwin",
+      "countries": [
+        "AU"
+      ],
+      "rule": "ACST-9:30"
+    },
+    {
+      "id": "Australia/Eucla",
+      "countries": [
+        "AU"
+      ],
+      "rule": "<+0845>-8:45"
+    },
+    {
+      "id": "Australia/Hobart",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/LHI",
+      "countries": [
+        "AU"
+      ],
+      "rule": "<+1030>-10:30<+11>-11,M10.1.0,M4.1.0"
+    },
+    {
+      "id": "Australia/Lindeman",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10"
+    },
+    {
+      "id": "Australia/Lord_Howe",
+      "countries": [
+        "AU"
+      ],
+      "rule": "<+1030>-10:30<+11>-11,M10.1.0,M4.1.0"
+    },
+    {
+      "id": "Australia/Melbourne",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/NSW",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/North",
+      "countries": [
+        "AU"
+      ],
+      "rule": "ACST-9:30"
+    },
+    {
+      "id": "Australia/Perth",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AWST-8"
+    },
+    {
+      "id": "Australia/Queensland",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10"
+    },
+    {
+      "id": "Australia/South",
+      "countries": [
+        "AU"
+      ],
+      "rule": "ACST-9:30ACDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/Sydney",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/Tasmania",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/Victoria",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AEST-10AEDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Australia/West",
+      "countries": [
+        "AU"
+      ],
+      "rule": "AWST-8"
+    },
+    {
+      "id": "Australia/Yancowinna",
+      "countries": [
+        "AU"
+      ],
+      "rule": "ACST-9:30ACDT,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Brazil/Acre",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-05>5"
+    },
+    {
+      "id": "Brazil/DeNoronha",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-02>2"
+    },
+    {
+      "id": "Brazil/East",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "Brazil/West",
+      "countries": [
+        "BR"
+      ],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "CET",
+      "countries": [
+        "BE",
+        "LU",
+        "NL"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "CST6CDT",
+      "countries": [],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Canada/Atlantic",
+      "countries": [
+        "CA"
+      ],
+      "rule": "AST4ADT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Canada/Central",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Canada/Eastern",
+      "countries": [
+        "CA",
+        "BS"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Canada/Mountain",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6",
+      "transitions": [
+        [
+          1767225600,
+          -25200
+        ],
+        [
+          1772960400,
+          -21600
+        ],
+        [
+          1793520000,
+          -21600
+        ]
+      ]
+    },
+    {
+      "id": "Canada/Newfoundland",
+      "countries": [
+        "CA"
+      ],
+      "rule": "NST3:30NDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Canada/Pacific",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7",
+      "transitions": [
+        [
+          1767225600,
+          -28800
+        ],
+        [
+          1772964000,
+          -25200
+        ],
+        [
+          1793523600,
+          -25200
+        ]
+      ]
+    },
+    {
+      "id": "Canada/Saskatchewan",
+      "countries": [
+        "CA"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "Canada/Yukon",
+      "countries": [
+        "CA"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "Chile/Continental",
+      "countries": [
+        "CL"
+      ],
+      "rule": "<-04>4<-03>,M9.1.6/24,M4.1.6/24"
+    },
+    {
+      "id": "Chile/EasterIsland",
+      "countries": [
+        "CL"
+      ],
+      "rule": "<-06>6<-05>,M9.1.6/22,M4.1.6/22"
+    },
+    {
+      "id": "Cuba",
+      "countries": [
+        "CU"
+      ],
+      "rule": "CST5CDT,M3.2.0/0,M11.1.0/1"
+    },
+    {
+      "id": "EET",
+      "countries": [
+        "GR"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "EST",
+      "countries": [
+        "PA",
+        "CA",
+        "KY"
+      ],
+      "rule": "EST5"
+    },
+    {
+      "id": "EST5EDT",
+      "countries": [],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Egypt",
+      "countries": [
+        "EG"
+      ],
+      "rule": "EET-2EEST,M4.5.5/0,M10.5.4/24"
+    },
+    {
+      "id": "Eire",
+      "countries": [
+        "IE"
+      ],
+      "rule": "IST-1GMT0,M10.5.0,M3.5.0/1"
+    },
+    {
+      "id": "Etc/GMT",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Etc/GMT+0",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Etc/GMT+1",
+      "countries": [],
+      "rule": "<-01>1"
+    },
+    {
+      "id": "Etc/GMT+10",
+      "countries": [],
+      "rule": "<-10>10"
+    },
+    {
+      "id": "Etc/GMT+11",
+      "countries": [],
+      "rule": "<-11>11"
+    },
+    {
+      "id": "Etc/GMT+12",
+      "countries": [],
+      "rule": "<-12>12"
+    },
+    {
+      "id": "Etc/GMT+2",
+      "countries": [],
+      "rule": "<-02>2"
+    },
+    {
+      "id": "Etc/GMT+3",
+      "countries": [],
+      "rule": "<-03>3"
+    },
+    {
+      "id": "Etc/GMT+4",
+      "countries": [],
+      "rule": "<-04>4"
+    },
+    {
+      "id": "Etc/GMT+5",
+      "countries": [],
+      "rule": "<-05>5"
+    },
+    {
+      "id": "Etc/GMT+6",
+      "countries": [],
+      "rule": "<-06>6"
+    },
+    {
+      "id": "Etc/GMT+7",
+      "countries": [],
+      "rule": "<-07>7"
+    },
+    {
+      "id": "Etc/GMT+8",
+      "countries": [],
+      "rule": "<-08>8"
+    },
+    {
+      "id": "Etc/GMT+9",
+      "countries": [],
+      "rule": "<-09>9"
+    },
+    {
+      "id": "Etc/GMT-0",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Etc/GMT-1",
+      "countries": [],
+      "rule": "<+01>-1"
+    },
+    {
+      "id": "Etc/GMT-10",
+      "countries": [],
+      "rule": "<+10>-10"
+    },
+    {
+      "id": "Etc/GMT-11",
+      "countries": [],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Etc/GMT-12",
+      "countries": [],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Etc/GMT-13",
+      "countries": [],
+      "rule": "<+13>-13"
+    },
+    {
+      "id": "Etc/GMT-14",
+      "countries": [],
+      "rule": "<+14>-14"
+    },
+    {
+      "id": "Etc/GMT-2",
+      "countries": [],
+      "rule": "<+02>-2"
+    },
+    {
+      "id": "Etc/GMT-3",
+      "countries": [],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Etc/GMT-4",
+      "countries": [],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Etc/GMT-5",
+      "countries": [],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Etc/GMT-6",
+      "countries": [],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Etc/GMT-7",
+      "countries": [],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Etc/GMT-8",
+      "countries": [],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Etc/GMT-9",
+      "countries": [],
+      "rule": "<+09>-9"
+    },
+    {
+      "id": "Etc/GMT0",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Etc/Greenwich",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Etc/UCT",
+      "countries": [],
+      "rule": "UTC0"
+    },
+    {
+      "id": "Etc/UTC",
+      "countries": [],
+      "rule": "UTC0"
+    },
+    {
+      "id": "Etc/Universal",
+      "countries": [],
+      "rule": "UTC0"
+    },
+    {
+      "id": "Etc/Zulu",
+      "countries": [],
+      "rule": "UTC0"
+    },
+    {
+      "id": "Europe/Amsterdam",
+      "countries": [
+        "NL"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Andorra",
+      "countries": [
+        "AD"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Astrakhan",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Europe/Athens",
+      "countries": [
+        "GR"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Belfast",
+      "countries": [
+        "GB",
+        "GG",
+        "IM",
+        "JE"
+      ],
+      "rule": "GMT0BST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Europe/Belgrade",
+      "countries": [
+        "RS"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Berlin",
+      "countries": [
+        "DE"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Bratislava",
+      "countries": [
+        "SK"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Brussels",
+      "countries": [
+        "BE"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Bucharest",
+      "countries": [
+        "RO"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Budapest",
+      "countries": [
+        "HU"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Busingen",
+      "countries": [
+        "DE"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Chisinau",
+      "countries": [
+        "MD"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Copenhagen",
+      "countries": [
+        "DK"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Dublin",
+      "countries": [
+        "IE"
+      ],
+      "rule": "IST-1GMT0,M10.5.0,M3.5.0/1"
+    },
+    {
+      "id": "Europe/Gibraltar",
+      "countries": [
+        "GI"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Guernsey",
+      "countries": [
+        "GG"
+      ],
+      "rule": "GMT0BST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Europe/Helsinki",
+      "countries": [
+        "FI"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Isle_of_Man",
+      "countries": [
+        "IM"
+      ],
+      "rule": "GMT0BST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Europe/Istanbul",
+      "countries": [
+        "TR"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Europe/Jersey",
+      "countries": [
+        "JE"
+      ],
+      "rule": "GMT0BST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Europe/Kaliningrad",
+      "countries": [
+        "RU"
+      ],
+      "rule": "EET-2"
+    },
+    {
+      "id": "Europe/Kiev",
+      "countries": [
+        "UA"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Kirov",
+      "countries": [
+        "RU"
+      ],
+      "rule": "MSK-3"
+    },
+    {
+      "id": "Europe/Kyiv",
+      "countries": [
+        "UA"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Lisbon",
+      "countries": [
+        "PT"
+      ],
+      "rule": "WET0WEST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Europe/Ljubljana",
+      "countries": [
+        "SI"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/London",
+      "countries": [
+        "GB"
+      ],
+      "rule": "GMT0BST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Europe/Luxembourg",
+      "countries": [
+        "LU"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Madrid",
+      "countries": [
+        "ES"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Malta",
+      "countries": [
+        "MT"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Mariehamn",
+      "countries": [
+        "AX"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Minsk",
+      "countries": [
+        "BY"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "Europe/Monaco",
+      "countries": [
+        "MC"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Moscow",
+      "countries": [
+        "RU"
+      ],
+      "rule": "MSK-3"
+    },
+    {
+      "id": "Europe/Nicosia",
+      "countries": [
+        "CY"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Oslo",
+      "countries": [
+        "NO"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Paris",
+      "countries": [
+        "FR"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Podgorica",
+      "countries": [
+        "ME"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Prague",
+      "countries": [
+        "CZ"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Riga",
+      "countries": [
+        "LV"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Rome",
+      "countries": [
+        "IT"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Samara",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Europe/San_Marino",
+      "countries": [
+        "SM"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Sarajevo",
+      "countries": [
+        "BA"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Saratov",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Europe/Simferopol",
+      "countries": [
+        "UA"
+      ],
+      "rule": "MSK-3"
+    },
+    {
+      "id": "Europe/Skopje",
+      "countries": [
+        "MK"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Sofia",
+      "countries": [
+        "BG"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Stockholm",
+      "countries": [
+        "SE"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Tallinn",
+      "countries": [
+        "EE"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Tirane",
+      "countries": [
+        "AL"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Tiraspol",
+      "countries": [
+        "MD"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Ulyanovsk",
+      "countries": [
+        "RU"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Europe/Uzhgorod",
+      "countries": [
+        "UA"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Vaduz",
+      "countries": [
+        "LI"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Vatican",
+      "countries": [
+        "VA"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Vienna",
+      "countries": [
+        "AT"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Vilnius",
+      "countries": [
+        "LT"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Volgograd",
+      "countries": [
+        "RU"
+      ],
+      "rule": "MSK-3"
+    },
+    {
+      "id": "Europe/Warsaw",
+      "countries": [
+        "PL"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Zagreb",
+      "countries": [
+        "HR"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Europe/Zaporozhye",
+      "countries": [
+        "UA"
+      ],
+      "rule": "EET-2EEST,M3.5.0/3,M10.5.0/4"
+    },
+    {
+      "id": "Europe/Zurich",
+      "countries": [
+        "CH"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Factory",
+      "countries": [],
+      "rule": "<-00>0"
+    },
+    {
+      "id": "GB",
+      "countries": [
+        "GB",
+        "GG",
+        "IM",
+        "JE"
+      ],
+      "rule": "GMT0BST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "GB-Eire",
+      "countries": [
+        "GB",
+        "GG",
+        "IM",
+        "JE"
+      ],
+      "rule": "GMT0BST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "GMT",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "GMT+0",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "GMT-0",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "GMT0",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Greenwich",
+      "countries": [],
+      "rule": "GMT0"
+    },
+    {
+      "id": "HST",
+      "countries": [
+        "US"
+      ],
+      "rule": "HST10"
+    },
+    {
+      "id": "Hongkong",
+      "countries": [
+        "HK"
+      ],
+      "rule": "HKT-8"
+    },
+    {
+      "id": "Iceland",
+      "countries": [
+        "CI",
+        "BF",
+        "GH",
+        "GM",
+        "GN",
+        "IS",
+        "ML",
+        "MR",
+        "SH",
+        "SL",
+        "SN",
+        "TG"
+      ],
+      "rule": "GMT0"
+    },
+    {
+      "id": "Indian/Antananarivo",
+      "countries": [
+        "MG"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Indian/Chagos",
+      "countries": [
+        "IO"
+      ],
+      "rule": "<+06>-6"
+    },
+    {
+      "id": "Indian/Christmas",
+      "countries": [
+        "CX"
+      ],
+      "rule": "<+07>-7"
+    },
+    {
+      "id": "Indian/Cocos",
+      "countries": [
+        "CC"
+      ],
+      "rule": "<+0630>-6:30"
+    },
+    {
+      "id": "Indian/Comoro",
+      "countries": [
+        "KM"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Indian/Kerguelen",
+      "countries": [
+        "TF"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Indian/Mahe",
+      "countries": [
+        "SC"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Indian/Maldives",
+      "countries": [
+        "MV"
+      ],
+      "rule": "<+05>-5"
+    },
+    {
+      "id": "Indian/Mauritius",
+      "countries": [
+        "MU"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Indian/Mayotte",
+      "countries": [
+        "YT"
+      ],
+      "rule": "EAT-3"
+    },
+    {
+      "id": "Indian/Reunion",
+      "countries": [
+        "RE"
+      ],
+      "rule": "<+04>-4"
+    },
+    {
+      "id": "Iran",
+      "countries": [
+        "IR"
+      ],
+      "rule": "<+0330>-3:30"
+    },
+    {
+      "id": "Israel",
+      "countries": [
+        "IL"
+      ],
+      "rule": "IST-2IDT,M3.4.4/26,M10.5.0"
+    },
+    {
+      "id": "Jamaica",
+      "countries": [
+        "JM"
+      ],
+      "rule": "EST5"
+    },
+    {
+      "id": "Japan",
+      "countries": [
+        "JP",
+        "AU"
+      ],
+      "rule": "JST-9"
+    },
+    {
+      "id": "Kwajalein",
+      "countries": [
+        "MH"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Libya",
+      "countries": [
+        "LY"
+      ],
+      "rule": "EET-2"
+    },
+    {
+      "id": "MET",
+      "countries": [
+        "BE",
+        "LU",
+        "NL"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "MST",
+      "countries": [
+        "US",
+        "CA"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "MST7MDT",
+      "countries": [],
+      "rule": "MST7MDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Mexico/BajaNorte",
+      "countries": [
+        "MX"
+      ],
+      "rule": "PST8PDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Mexico/BajaSur",
+      "countries": [
+        "MX"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "Mexico/General",
+      "countries": [
+        "MX"
+      ],
+      "rule": "CST6"
+    },
+    {
+      "id": "NZ",
+      "countries": [
+        "NZ",
+        "AQ"
+      ],
+      "rule": "NZST-12NZDT,M9.5.0,M4.1.0/3"
+    },
+    {
+      "id": "NZ-CHAT",
+      "countries": [
+        "NZ"
+      ],
+      "rule": "<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45"
+    },
+    {
+      "id": "Navajo",
+      "countries": [
+        "US"
+      ],
+      "rule": "MST7MDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "PRC",
+      "countries": [
+        "CN"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "PST8PDT",
+      "countries": [],
+      "rule": "PST8PDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "Pacific/Apia",
+      "countries": [
+        "WS"
+      ],
+      "rule": "<+13>-13"
+    },
+    {
+      "id": "Pacific/Auckland",
+      "countries": [
+        "NZ"
+      ],
+      "rule": "NZST-12NZDT,M9.5.0,M4.1.0/3"
+    },
+    {
+      "id": "Pacific/Bougainville",
+      "countries": [
+        "PG"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Pacific/Chatham",
+      "countries": [
+        "NZ"
+      ],
+      "rule": "<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45"
+    },
+    {
+      "id": "Pacific/Chuuk",
+      "countries": [
+        "FM"
+      ],
+      "rule": "<+10>-10"
+    },
+    {
+      "id": "Pacific/Easter",
+      "countries": [
+        "CL"
+      ],
+      "rule": "<-06>6<-05>,M9.1.6/22,M4.1.6/22"
+    },
+    {
+      "id": "Pacific/Efate",
+      "countries": [
+        "VU"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Pacific/Enderbury",
+      "countries": [
+        "KI"
+      ],
+      "rule": "<+13>-13"
+    },
+    {
+      "id": "Pacific/Fakaofo",
+      "countries": [
+        "TK"
+      ],
+      "rule": "<+13>-13"
+    },
+    {
+      "id": "Pacific/Fiji",
+      "countries": [
+        "FJ"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Pacific/Funafuti",
+      "countries": [
+        "TV"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Pacific/Galapagos",
+      "countries": [
+        "EC"
+      ],
+      "rule": "<-06>6"
+    },
+    {
+      "id": "Pacific/Gambier",
+      "countries": [
+        "PF"
+      ],
+      "rule": "<-09>9"
+    },
+    {
+      "id": "Pacific/Guadalcanal",
+      "countries": [
+        "SB"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Pacific/Guam",
+      "countries": [
+        "GU"
+      ],
+      "rule": "ChST-10"
+    },
+    {
+      "id": "Pacific/Honolulu",
+      "countries": [
+        "US"
+      ],
+      "rule": "HST10"
+    },
+    {
+      "id": "Pacific/Johnston",
+      "countries": [
+        "US"
+      ],
+      "rule": "HST10"
+    },
+    {
+      "id": "Pacific/Kanton",
+      "countries": [
+        "KI"
+      ],
+      "rule": "<+13>-13"
+    },
+    {
+      "id": "Pacific/Kiritimati",
+      "countries": [
+        "KI"
+      ],
+      "rule": "<+14>-14"
+    },
+    {
+      "id": "Pacific/Kosrae",
+      "countries": [
+        "FM"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Pacific/Kwajalein",
+      "countries": [
+        "MH"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Pacific/Majuro",
+      "countries": [
+        "MH"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Pacific/Marquesas",
+      "countries": [
+        "PF"
+      ],
+      "rule": "<-0930>9:30"
+    },
+    {
+      "id": "Pacific/Midway",
+      "countries": [
+        "UM"
+      ],
+      "rule": "SST11"
+    },
+    {
+      "id": "Pacific/Nauru",
+      "countries": [
+        "NR"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Pacific/Niue",
+      "countries": [
+        "NU"
+      ],
+      "rule": "<-11>11"
+    },
+    {
+      "id": "Pacific/Norfolk",
+      "countries": [
+        "NF"
+      ],
+      "rule": "<+11>-11<+12>,M10.1.0,M4.1.0/3"
+    },
+    {
+      "id": "Pacific/Noumea",
+      "countries": [
+        "NC"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Pacific/Pago_Pago",
+      "countries": [
+        "AS"
+      ],
+      "rule": "SST11"
+    },
+    {
+      "id": "Pacific/Palau",
+      "countries": [
+        "PW"
+      ],
+      "rule": "<+09>-9"
+    },
+    {
+      "id": "Pacific/Pitcairn",
+      "countries": [
+        "PN"
+      ],
+      "rule": "<-08>8"
+    },
+    {
+      "id": "Pacific/Pohnpei",
+      "countries": [
+        "FM"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Pacific/Ponape",
+      "countries": [
+        "SB",
+        "FM"
+      ],
+      "rule": "<+11>-11"
+    },
+    {
+      "id": "Pacific/Port_Moresby",
+      "countries": [
+        "PG"
+      ],
+      "rule": "<+10>-10"
+    },
+    {
+      "id": "Pacific/Rarotonga",
+      "countries": [
+        "CK"
+      ],
+      "rule": "<-10>10"
+    },
+    {
+      "id": "Pacific/Saipan",
+      "countries": [
+        "MP"
+      ],
+      "rule": "ChST-10"
+    },
+    {
+      "id": "Pacific/Samoa",
+      "countries": [
+        "AS",
+        "UM"
+      ],
+      "rule": "SST11"
+    },
+    {
+      "id": "Pacific/Tahiti",
+      "countries": [
+        "PF"
+      ],
+      "rule": "<-10>10"
+    },
+    {
+      "id": "Pacific/Tarawa",
+      "countries": [
+        "KI"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Pacific/Tongatapu",
+      "countries": [
+        "TO"
+      ],
+      "rule": "<+13>-13"
+    },
+    {
+      "id": "Pacific/Truk",
+      "countries": [
+        "PG",
+        "AQ",
+        "FM"
+      ],
+      "rule": "<+10>-10"
+    },
+    {
+      "id": "Pacific/Wake",
+      "countries": [
+        "UM"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Pacific/Wallis",
+      "countries": [
+        "WF"
+      ],
+      "rule": "<+12>-12"
+    },
+    {
+      "id": "Pacific/Yap",
+      "countries": [
+        "PG",
+        "AQ",
+        "FM"
+      ],
+      "rule": "<+10>-10"
+    },
+    {
+      "id": "Poland",
+      "countries": [
+        "PL"
+      ],
+      "rule": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+      "id": "Portugal",
+      "countries": [
+        "PT"
+      ],
+      "rule": "WET0WEST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "ROC",
+      "countries": [
+        "TW"
+      ],
+      "rule": "CST-8"
+    },
+    {
+      "id": "ROK",
+      "countries": [
+        "KR"
+      ],
+      "rule": "KST-9"
+    },
+    {
+      "id": "Singapore",
+      "countries": [
+        "SG",
+        "AQ",
+        "MY"
+      ],
+      "rule": "<+08>-8"
+    },
+    {
+      "id": "Turkey",
+      "countries": [
+        "TR"
+      ],
+      "rule": "<+03>-3"
+    },
+    {
+      "id": "UCT",
+      "countries": [],
+      "rule": "UTC0"
+    },
+    {
+      "id": "US/Alaska",
+      "countries": [
+        "US"
+      ],
+      "rule": "AKST9AKDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/Aleutian",
+      "countries": [
+        "US"
+      ],
+      "rule": "HST10HDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/Arizona",
+      "countries": [
+        "US",
+        "CA"
+      ],
+      "rule": "MST7"
+    },
+    {
+      "id": "US/Central",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/East-Indiana",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/Eastern",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/Hawaii",
+      "countries": [
+        "US"
+      ],
+      "rule": "HST10"
+    },
+    {
+      "id": "US/Indiana-Starke",
+      "countries": [
+        "US"
+      ],
+      "rule": "CST6CDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/Michigan",
+      "countries": [
+        "US"
+      ],
+      "rule": "EST5EDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/Mountain",
+      "countries": [
+        "US"
+      ],
+      "rule": "MST7MDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/Pacific",
+      "countries": [
+        "US"
+      ],
+      "rule": "PST8PDT,M3.2.0,M11.1.0"
+    },
+    {
+      "id": "US/Samoa",
+      "countries": [
+        "AS",
+        "UM"
+      ],
+      "rule": "SST11"
+    },
+    {
+      "id": "UTC",
+      "countries": [],
+      "rule": "UTC0"
+    },
+    {
+      "id": "Universal",
+      "countries": [],
+      "rule": "UTC0"
+    },
+    {
+      "id": "W-SU",
+      "countries": [
+        "RU"
+      ],
+      "rule": "MSK-3"
+    },
+    {
+      "id": "WET",
+      "countries": [
+        "PT"
+      ],
+      "rule": "WET0WEST,M3.5.0/1,M10.5.0"
+    },
+    {
+      "id": "Zulu",
+      "countries": [],
+      "rule": "UTC0"
+    }
+  ]
+}

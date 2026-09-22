@@ -5,6 +5,7 @@
 #include "platform_compat.h"
 
 #include "storage.h"
+#include "timezones.h"
 #include "logger.h"
 #include "alerts.h"
 #include "reset_trace.h"
@@ -634,6 +635,24 @@ inline void handleCommand(const char *cmd, const char *data, JsonVariantConst ro
         startupRequestWifiConnect();
         sendAck(cmd);
         sendDeviceInfo();
+        return;
+    }
+
+    if (strcmp(cmd, "timezone_set") == 0)
+    {
+        if (!root["id"].is<const char *>() || !alarmTimeZones::ruleFor(root["id"].as<const char *>())) {
+            sendNack(cmd, "invalid_timezone");
+            return;
+        }
+        char previous[sizeof(gConfig.timeZone)];
+        memcpy(previous, gConfig.timeZone, sizeof(previous));
+        copyBounded(gConfig.timeZone, sizeof(gConfig.timeZone), root["id"].as<const char *>());
+        if (!storageSaveCurrentConfig(true)) {
+            memcpy(gConfig.timeZone, previous, sizeof(previous));
+            sendNack(cmd, "save_failed");
+            return;
+        }
+        sendAck(cmd);
         return;
     }
 

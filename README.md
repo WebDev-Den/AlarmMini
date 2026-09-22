@@ -1,362 +1,100 @@
 # AlarmMini
 
-AlarmMini is a commercial firmware and web-installer project for a compact physical Ukraine alert map based on addressable WS2812B LEDs and ESP32-C3 or ESP8266 controllers.
+**Мапа тривог України · Ukraine alert map**
+ESP32-C3 SuperMini / ESP8266 Wemos D1 mini · UA / EN · v2.1.5
 
-Production installer: [https://alarmmini.vercel.app](https://alarmmini.vercel.app)
+[Відкрити інсталятор / Open installer](https://alarmmini.vercel.app) · [Посібник / User guide (PDF)](docs/AlarmMini_User_Manual_UA_EN.pdf) · [Реліз / Release](https://github.com/WebDev-Den/AlarmMini/releases/latest) · [Підтримка / Support](https://t.me/+j3zFZHE5gGoyNGYy)
 
-Інсталятор, панель пристрою та Wi-Fi налаштування підтримують **UA / EN**.
-[JSON-словники, редагування перекладу та мобільний інтерфейс](docs/localization.md).
+---
 
-[Зміни v2.1.4 та початкові налаштування для нових плат](docs/releases/v2.1.4.md).
+## Українська
 
-## Актуальна версія
+AlarmMini перетворює компактну LED-мапу на зручний індикатор стану тривог. Налаштуйте Wi-Fi з телефона, відкрийте панель пристрою й оберіть кольори, яскравість та нічний розклад. Для оновлення достатньо USB-кабелю й браузера на комп’ютері.
 
-Єдина робоча гілка — **main**. Підтримується лише найновіший стабільний реліз,
-зараз **v2.1.4**, для обох плат: ESP32-C3 SuperMini та Wemos D1 mini / ESP8266.
-Старі релізи й теги прибрані з GitHub; інсталятор пропонує лише актуальну версію.
-Імпорт попередніх конфігурацій збережено для оновлення вже встановлених плат.
+### Можливості
 
-[Результати перевірки Wemos D1 mini та підключення LED](docs/wemos-d1-mini.md).
+- Українська й англійська мови інсталятора, панелі та початкового налаштування Wi-Fi.
+- Адаптивна панель на самому пристрої: огляд мапи, кольори, нічний режим, калібрування та QR-етикетки.
+- MQTT і резервний HTTP/HTTPS-канал із підтримкою токена авторизації.
+- Початковий JSON-профіль із шістьма станами, кольорами, MQTT і резервним API. Сервісний пароль та токен включені за дозволом автора; домашній Wi-Fi користувач налаштовує сам.
+- Пошук часового поясу за країною або містом, визначення з браузера, автоматичний літній/зимовий час. Підтримуються й зміщення на 30 та 45 хвилин.
+- Експорт та імпорт JSON; оновлення зі збереженням і перевіркою налаштувань.
 
-## Резервний URL: формат відповіді та авторизація
+### Перший запуск
 
-Резервний API має відповідати на `GET` статусом **HTTP 200** і JSON-масивом
-рівно з **25 цілих чисел**: `0` — немає тривоги, `1` — тривога.
-Прошивка **2.1.0+** також приймає коди **2–255** з власними кольорами.
-Старим прошивкам залишається MQTT-топік `ukraine/alarm/map/full` зі станами **0/1**.
-Новий `ukraine/alarm/map/full_v2` та резервний HTTPS підтримують стани **0–255**.
-У вебпанелі можна задати денні й нічні кольори для **0, 1 і ще 16 станів** через «+».
-Починаючи з **2.1.3**, зміна будь-якого коду, зокрема 2 → 3, запускає 30-секундну пульсацію його кольору. Повторні MQTT/HTTPS повідомлення з тим самим кодом не перезапускають ефект. Для станів 1–255 діє нічне налаштування пульсації тривоги, для 0 — відбою; обмеження яскравості та нульова яскравість зберігаються.
-Звуковий сигнал прибрано; палітра зберігається у конфігурації та резервних копіях.
-[Налаштування кольорів і сумісність](docs/multistate.md). Приклад відповіді:
+1. Увімкніть мапу й підключіться до Wi-Fi **AlarmMap-Setup-XXXXXX** (без пароля).
+2. Відкрийте **http://192.168.4.1**, виберіть домашню мережу **2,4 ГГц** і збережіть пароль.
+3. Поверніться до домашнього Wi-Fi. Відкрийте адресу з етикетки мапи; пароль адміністратора також є на етикетці або в USB-інсталяторі.
+4. У розділі **Нічний режим → Часовий пояс** виберіть місце, де стоятиме мапа, і натисніть **Зберегти**.
 
-```json
-[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-```
+Друкований [посібник UA + EN](docs/AlarmMini_User_Manual_UA_EN.pdf) займає **один аркуш A4: дві половини A5**. Друкуйте в альбомній орієнтації, масштаб 100%; за потреби розріжте посередині.
 
-Порядок областей збігається з MQTT. Масив передається без обгортки `data`/`states`,
-без рядків `"0"`/`"1"` і без `true`/`false`. Опитування — раз на 30 секунд.
-Починаючи з прошивки **2.0.9**, у полі «Токен авторизації» можна вказати токен
-резервного API; плата й перевірка сайту передадуть `Authorization: Bearer <token>`.
+### Оновлення
 
-[Повний контракт, послідовність 25 областей, приклад HTTP-запиту та коди помилок →](docs/http-fallback.md)
+На [сайті](https://alarmmini.vercel.app) у Chrome або Edge на комп’ютері підключіть плату USB-кабелем із передаванням даних. Виберіть свою плату й **оновлення зі збереженням налаштувань**. Не від’єднуйте USB до завершення перевірки. Оновлюються і програма, і вебпанель плати. Режим першого встановлення скидає старі налаштування й призначений для нових пристроїв.
 
-## Product Summary
+Для готової мапи початкове налаштування та подальше керування доступні з телефона. Прошивання через USB виконується на комп’ютері. Інтернет потрібен для отримання станів тривог і синхронізації часу. За відсутності актуальних даних перевіряйте офіційні сповіщення: мапа є допоміжним індикатором.
 
-AlarmMini is designed as a ready-to-assemble IoT map controller. A user can connect the board to a computer, flash the latest firmware from the website, restore or update the full configuration, generate QR labels, and deploy the device without installing developer tools.
+### Використання та підтримка
 
-The project includes:
+Особисте некомерційне використання, навчання та подарунки дозволені. **Продаж пристроїв із AlarmMini, платні послуги та інше комерційне використання потребують попередньої письмової згоди автора WebDev-Den.** Повні умови: [LICENSE](LICENSE). Для підтримки й комерційних домовленостей: [Telegram](https://t.me/+j3zFZHE5gGoyNGYy).
 
-- embedded firmware for ESP32-C3 SuperMini and ESP8266 / Wemos D1 mini;
-- LittleFS web interface served directly from the board;
-- UART service protocol for factory setup and recovery;
-- Vercel web installer for flashing, config backup/restore, and QR label printing;
-- end-user user manual in PDF/DOCX format for setup and onboarding;
-- GitHub Actions for firmware checks and release binaries; Vercel Git integration deploys `main`;
-- STL/manual production assets for enclosure and assembly.
+---
 
-## Supported Hardware
+## English
 
-- ESP32-C3 SuperMini, PlatformIO environment `esp32c3`.
-- ESP8266 / Wemos D1 mini, PlatformIO environment `esp8266`.
-- WS2812B addressable LED strip or PCB LEDs.
-- USB connection for flashing, serial diagnostics, config import/export, and service setup.
+AlarmMini turns a compact LED map into an easy-to-read Ukraine alert display. Set up Wi-Fi from your phone, open the device dashboard, and choose your colours, brightness and night schedule. Updates need only a USB data cable and a desktop browser.
 
-The firmware was optimized for small embedded boards: low RAM usage, non-blocking reconnect logic, compact JSON config, LittleFS storage, and safe serial recovery.
+### Features
 
-## Main Features
+- Ukrainian and English throughout the installer, device dashboard and initial Wi-Fi setup.
+- Responsive dashboard hosted on the device: map overview, colours, night mode, calibration and QR labels.
+- MQTT updates with an HTTP/HTTPS fallback source and authorization-token support.
+- A default JSON profile with six states, colours, MQTT and fallback API settings. Service credentials are included with the author's permission; users supply their own home Wi-Fi details.
+- Search time zones by country or city, detect your browser's zone, and switch automatically between summer and winter time. Half-hour and quarter-hour offsets are supported.
+- JSON export/import and firmware updates that preserve and verify settings.
 
-- MQTT-based real-time alert map updates.
-- Wi-Fi STA mode plus provisioning AP mode.
-- AP QR code for first-time setup.
-- Device QR labels for IP/mDNS/admin access.
-- Full JSON config import/export over UART and web installer.
-- Safe config preservation during flashing.
-- LittleFS web UI on the device.
-- Admin password, mDNS hostname, IP and health information.
-- Reset diagnostics and boot counters.
-- Day/night LED behavior and brightness limits.
-- GitHub Release firmware assets for browser flashing.
-- Vercel-hosted installer at `alarmmini.vercel.app`.
+### First setup
 
-## Repository Structure
+1. Power on the map and join **AlarmMap-Setup-XXXXXX** Wi-Fi (no password).
+2. Open **http://192.168.4.1**, select your home **2.4 GHz** network, and save its password.
+3. Rejoin your home Wi-Fi. Open the address on the map's label; the admin password is on the label or available through the USB installer.
+4. Go to **Night mode → Time zone**, choose where the map will be used, and select **Save**.
 
-- `firmware/` - embedded firmware, PlatformIO project, LittleFS web assets, scripts, config schema, STL files.
-- `vercel/` - Next.js/Vercel installer for flashing boards and managing full config JSON.
-- `docs/` - customer-facing user manual sources and exported PDF/DOCX files.
-- `.github/workflows/` - CI pipelines for firmware, release assets, and security scan. The website deploys through the connected Vercel Git integration from `main`.
+The printable [UA + EN guide](docs/AlarmMini_User_Manual_UA_EN.pdf) fits on **one A4 sheet as two A5 panels**. Print landscape at 100% scale; cut along the centre line if needed.
 
-## User Manual
+### Updates
 
-The repository includes a ready-to-share end-user manual for customers who need
-clear setup instructions without reading technical documentation first.
+Open the [installer](https://alarmmini.vercel.app) in Chrome or Edge on a computer and connect the board with a USB data cable. Select your board and **update while preserving settings**. Keep USB connected until verification finishes. The update includes both firmware and the board's web interface. First installation resets previous settings and is intended for new devices.
 
-Available files:
+A phone is sufficient for Wi-Fi setup and everyday control of an assembled map. USB flashing requires a computer. Alert updates and time synchronization require internet access. If data is stale, check official notifications: this map is a supplementary display.
 
-- `docs/AlarmMini_User_Manual_uk.pdf` - polished Ukrainian PDF manual for end users.
-- `docs/AlarmMini_User_Manual_uk.docx` - editable source version of the same manual.
-- `docs/build_user_manual.py` - generator script used to rebuild the manual.
+### Use and support
 
-The manual currently covers:
+Personal non-commercial use, learning and gifts are permitted. **Selling AlarmMini-equipped devices, offering paid services, or any other commercial use requires prior written permission from the author, WebDev-Den.** See [LICENSE](LICENSE) for the full terms. Support and commercial enquiries: [Telegram](https://t.me/+j3zFZHE5gGoyNGYy).
 
-- first Wi-Fi setup via provisioning AP `AlarmMap-Setup-XXXXXX`;
-- opening the setup page at `http://192.168.4.1`;
-- firmware flashing through `https://alarmmini.vercel.app`;
-- basic MQTT, web-panel, QR-label, and LED calibration steps;
-- Telegram contact path for writing to the author if the user needs help.
+---
 
-Generated folders are ignored:
+## Development / Розробка
 
-- `firmware/.pio/`
-- `firmware/data/`
-- `firmware/release_artifacts/`
-- `vercel/.next/`
-- `vercel/node_modules/`
+| Path | Contents / Вміст |
+| --- | --- |
+| `firmware/` | ESP32-C3 / ESP8266 firmware and embedded web panel |
+| `vercel/` | Web installer and default JSON profile |
+| `docs/` | Printable bilingual PDF only |
+| `documentation/` | Technical notes, release history and manual source |
 
-## Firmware Development
-
-Install PlatformIO, then run from the repository root:
-
-```powershell
-cd firmware
-platformio run -e esp32c3
-platformio run -e esp8266
-```
-
-Build LittleFS image:
-
-```powershell
-cd firmware
-platformio run -t buildfs -e esp32c3
-platformio run -t buildfs -e esp8266
-```
-
-Flash firmware and filesystem:
-
-```powershell
-cd firmware
-platformio run -t upload -e esp32c3
-platformio run -t uploadfs -e esp32c3
-# or
-platformio run -t upload -e esp8266
-platformio run -t uploadfs -e esp8266
-```
-
-Safe flashing with config preservation:
-
-```powershell
-cd firmware
-platformio run -e esp32c3 -t flash_preserve
-# or
-platformio run -e esp8266 -t flash_preserve
-```
-
-Manual config-preserving flash:
-
-```powershell
-cd firmware
-python scripts/config_preserve_flash.py --env esp32c3 --port COM7
-# or
-python scripts/config_preserve_flash.py --env esp8266 --port COM7
-```
-
-## Firmware Release Assets
-
-Release binaries are generated from the `firmware/` folder:
-
-```powershell
+```sh
+# Firmware and LittleFS for both boards
 cd firmware
 python scripts/build_release_assets.py
-```
-
-Expected output:
-
-- `firmware/release_artifacts/alarmmini-esp32c3-firmware.bin`
-- `firmware/release_artifacts/alarmmini-esp32c3-littlefs.bin`
-- `firmware/release_artifacts/alarmmini-esp32c3-bootloader.bin`
-- `firmware/release_artifacts/alarmmini-esp32c3-partitions.bin`
-- `firmware/release_artifacts/alarmmini-esp32c3-boot_app0.bin`
-- `firmware/release_artifacts/alarmmini-esp8266-firmware.bin`
-- `firmware/release_artifacts/alarmmini-esp8266-littlefs.bin`
-
-These files are attached to GitHub Releases by `.github/workflows/release-assets.yml`. The Vercel installer reads GitHub Releases and uses these assets for browser flashing.
-
-## Vercel Installer
-
-The installer lives in `vercel/` and is deployed to:
-
-[https://alarmmini.vercel.app](https://alarmmini.vercel.app)
-
-Local build:
-
-```powershell
-cd vercel
-npm install
+# Installer
+cd ../vercel
+npm ci
+npm test
 npm run build
 ```
 
-Local development:
+[Timezone implementation](documentation/timezones.md) · [Translations in JSON](documentation/localization.md) · [Fallback API contract](documentation/http-fallback.md) · [ESP8266 wiring](documentation/wemos-d1-mini.md) · [v2.1.5 changes](documentation/releases/v2.1.5.md)
 
-```powershell
-cd vercel
-npm run dev
-```
-
-The installer supports:
-
-- selecting a GitHub Release;
-- flashing firmware and LittleFS from release `.bin` assets;
-- reading board info over Web Serial;
-- reading and writing full config JSON;
-- preserving config before flashing and restoring it after flashing;
-- showing IP, mDNS, admin password, reset reason, firmware version, and boot counter;
-- generating QR labels for device access;
-- generating AP Wi-Fi/setup QR codes when the board is in AP mode.
-
-## Vercel Project Settings
-
-Required Vercel settings:
-
-- Project root directory: `vercel`
-- Production branch: `main`
-- Production domain: `alarmmini.vercel.app`
-- Framework preset: Next.js
-
-Recommended public environment variables:
-
-```env
-NEXT_PUBLIC_GITHUB_OWNER=WebDev-Den
-NEXT_PUBLIC_GITHUB_REPO=AlarmMini
-```
-
-If `https://alarmmini.vercel.app` returns `401 Unauthorized`, disable Deployment Protection for production or allow public access in the Vercel dashboard.
-
-## GitHub Actions CI/CD
-
-Workflows:
-
-- `firmware-ci.yml` validates config, builds firmware, builds LittleFS, builds the installer, and uploads CI `.bin` artifacts for test flashing.
-- `release-assets.yml` builds production release `.bin` files and attaches them to GitHub Releases.
-- `vercel-deploy.yml` builds and deploys the installer from `vercel/` to Vercel.
-- `secret-scan.yml` runs Gitleaks on push, pull requests, and schedule.
-
-Required GitHub repository secrets for Vercel deployment:
-
-- `VERCEL_TOKEN`
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
-
-Optional deploy-hook based deployment:
-
-- `VERCEL_DEPLOY_HOOK_URL`
-
-Use deploy hooks only if you want Vercel to be triggered by a secret URL. The preferred commercial flow is GitHub Actions with Vercel token-based deployment.
-
-## Configuration Policy
-
-AlarmMini uses full-config read/write semantics.
-
-The board and installer should follow one rule:
-
-- read the full JSON config;
-- edit it in memory/UI;
-- write the full JSON config back;
-- never partially overwrite unrelated sections.
-
-This prevents accidental loss of Wi-Fi, MQTT, NTP, color, region, admin, or calibration fields when changing only one setting.
-
-Private local configs must not be committed. Use:
-
-- `firmware/.env` for firmware build-time local secrets;
-- `firmware/work_data/config.json` for local board defaults, ignored by git;
-- Vercel dashboard env vars for production installer settings.
-
-Committed safe defaults:
-
-- `firmware/work_data/config.example.json`
-- `firmware/config.schema.json`
-- `vercel/.env.production` with public GitHub owner/repo only.
-
-## Serial Service Protocol
-
-The board accepts service commands over USB serial and responds with JSON.
-
-Common commands:
-
-- `hello`
-- `get:info`
-- `get:config`
-- `set:config { ... }`
-- `set:wifi {"ssid":"...","password":"..."}`
-
-The installer also uses chunked config restore for large JSON payloads, so full config import/export remains stable even when the config grows.
-
-## Production Workflow
-
-Recommended factory/service workflow:
-
-1. Connect the board by USB.
-2. Open [https://alarmmini.vercel.app](https://alarmmini.vercel.app).
-3. Connect the board in the browser.
-4. Read current device info and config.
-5. Flash selected GitHub Release.
-6. Restore the full config automatically.
-7. Verify board info, firmware version, IP, mDNS, and admin password.
-8. Print QR labels from the installer.
-9. If the board is in AP mode, print AP setup QR and finish Wi-Fi provisioning.
-
-## Quality Gates
-
-Before release:
-
-```powershell
-cd firmware
-python scripts/validate_config_contract.py
-platformio run -e esp32c3
-platformio run -e esp8266
-platformio run -t buildfs -e esp32c3
-platformio run -t buildfs -e esp8266
-python scripts/build_release_assets.py
-```
-
-```powershell
-cd vercel
-npm install
-npm run build
-```
-
-Expected result:
-
-- firmware build succeeds;
-- LittleFS image builds;
-- release `.bin` assets are generated;
-- Next.js production build succeeds;
-- GitHub Actions pass on `main`;
-- `https://alarmmini.vercel.app` is publicly accessible.
-
-## Security And Operations
-
-- Do not commit MQTT passwords, Wi-Fi passwords, Vercel tokens, or deploy hook URLs.
-- Keep production secrets in GitHub Secrets or Vercel environment variables.
-- Keep local config backups outside git.
-- Use the serial export/import flow before flashing customer devices.
-- Treat deploy hook URLs like passwords.
-- Review `npm audit` output before major public releases.
-
-## Commercial Notes
-
-This repository is structured for commercial use:
-
-- hardware firmware and production assets are isolated in `firmware/`;
-- customer-facing installer is isolated in `vercel/`;
-- release artifacts are generated automatically;
-- the website can flash boards without local developer tools;
-- full config backup/restore protects customer setup data;
-- QR labels simplify deployment and support.
-
-Approximate product cost depends on print quality, LED count, controller board, assembly convenience, and MQTT/server support. The main commercial value is not only the components, but also reliable firmware, safe flashing, configuration recovery, hosted installer, and operational support.
-
-## Useful Links
-
-- Production installer: [https://alarmmini.vercel.app](https://alarmmini.vercel.app)
-- Repository: [https://github.com/WebDev-Den/AlarmMini](https://github.com/WebDev-Den/AlarmMini)
+The timezone database follows IANA rules shipped with the firmware. Future changes to national time rules require a database/firmware update. Third-party libraries and data retain their own licences; the AlarmMini licence applies only to original project materials.

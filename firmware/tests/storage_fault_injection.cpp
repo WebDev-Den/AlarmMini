@@ -41,6 +41,15 @@ static size_t checkPowerCuts(const std::map<std::string, std::string> &baseline)
 
 int main()
 {
+    assert(std::string(alarmTimeZones::ruleFor("America/New_York")) == "EST5EDT,M3.2.0,M11.1.0");
+    assert(std::string(alarmTimeZones::ruleFor("Asia/Kathmandu")) == "<+0545>-5:45");
+    assert(!alarmTimeZones::ruleFor("Unknown/Place"));
+    // Explicit future IANA transitions cover countries with irregular DST rules.
+    int32_t offset;
+    assert(alarmTimeZones::offsetAt("Asia/Gaza", 1774655999, offset) && offset == 7200);
+    assert(alarmTimeZones::offsetAt("Asia/Gaza", 1774656000, offset) && offset == 10800);
+    assert(std::string(alarmTimeZones::ruleAt("Asia/Gaza", 1774656000)) == "UTC-3:00:00");
+    assert(!alarmTimeZones::offsetAt("America/New_York", 1774656000, offset));
     // A factory profile is applied exactly once, with service credentials intact.
     applyDefaults();
     credentials("factory-network");
@@ -56,6 +65,21 @@ int main()
     assert(std::string(gConfig.wifiSsid) == "factory-network");
     assert(std::string(gConfig.mqttPass) == "factory-mqtt-password");
     assert(std::string(gConfig.fallbackToken) == "factory-token");
+    assert(std::string(gConfig.timeZone) == "Europe/Kyiv");
+    factory["tz"] = "America/Los_Angeles";
+    char zoneError[32] = {};
+    assert(storageSaveConfigFromJson(factory.as<JsonVariantConst>(), true, zoneError, sizeof(zoneError)));
+    reboot();
+    assert(std::string(gConfig.timeZone) == "America/Los_Angeles");
+    for (const char *invalid : {"", "Unknown/Place", "UTC+05:30", "America/New_York\n"}) {
+        factory["tz"] = invalid;
+        assert(!storageSaveConfigFromJson(factory.as<JsonVariantConst>(), true, zoneError, sizeof(zoneError)));
+        assert(std::string(zoneError) == "bad_timezone");
+        assert(std::string(gConfig.timeZone) == "America/Los_Angeles");
+    }
+    factory.remove("tz");
+    assert(storageSaveConfigFromJson(factory.as<JsonVariantConst>(), true, zoneError, sizeof(zoneError)));
+    assert(std::string(gConfig.timeZone) == "Europe/Kyiv");
     credentials("user-network");
     assert(storageSaveCurrentConfig(true));
     reboot();

@@ -154,6 +154,10 @@ def validate_compact_config(cfg: Any) -> list[str]:
     if not (isinstance(t, list) and len(t) == 3 and all(_is_str(x) for x in t)):
         errors.append("t must be [string, string, string]")
 
+    zones = json.loads((PROJECT_DIR / "work_data/timezones.json").read_text(encoding="utf-8"))
+    if "tz" in cfg and (not isinstance(cfg["tz"], str) or cfg["tz"] not in {zone["id"] for zone in zones["zones"]}):
+        errors.append("tz must be a supported IANA time zone")
+
     g = cfg.get("g")
     if not _is_int_in(g, 0, 65535):
         errors.append("g must be 0..65535")

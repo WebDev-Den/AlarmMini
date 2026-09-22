@@ -578,5 +578,20 @@
   "Початкові налаштування AlarmMini · 6 станів": "AlarmMini default settings · 6 states",
   "MQTT, пароль, резервний URL і токен авторизації вже заповнені. Після встановлення налаштуй свій Wi-Fi. Прив’язку LED можна змінити в калібруванні.": "MQTT, its password, the fallback URL and authorization token are already filled in. Set up your Wi-Fi after installation. LED mapping can be changed in calibration.",
   "Початкові налаштування вже на платі, включно з MQTT і резервним API. Залишилося підключити свій Wi-Fi.": "The default settings are on the board, including MQTT and the fallback API. Connect your Wi-Fi to finish setup.",
-  "AlarmMini встановлено. Кольори, MQTT і резервний API записано й перевірено. Налаштуй свій Wi-Fi.": "AlarmMini installed. Colors, MQTT and the fallback API were written and verified. Set up your Wi-Fi."
+  "AlarmMini встановлено. Кольори, MQTT і резервний API записано й перевірено. Налаштуй свій Wi-Fi.": "AlarmMini installed. Colors, MQTT and the fallback API were written and verified. Set up your Wi-Fi.",
+  "Знайти країну або місто": "Find a country or city",
+  "Країна, місто або Europe/Kyiv": "Country, city or Europe/Kyiv",
+  "Часовий пояс": "Time zone",
+  "Визначити з браузера": "Use browser time zone",
+  "Обери місце, де стоятиме мапа. Нічний режим працює за місцевим часом; літній час змінюється автоматично.": "Choose where the map will be located. Night mode follows local time, with automatic daylight saving changes.",
+  "Не вдалося визначити часовий пояс. Обери його зі списку.": "Could not detect your time zone. Select it from the list.",
+  "Обери часовий пояс зі списку.": "Select a time zone from the list.",
+  "Для зміни часового поясу потрібна прошивка 2.1.5 або новіша.": "Changing the time zone requires firmware 2.1.5 or newer.",
+  "Не вдалося підтвердити збереження часового поясу.": "Could not verify that the time zone was saved.",
+  "Часовий пояс збережено. Нічний режим використовує місцевий час.": "Time zone saved. Night mode now uses local time.",
+  "Зберегти часовий пояс": "Save time zone",
+  "Зберігаємо…": "Saving…",
+  "Посібник UA + EN · PDF": "UA + EN guide · PDF",
+  "Початкові налаштування · JSON": "Default settings · JSON",
+  "Умови використання": "Terms of use"
 }

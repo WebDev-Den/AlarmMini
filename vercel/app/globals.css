@@ -1046,3 +1046,9 @@ button, a, summary, input, select { touch-action: manipulation; }
   .modal-card { width: 100%; max-height: calc(100dvh - 24px); }
   .installer-footer { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
 }
+
+.time-zone-field { display: grid; gap: 10px; min-width: 0; margin-bottom: 16px; }
+.time-zone-field label { margin: 0; }
+.time-zone-field input, .time-zone-field select { width: 100%; min-width: 0; min-height: 44px; text-overflow: ellipsis; }
+.time-zone-field .btn { justify-self: start; }
+.install-time-zone { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }

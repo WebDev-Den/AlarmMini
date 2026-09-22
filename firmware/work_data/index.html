@@ -205,7 +205,6 @@
     <div class="row g-3 align-items-start">
       <aside class="sidebar col-12 col-lg-4 col-xl-3">
         <div class="sidebar-top">
-          <div class="language-switcher" role="group" aria-label="Мова / Language" translate="no"><button type="button" data-locale="ua" lang="uk" aria-label="Українська" aria-pressed="true">UA</button><button type="button" data-locale="en" lang="en" aria-label="English" aria-pressed="false">EN</button></div>
           <div class="brand-row">
             <div class="brand-mark">AM</div>
             <div class="brand-copy">
@@ -213,6 +212,7 @@
               <div class="brand-subtitle">Map Controller</div>
             </div>
           </div>
+          <div class="language-switcher" role="group" aria-label="Мова / Language" translate="no"><button type="button" data-locale="ua" lang="uk" aria-label="Українська" aria-pressed="true">UA</button><button type="button" data-locale="en" lang="en" aria-label="English" aria-pressed="false">EN</button></div>
           <a class="device-chip" id="deviceBadge" href="#" title="Відкрити пристрій за mDNS-адресою">
             <span class="device-dot" id="deviceDot"></span>
             <span class="device-chip-text" id="deviceName" translate="no">connecting...</span>
@@ -379,6 +379,14 @@
                     <div class="toggle-thumb"></div>
                   </div>
                 </label>
+              </div>
+              <div class="timezone-settings">
+                <label for="timeZoneSearch" class="field-label">Знайти країну або місто</label>
+                <input type="search" id="timeZoneSearch" class="field-input" autocomplete="off" placeholder="Країна, місто або Europe/Kyiv">
+                <label for="timeZone" class="field-label">Часовий пояс</label>
+                <select id="timeZone" class="field-input" aria-describedby="timeZoneHint"></select>
+                <button type="button" class="sidebar-action" id="detectTimeZone">Визначити з браузера</button>
+                <p class="field-hint" id="timeZoneHint">Обери місце, де стоятиме мапа. Нічний режим працює за місцевим часом; літній час змінюється автоматично.</p>
               </div>
               <div class="night-schedule">
                 <div>
@@ -670,6 +678,8 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/i18n-core.js"></script>
   <script src="/i18n.js"></script>
+  <script src="/timezones.js"></script>
+  <script src="/timezone-utils.js"></script>
   <script src="/main.js"></script>
 </body>
 

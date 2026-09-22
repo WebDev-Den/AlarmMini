@@ -1663,12 +1663,24 @@ input[type=time],
 }
 
 /* Locale controls remain reachable at sign-in and throughout device setup. */
+.timezone-settings { display: grid; gap: 10px; padding: 20px; border-bottom: 1px solid var(--border); }
+.timezone-settings .field-label { margin: 0; }
+.timezone-settings .field-hint { margin: 0; }
+.timezone-settings select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+.timezone-settings .sidebar-action { justify-self: start; width: auto; min-height: 44px; }
 .language-switcher { display: flex; gap: 2px; width: max-content; padding: 3px; border: 1px solid var(--border2); border-radius: 12px; }
 .language-switcher button { min-width: 44px; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text2); font: inherit; font-weight: 700; cursor: pointer; }
 .language-switcher button[aria-pressed="true"] { color: var(--bg); background: var(--accent); }
 .language-switcher button:hover { box-shadow: inset 0 0 0 1px currentColor; }
 .auth-card > .language-switcher { margin: 0 0 16px auto; }
-.sidebar-top > .language-switcher { margin: 0 0 12px auto; }
+.sidebar-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px 10px; }
+.sidebar-top > .brand-row { min-width: 0; grid-column: 1; grid-row: 1; gap: 10px; }
+.sidebar-top .brand-mark { width: 40px; height: 40px; flex-shrink: 0; }
+.sidebar-top .brand-copy { gap: 4px; }
+.sidebar-top .brand-title { font-size: 15px; letter-spacing: .02em; }
+.sidebar-top .brand-subtitle { font-size: 9px; }
+.sidebar-top > .language-switcher { grid-column: 2; grid-row: 1; margin: 0; background: rgba(4, 15, 29, .35); }
+.sidebar-top > .device-chip { grid-column: 1 / -1; }
 .sidebar-tools > summary { display: none; }
 button, a, input, select, summary { touch-action: manipulation; }
 :where(button, a, input, select, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -1678,10 +1690,6 @@ button, a, input, select, summary { touch-action: manipulation; }
 .panel-text, .field-hint, .label-line, .content-title, .device-chip-text { overflow-wrap: anywhere; }
 @media (max-width: 991px) {
     .sidebar { position: static; max-height: none; }
-    .sidebar-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-    .sidebar-top > .brand-row { grid-column: 1; grid-row: 1; }
-    .sidebar-top > .language-switcher { grid-column: 2; grid-row: 1; margin: 0; }
-    .sidebar-top > .device-chip { grid-column: 1 / -1; }
     .sidebar-tools > summary { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border2); border-radius: 12px; cursor: pointer; color: var(--text2); }
     .sidebar-tools > summary::after { content: "+"; font-size: 20px; }
     .sidebar-tools[open] > summary::after { content: "−"; }
@@ -1710,6 +1718,9 @@ button, a, input, select, summary { touch-action: manipulation; }
     .brand-row { gap: 8px; }
     .brand-mark { width: 36px; height: 36px; flex-shrink: 0; }
     .brand-title { font-size: 14px; letter-spacing: 0; }
+    .sidebar-top > .brand-row { gap: 8px; }
+    .sidebar-top .brand-mark { width: 36px; height: 36px; }
+    .sidebar-top .brand-title { font-size: 14px; letter-spacing: 0; }
     .content-title { font-size: 23px; }
 }
 @media (prefers-reduced-motion: reduce) {

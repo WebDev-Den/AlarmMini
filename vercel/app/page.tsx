@@ -7,6 +7,8 @@ import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
 import { BoardIllustration } from "./board-illustration";
 import airPreset from "../public/profiles/ukrainealarm-air-6-states.json";
+import { TimeZoneField } from "./time-zone-field";
+import { defaultZone, isValid as isTimeZone, supportsTimeZone } from "../../firmware/work_data/timezone-utils";
 import { normalizeFallbackUrl, normalizeFallbackToken, supportsFallback, supportsFallbackToken, supportsMultiState, verifyFallbackEndpoint } from "./fallback-settings";
 import { FallbackUrlField } from "./fallback-url-field";
 import QRCode from "qrcode";
@@ -461,6 +463,9 @@ export default function Page() {
   const [mqttTopic, setMqttTopic] = useState("");
   const [mqttUser, setMqttUser] = useState("");
   const [mqttPassword, setMqttPassword] = useState("");
+  const [timeZone, setTimeZone] = useState(defaultZone);
+  const [installTimeZone, setInstallTimeZone] = useState(defaultZone);
+  const [timeZoneSaving, setTimeZoneSaving] = useState(false);
   const [configText, setConfigText] = useState("{}");
   const [downloadedConfig, setDownloadedConfig] = useState<any | null>(null);
   const [backupAvailable, setBackupAvailable] = useState(false);
@@ -760,6 +765,7 @@ export default function Page() {
     setMqttPassword(mqtt.password);
     setFallbackUrl(String(cfg.fu ?? ""));
     setFallbackToken(String(cfg.ft ?? ""));
+    setTimeZone(String(cfg.tz ?? defaultZone));
   }
 
   function persistBackupConfig(cfg: any) {
@@ -977,6 +983,11 @@ export default function Page() {
   }
 
   async function sendConfigChunked(configObj: any, label = "config") {
+    if (configObj.tz !== undefined) {
+      if (!isTimeZone(configObj.tz)) throw new Error("Обери часовий пояс зі списку.");
+      const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+      if (!supportsTimeZone(String(device.fw))) throw new Error("Для зміни часового поясу потрібна прошивка 2.1.5 або новіша.");
+    }
     if (Object.keys(configObj.sc || {}).length || configObj.m?.t === "ukraine/alarm/map/full_v2") {
       const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
       if (!supportsMultiState(String(device.fw))) throw new Error("Для нових станів і топіка full_v2 потрібна прошивка 2.1.0 або новіша.");
@@ -1207,6 +1218,26 @@ export default function Page() {
     } finally { setFallbackSaving(false); }
   }
 
+  async function saveTimeZone(value: string) {
+    if (!isTimeZone(value)) throw new Error("Обери часовий пояс зі списку.");
+    await sendAndWait(JSON.stringify({ cmd: "timezone_set", id: value }), (j) => j?.status === "ACK" && j?.cmd === "timezone_set", 10000);
+    const verified = await sendAndWait("get:config", (j) => j?.event === "config" && j?.config, 10000);
+    if (verified.config.tz !== value) throw new Error("Не вдалося підтвердити збереження часового поясу.");
+    applyConfigToUi(verified.config);
+  }
+
+  async function cmdSetTimeZone() {
+    if (timeZoneSaving) return;
+    setTimeZoneSaving(true);
+    try {
+      await ensureConnected(true);
+      const device = await sendAndWait("get:info", (j) => j?.event === "device_info", 6000);
+      if (!supportsTimeZone(String(device.fw))) throw new Error("Для зміни часового поясу потрібна прошивка 2.1.5 або новіша.");
+      await saveTimeZone(timeZone);
+      setStatus("Часовий пояс збережено. Нічний режим використовує місцевий час.");
+    } finally { setTimeZoneSaving(false); }
+  }
+
   async function cmdSetMqtt() {
     await ensureConnected(true);
     if (!mqttHost.trim()) throw new Error("MQTT host порожній");
@@ -1376,7 +1407,9 @@ export default function Page() {
   }
 
   async function runFlashFlow(restoreSettings: boolean) {
-    const freshConfig = !restoreSettings && useAirPreset ? structuredClone(airPreset) : null;
+    const freshConfig: any = !restoreSettings && useAirPreset ? structuredClone(airPreset) : null;
+    if (!restoreSettings && !supportsTimeZone(selectedRelease?.tag_name ?? "") && installTimeZone !== defaultZone) throw new Error("Для зміни часового поясу потрібна прошивка 2.1.5 або новіша.");
+    if (freshConfig && supportsTimeZone(selectedRelease?.tag_name ?? "")) freshConfig.tz = installTimeZone;
     if (freshConfig && !supportsMultiState(selectedRelease?.tag_name ?? "")) throw new Error("Для шаблону UkraineAlarm AIR · 6 станів вибери прошивку 2.1.0 або новішу.");
     if (freshConfig && buildConfigValidationErrors(freshConfig).length) throw new Error("Шаблон налаштувань некоректний. Запис не розпочато.");
     const reserveUrl = normalizeFallbackUrl(installFallbackUrl);
@@ -1425,6 +1458,7 @@ export default function Page() {
     if (backup?.fu && !reserveUrl && supportsMultiState(backupFirmware) && !supportsMultiState(selectedRelease?.tag_name ?? "")) {
       await verifyFallbackEndpoint(String(backup.fu), String(backup.ft ?? ""), undefined, selectedRelease?.tag_name);
     }
+    if (backup?.tz !== undefined && !supportsTimeZone(selectedRelease?.tag_name ?? "")) throw new Error("Для зміни часового поясу потрібна прошивка 2.1.5 або новіша.");
     const flashPort = rememberedPortRef.current;
     await disconnectPort();
     setPipelineStep("flash", "active");
@@ -1485,6 +1519,9 @@ export default function Page() {
       setFlashStatus("Зберігаємо резервний URL і перевіряємо його на платі…");
       await saveFallbackUrl(reserveUrl, reserveToken, selectedRelease?.tag_name);
       setPipelineStep("verify", "done");
+    }
+    if (!restoreSettings && !freshConfig && supportsTimeZone(selectedRelease?.tag_name ?? "")) {
+      await saveTimeZone(installTimeZone);
     }
     await cmdGetInfo();
     setFlashOutcome("success");
@@ -1588,6 +1625,10 @@ export default function Page() {
               <a className="text-button" href="/profiles/ukrainealarm-air-6-states.json" download>{t("Завантажити шаблон JSON")}</a>
               {presetUnsupported ? <p className="notice warning" role="alert">{t("Вибери прошивку 2.1.0 або новішу для шести станів, або вимкни шаблон.")}</p> : null}
             </div> : null}
+            {newDeviceMode ? <div className="install-time-zone">
+              <TimeZoneField id="install-time-zone" value={installTimeZone} onChange={setInstallTimeZone} disabled={flashBusy || waitActive || !supportsTimeZone(selectedRelease?.tag_name ?? "")} />
+              {!supportsTimeZone(selectedRelease?.tag_name ?? "") ? <p className="hint">{t("Для зміни часового поясу потрібна прошивка 2.1.5 або новіша.")}</p> : null}
+            </div> : null}
             <div className="mqtt-topics">
               <strong>{t("MQTT: два топіки для різних прошивок")}</strong>
               <p><code>ukraine/alarm/map/full</code>{" " + t("— старий топік: 0 — відбій, 1 — тривога. Залишається для плат зі старою прошивкою.")}</p>
@@ -1599,7 +1640,7 @@ export default function Page() {
               <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} token={installFallbackToken} onTokenChange={setInstallFallbackToken} firmwareVersion={selectedRelease?.tag_name} disabled={flashBusy || waitActive || fallbackSaving} />
               <p className="hint">{t("JSON-масив із 25 чисел у порядку областей MQTT: 0/1 для старих прошивок, 0–255 починаючи з 2.1.0. Опитування кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.")}</p>
               <p className="hint">{t("Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.")}</p>
-              <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/docs/http-fallback.md`} target="_blank" rel="noreferrer">{t("Порядок областей і приклад відповіді ↗")}</a>
+              <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/documentation/http-fallback.md`} target="_blank" rel="noreferrer">{t("Порядок областей і приклад відповіді ↗")}</a>
             </details>
             <div className="release-summary" aria-live="polite">
               {releasesLoading ? <span>{t("Завантажуємо актуальну версію…")}</span> : releasesError ? <><span>{t(releasesError)}</span><button className="btn" onClick={() => setReleasesAttempt((v) => v + 1)}>{t("Спробувати ще раз")}</button></> : !selectedRelease ? <span>{t("Опублікованих версій поки немає.")}</span> : <><span>{t("Версія") + " "}<strong>{selectedRelease.tag_name}</strong>{" " + t("· актуальна")}</span><small>{selectedReleaseUpdatedAt}</small></>}
@@ -1802,6 +1843,13 @@ export default function Page() {
       </section>
 
       <section className="card">
+        <h2>{t("Часовий пояс")}</h2>
+        <TimeZoneField id="device-time-zone" value={timeZone} onChange={setTimeZone} disabled={flashBusy || waitActive || timeZoneSaving || portState !== "connected" || !supportsTimeZone(info.fw)} />
+        {!supportsTimeZone(info.fw) ? <p className="hint">{t("Для зміни часового поясу потрібна прошивка 2.1.5 або новіша.")}</p> : null}
+        <button className="btn" disabled={flashBusy || waitActive || timeZoneSaving || portState !== "connected" || !supportsTimeZone(info.fw)} onClick={() => void cmdSetTimeZone().catch(showActionError)}>{t(timeZoneSaving ? "Зберігаємо…" : "Зберегти часовий пояс")}</button>
+      </section>
+
+      <section className="card">
         <h2>{t("Редактор конфігурації")}</h2>
         <div className="row gap">
           <button className="btn primary" onClick={() => setConfigModalOpen(true)}>{" " + t("Відкрити редактор конфігу") + " "}</button>
@@ -1892,7 +1940,14 @@ export default function Page() {
           <section className="card"><h2>{t("Журнал пристрою")}</h2><div className="log-box">{serialLines.length === 0 ? <div className="log-empty">{t("Підключи плату, щоб побачити повідомлення.")}</div> : serialLines.map((line, index) => <div key={`${index}-${line}`}>{line}</div>)}</div></section>
         </div> : null}
       </details>
-      <footer className="installer-footer"><span>{t("AlarmMini · Зроблено для своєї карти")}</span><a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer">{t("Код проєкту ↗")}</a><a href={SUPPORT_AUTHOR_URL} target="_blank" rel="noreferrer">{t("Підтримати автора ↗")}</a></footer>
+      <footer className="installer-footer">
+        <span>{t("AlarmMini · Зроблено для своєї карти")}</span>
+        <a href="/downloads/AlarmMini_User_Manual_UA_EN.pdf" target="_blank" rel="noreferrer">{t("Посібник UA + EN · PDF")}</a>
+        <a href="/profiles/ukrainealarm-air-6-states.json" download>{t("Початкові налаштування · JSON")}</a>
+        <a href={`${GITHUB_REPO_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer">{t("Умови використання")}</a>
+        <a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer">{t("Код проєкту ↗")}</a>
+        <a href={SUPPORT_AUTHOR_URL} target="_blank" rel="noreferrer">{t("Підтримати автора ↗")}</a>
+      </footer>
     </main>
   );
 }

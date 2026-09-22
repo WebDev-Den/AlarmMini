@@ -238,6 +238,7 @@ function normalizeConfig(cfg) {
     mqttHost: mqtt.h ?? source.mqttHost ?? "",
     fallbackUrl: source.fu ?? "",
     fallbackToken: source.ft ?? "",
+    timeZone: source.tz ?? "Europe/Kyiv",
     mqttPort: Number(mqtt.p ?? source.mqttPort ?? 1883),
     mqttTopic: mqtt.t ?? source.mqttTopic ?? "ukraine/alarm/map/full_v2",
     mqttUser: mqtt.u ?? source.mqttUser ?? "",
@@ -775,6 +776,13 @@ function applyConfig(cfg) {
   customStateColors = stateColorsFromConfig(cfg);
   renderStateColors();
   currentConfig.logCategoryBits = previousLogCategoryBits;
+  renderTimeZones(currentConfig.timeZone);
+
+  // Editable connection settings come from /api/config. /api/info is device
+  // metadata and does not include the fallback URL or its authorization token.
+  for (const field of ["mqttHost", "mqttPort", "mqttTopic", "mqttUser", "mqttPass", "fallbackUrl", "fallbackToken"]) {
+    $(field).value = currentConfig[field];
+  }
 
   $("nightEnabled").checked = Boolean(currentConfig.nightEnabled);
   $("nightStart").value = `${pad(currentConfig.nightStartH)}:${pad(currentConfig.nightStartM)}`;
@@ -828,6 +836,7 @@ function buildPayload() {
   }
   payload.fu = $("fallbackUrl").value.trim();
   payload.ft = payload.fu ? $("fallbackToken").value.trim() : "";
+  payload.tz = $("timeZone").value;
   payload.m = {
     h: $("mqttHost").value.trim(),
     p: parseInt($("mqttPort").value, 10) || 1883,
@@ -1579,13 +1588,13 @@ function bindDirtyTracking() {
   document.addEventListener("input", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    if (target.id === "loginPassword" || target.id === "calRegionSearch") return;
+    if (target.id === "loginPassword" || target.id === "calRegionSearch" || target.id === "timeZoneSearch") return;
     updateDirtyState();
   });
   document.addEventListener("change", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    if (target.id === "loginPassword" || target.id === "calRegionSearch") return;
+    if (target.id === "loginPassword" || target.id === "calRegionSearch" || target.id === "timeZoneSearch") return;
     updateDirtyState();
   });
 }
@@ -1596,13 +1605,6 @@ async function bootAuthenticated() {
   MAX_LEDS = info.maxLeds || 0;
   currentSessionReady = true;
   currentConfig.logCategoryBits = info.logCategoryBits || {};
-  $("mqttHost").value = info.mqttHost || "";
-  $("fallbackUrl").value = info.fallbackUrl || "";
-  $("fallbackToken").value = info.fallbackToken || "";
-  $("mqttPort").value = info.mqttPort || 1883;
-  $("mqttTopic").value = info.mqttTopic || "ukraine/alarm/map/full_v2";
-  $("mqttUser").value = info.mqttUser || "";
-  $("mqttPass").value = info.mqttPass || "";
   applyDeviceInfo(info);
   await updateRuntimeHealth();
   const cfg = await fetchJson("/api/config");
@@ -1658,11 +1660,39 @@ function bindAuthUi() {
   window.addEventListener("resize", updateCalibrationMobilePanels);
 }
 
+function renderTimeZones(selected = $("timeZone").value || "Europe/Kyiv") {
+  const utils = window.AlarmTimeZoneUtils;
+  const locale = document.documentElement.lang === "en" ? "en" : "ua";
+  const choices = utils.options(locale, $("timeZoneSearch").value);
+  if (!choices.some(zone => zone.id === selected)) {
+    const saved = utils.options(locale).find(zone => zone.id === selected);
+    if (saved) choices.unshift(saved);
+  }
+  $("timeZone").replaceChildren(...choices.map(zone => {
+    const option = document.createElement("option");
+    option.value = zone.id;
+    option.textContent = zone.label;
+    option.translate = false;
+    return option;
+  }));
+  $("timeZone").value = selected;
+}
+
 async function boot() {
   bindSidebarTools();
   await window.AlarmI18n.init();
   applyStaticLang();
   window.AlarmI18n.localize();
+  renderTimeZones();
+  $("timeZoneSearch").addEventListener("input", () => renderTimeZones());
+  $("detectTimeZone").addEventListener("click", () => {
+    const detected = window.AlarmTimeZoneUtils.detect();
+    if (!detected) return showToast("Не вдалося визначити часовий пояс. Обери його зі списку.", true);
+    $("timeZoneSearch").value = "";
+    renderTimeZones(detected);
+    updateDirtyState();
+  });
+  document.addEventListener("languagechange", () => renderTimeZones());
   document.addEventListener("languagechange", filterCalibrationRegionList);
   document.addEventListener("languagechange", () => {
     labelRenderOptions.forEach((options, canvasId) => {

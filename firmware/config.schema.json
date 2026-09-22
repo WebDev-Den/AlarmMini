@@ -127,6 +127,7 @@
       "maxItems": 3,
       "items": { "type": "string", "maxLength": 63 }
     },
+    "tz": { "type": "string", "minLength": 1, "maxLength": 47, "description": "IANA time zone from work_data/timezones.json; missing means Europe/Kyiv" },
     "g": { "type": "integer", "minimum": 0, "maximum": 65535 }
   },
   "$defs": {

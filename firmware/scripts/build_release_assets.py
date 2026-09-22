@@ -44,6 +44,9 @@ def main():
         / "boot_app0.bin",
         "alarmmini-esp8266-firmware.bin": ESP8266_BUILD_DIR / "firmware.bin",
         "alarmmini-esp8266-littlefs.bin": ESP8266_BUILD_DIR / "littlefs.bin",
+        "alarmmini-default-settings.json": PROJECT_DIR / "work_data" / "config.example.json",
+        "AlarmMini_User_Manual_UA_EN.pdf": PROJECT_DIR.parent / "docs" / "AlarmMini_User_Manual_UA_EN.pdf",
+        "LICENSE": PROJECT_DIR.parent / "LICENSE",
     }
 
     for name, src in artifacts.items():

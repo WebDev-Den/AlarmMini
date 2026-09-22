@@ -48,6 +48,20 @@ test('language selection works when persistent storage is unavailable', async ({
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Твоя карта.');
 });
 
+test('installer timezone search and detection preserve the selection when changing language', async ({ page }) => {
+  await page.route('**/api/releases', route => route.fulfill({ json: [{ ...release, tag_name: 'v2.1.5', name: 'v2.1.5' }] }));
+  await page.goto('/');
+  await page.getByRole('radio', { name: /Перше встановлення/ }).check();
+  await page.locator('#install-time-zone-search').fill('New York');
+  await page.locator('#install-time-zone').selectOption('America/New_York');
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await expect(page.locator('#install-time-zone')).toHaveValue('America/New_York');
+  await page.locator('.install-time-zone').getByRole('button', { name: 'Use browser time zone' }).click();
+  expect(await page.locator('#install-time-zone').inputValue()).toBe(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone));
+  await page.setViewportSize({ width: 320, height: 740 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('both languages fit mobile, tablet and desktop, including the expanded settings and editor', async ({ page }) => {
   await page.route('**/api/releases', route => route.fulfill({ json: [release] }));
   await page.addInitScript(() => { delete (Navigator.prototype as any).serial; });
@@ -82,18 +96,111 @@ test('both languages fit mobile, tablet and desktop, including the expanded sett
 });
 
 async function mockDevice(page: import('@playwright/test').Page, authenticated = true) {
+  let storedConfig = { ...structuredClone(config), m: { h: 'saved.example.com', p: 1883, t: 'ukraine/alarm/map/full_v2', u: 'test-user', s: 'test-password' }, fu: 'https://reserve.example/status', ft: 'saved-test-token' };
+  const writes: any[] = [];
   await page.route('http://device.test/**', async route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/api/session') return route.fulfill({ json: { authenticated } });
     if (url.pathname === '/api/info') return route.fulfill({ json: { hostname: 'alarmmini', ip: '192.168.1.10', adminPassword: 'Пароль', apSsid: 'Відбій', regions: ['Вінницька область', 'Волинська область'], maxLeds: 27, mqttHost: 'mqtt.example.com', mqttPort: 1883, mqttTopic: 'ukraine/alarm/map/full_v2' } });
-    if (url.pathname === '/api/config') return route.fulfill({ json: config });
+    if (url.pathname === '/api/config') return route.fulfill({ json: storedConfig });
+    if (url.pathname === '/api/saveSettings') {
+      storedConfig = route.request().postDataJSON();
+      writes.push(structuredClone(storedConfig));
+      return route.fulfill({ body: 'OK' });
+    }
     if (url.pathname === '/health') return route.fulfill({ json: { wifiConnected: true, mqttConnected: true, alertsFresh: true } });
     if (url.pathname === '/api/alerts') return route.fulfill({ json: Array(25).fill(0) });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { ok: true } });
     const file = path.join(webRoot, url.pathname === '/' ? 'index.html' : url.pathname);
     return existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404 });
   });
+  return { writes };
 }
+
+test('device fallback loads from config, survives edits and reload, and clears only on request', async ({ page }) => {
+  const { writes } = await mockDevice(page);
+  await page.goto('http://device.test/');
+  await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
+  await page.locator('[data-tab="mqtt"]').click();
+  await expect(page.locator('#mqttHost')).toHaveValue('saved.example.com');
+  await expect(page.locator('#fallbackUrl')).toHaveValue('https://reserve.example/status');
+  await expect(page.locator('#fallbackToken')).toHaveValue('saved-test-token');
+  await expect(page.locator('#saveBtn')).toBeHidden();
+
+  // Saving another section must not silently erase a previously configured fallback.
+  await page.locator('[data-tab="night"]').click();
+  await page.locator('#nightStart').fill('21:30');
+  await page.locator('#saveBtn').click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].fu).toBe('https://reserve.example/status');
+  expect(writes[0].ft).toBe('saved-test-token');
+
+  await page.locator('[data-tab="mqtt"]').click();
+  await page.locator('#fallbackUrl').fill('https://new.example/alerts');
+  await page.locator('#fallbackToken').fill('new-test-token');
+  await page.locator('.sidebar [data-locale="en"]').click();
+  await expect(page.locator('#fallbackToken')).toHaveValue('new-test-token');
+  await page.locator('#saveBtn').click();
+  await expect.poll(() => writes.length).toBe(2);
+  expect(writes[1].fu).toBe('https://new.example/alerts');
+  expect(writes[1].ft).toBe('new-test-token');
+  await page.reload();
+  await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
+  await page.locator('[data-tab="mqtt"]').click();
+  await expect(page.locator('#fallbackUrl')).toHaveValue('https://new.example/alerts');
+  await expect(page.locator('#fallbackToken')).toHaveValue('new-test-token');
+  await expect(page.locator('#saveBtn')).toBeHidden();
+  await page.locator('#fallbackUrl').fill('');
+  await page.locator('#saveBtn').click();
+  await expect.poll(() => writes.length).toBe(3);
+  expect(writes[2].fu).toBe(''); expect(writes[2].ft).toBe('');
+  await page.reload();
+  await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
+  await page.locator('[data-tab="mqtt"]').click();
+  await expect(page.locator('#fallbackUrl')).toHaveValue('');
+  await expect(page.locator('#fallbackToken')).toHaveValue('');
+});
+
+test('device language control shares the brand row on desktop and mobile', async ({ page }) => {
+  await mockDevice(page);
+  await page.goto('http://device.test/');
+  await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
+  for (const width of [320, 390, 768, 1024, 1280, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    const brand = (await page.locator('.brand-row').boundingBox())!;
+    const language = (await page.locator('.sidebar .language-switcher').boundingBox())!;
+    expect(Math.abs(brand.y + brand.height / 2 - language.y - language.height / 2)).toBeLessThan(1);
+    expect(brand.x + brand.width).toBeLessThanOrEqual(language.x);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
+test('device timezone search, detection, language change and save survive reload', async ({ page }) => {
+  const { writes } = await mockDevice(page);
+  await page.goto('http://device.test/');
+  await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
+  await page.locator('[data-tab="night"]').click();
+  await expect(page.locator('#timeZone')).toHaveValue('Europe/Kyiv');
+  await expect(page.locator('#timeZone option')).toHaveCount(598);
+  await page.locator('#timeZoneSearch').fill('Los Angeles');
+  await expect(page.locator('#saveBtn')).toBeHidden();
+  await page.locator('#timeZone').selectOption('America/Los_Angeles');
+  await page.locator('.sidebar [data-locale="en"]').click();
+  await expect(page.locator('#timeZone')).toHaveValue('America/Los_Angeles');
+  await page.locator('#saveBtn').click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].tz).toBe('America/Los_Angeles');
+  await page.reload();
+  await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
+  await page.locator('[data-tab="night"]').click();
+  await expect(page.locator('#timeZone')).toHaveValue('America/Los_Angeles');
+  await page.locator('#timeZoneSearch').fill('Kathmandu');
+  await page.locator('#timeZone').selectOption('Asia/Kathmandu');
+  await page.locator('#detectTimeZone').click();
+  expect(await page.locator('#timeZone').inputValue()).toBe(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone));
+  await page.setViewportSize({ width: 320, height: 740 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
 
 test('device languages preserve credentials, unsaved drafts and region identifiers on mobile', async ({ page }) => {
   const errors: string[] = [];

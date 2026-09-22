@@ -149,6 +149,8 @@ void checkWebAssets()
         "/locales/en.json",
         "/map.svg",
         "/config.json",
+        "/timezones.js",
+        "/timezone-utils.js",
     };
 
     gWebAssetsMissingMask = 0;

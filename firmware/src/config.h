@@ -16,7 +16,7 @@ constexpr char DEFAULT_MQTT_TOPIC[] = "ukraine/alarm/map/full_v2";
 #define WIFI_PASS_MAXLEN  64
 #define NTP_SERVER_MAXLEN 64
 #define ADMIN_PASS_MAXLEN 32
-#define FIRMWARE_VERSION  "2.1.4"
+#define FIRMWARE_VERSION  "2.1.5"
 
 #define REGIONS_COUNT 25
 
@@ -185,6 +185,7 @@ struct AppConfig {
     char         ntpServer1[NTP_SERVER_MAXLEN];
     char         ntpServer2[NTP_SERVER_MAXLEN];
     char         ntpServer3[NTP_SERVER_MAXLEN];
+    char         timeZone[48];
     char         adminPassword[ADMIN_PASS_MAXLEN];
     uint16_t     logMask;
 };

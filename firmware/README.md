@@ -13,7 +13,7 @@ support is removed. New installs use `ukraine/alarm/map/full_v2`; existing backu
 preserve their MQTT topic (`ukraine/alarm/map/full` remains the legacy 0/1 feed).
 Both ESP32-C3 and
 ESP8266 builds support this. Upgrade firmware and LittleFS together, preserving
-the config. See [compatibility and migration](../docs/multistate.md).
+the config. See [compatibility and migration](../documentation/multistate.md).
 
 Production installer: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
@@ -160,7 +160,7 @@ on Linux. They execute production code with simulated flash, radio, serial and
 time; they do not replace tests on physical boards. Run them after PlatformIO
 finishes installing dependencies.
 
-The [stability audit](../docs/firmware-stability-audit.md) documents the fixes and
+The [stability audit](../documentation/firmware-stability-audit.md) documents the fixes and
 the hardware acceptance checklist. Setup remains available while saved Wi-Fi is
 retried, including when a router starts after the device. After a runtime outage
 of 30 seconds, the setup AP opens again; it closes after 30 seconds of stable
@@ -208,7 +208,7 @@ vercel alias set <deployment-url> alarmmini.vercel.app
 
 ### Optimization regression checks
 
-Run `python tests/optimization_test.py` after installing PlatformIO dependencies. It exercises the production UART serializer, HTTP writer, legacy config migration, and LED frame cache for both chip configurations. See `../docs/firmware-optimization.md` for measured RAM/flash changes and hardware verification limits.
+Run `python tests/optimization_test.py` after installing PlatformIO dependencies. It exercises the production UART serializer, HTTP writer, legacy config migration, and LED frame cache for both chip configurations. See `../documentation/firmware-optimization.md` for measured RAM/flash changes and hardware verification limits.
 
 - `server.json` is intentionally not part of this firmware/release flow.
 - Keep private tokens and MQTT credentials only in root `.env` or GitHub secrets.

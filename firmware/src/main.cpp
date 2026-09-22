@@ -12,6 +12,7 @@
 #include "reset_trace.h"
 #include "runtime_stats.h"
 #include "wifi_diagnostics.h"
+#include "timezones.h"
 #if defined(ESP32)
 #include <esp_log.h>
 #endif
@@ -24,6 +25,24 @@ unsigned long gLoopIterationCount = 0;
 static const char *ntpServerOrDefault(const char *configured, const char *fallback)
 {
     return (configured && configured[0]) ? configured : fallback;
+}
+
+static void applyConfiguredTimeZone()
+{
+    static char appliedRule[128] = {};
+    static char appliedZone[sizeof(gConfig.timeZone)] = {};
+    static time_t lastChecked = 0;
+    const time_t now = time(nullptr);
+    if (now == lastChecked && strcmp(appliedZone, gConfig.timeZone) == 0) return;
+    lastChecked = now;
+    const char *rule = alarmTimeZones::ruleAt(gConfig.timeZone, now);
+    if (!rule) rule = alarmTimeZones::ruleAt(alarmTimeZones::DEFAULT_ID, now);
+    if (strcmp(appliedRule, rule) != 0) {
+        setenv("TZ", rule, 1);
+        tzset();
+        snprintf(appliedRule, sizeof(appliedRule), "%s", rule);
+    }
+    snprintf(appliedZone, sizeof(appliedZone), "%s", gConfig.timeZone);
 }
 
 static void generateHardwareAdminPassword()
@@ -128,8 +147,7 @@ void setup()
     const char *ntp2 = ntpServerOrDefault(gConfig.ntpServer2, "time.nist.gov");
     const char *ntp3 = ntpServerOrDefault(gConfig.ntpServer3, "time.google.com");
     configTime(0, 0, ntp1, ntp2, ntp3);
-    setenv("TZ", "EET-2EEST,M3.5.0/3,M10.5.0/4", 1);
-    tzset();
+    applyConfiguredTimeZone();
 
     LOG_INFO(LOG_CAT_SYSTEM, "NTP sync started: %s | %s | %s", ntp1, ntp2, ntp3);
 
@@ -148,6 +166,7 @@ void loop()
     uartcfg::handle();
     startupProvisioningHandle();
     webserverHandle();
+    applyConfiguredTimeZone();
     resetTraceHandle();
 #if defined(ESP8266)
     MDNS.update();

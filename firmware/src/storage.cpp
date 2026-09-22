@@ -2,6 +2,7 @@
 #include "reset_trace.h"
 #include "platform_compat.h"
 #include "fallback_contract.h"
+#include "timezones.h"
 
 #include <LittleFS.h>
 
@@ -207,6 +208,13 @@ bool validateFullConfigJson(JsonVariantConst cfg, char *error, size_t errorSize)
         return false;
     }
 
+    if (cfg.containsKey("tz") && (!cfg["tz"].is<const char *>() ||
+        !alarmTimeZones::ruleFor(cfg["tz"].as<const char *>())))
+    {
+        setErr("bad_timezone");
+        return false;
+    }
+
     if (!isNumber(cfg["g"]))
     {
         setErr("bad_g");
@@ -368,6 +376,7 @@ void applyDefaults()
     gConfig.blink.nightIntensity = 30;
 
     gConfig.mqttPort = 1883;
+    copyBounded(gConfig.timeZone, sizeof(gConfig.timeZone), alarmTimeZones::DEFAULT_ID);
     copyBounded(gConfig.mqttTopic, MQTT_TOPIC_MAXLEN, DEFAULT_MQTT_TOPIC);
     gConfig.logMask = LOG_MASK_DEFAULT_RUNTIME;
 }
@@ -681,6 +690,7 @@ void storageApplyJson(JsonVariantConst doc)
     copyBounded(gConfig.ntpServer1, NTP_SERVER_MAXLEN, !ntp.isNull() && ntp.size() > 0 ? readStr(ntp[0]) : readStr(doc["ntpServer1"]));
     copyBounded(gConfig.ntpServer2, NTP_SERVER_MAXLEN, !ntp.isNull() && ntp.size() > 1 ? readStr(ntp[1]) : readStr(doc["ntpServer2"]));
     copyBounded(gConfig.ntpServer3, NTP_SERVER_MAXLEN, !ntp.isNull() && ntp.size() > 2 ? readStr(ntp[2]) : readStr(doc["ntpServer3"]));
+    copyBounded(gConfig.timeZone, sizeof(gConfig.timeZone), doc["tz"] | alarmTimeZones::DEFAULT_ID);
 
     gConfig.mqttPort = compactMqtt.containsKey("p") ? readU16(compactMqtt["p"], 1883) : readU16(doc["mqttPort"], 1883);
     gConfig.logMask = doc.containsKey("g") ? readU16(doc["g"], LOG_MASK_ALL) : readU16(doc["logMask"], LOG_MASK_ALL);
@@ -822,6 +832,7 @@ void storagePopulateJson(JsonDocument &doc)
     ntp.add(gConfig.ntpServer1);
     ntp.add(gConfig.ntpServer2);
     ntp.add(gConfig.ntpServer3);
+    doc["tz"] = gConfig.timeZone;
 
     doc["g"] = gConfig.logMask;
     // Preserve the old wire shape when no reserve is configured.
