@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const web = path.join(__dirname, '../work_data');
 const html = fs.readFileSync(path.join(web, 'index.html'), 'utf8');
 const base = JSON.parse(fs.readFileSync(path.join(web, 'config.example.json'), 'utf8'));
+delete base.sc; // Exercise legacy two-state imports independently of the factory profile.
 base.fu = 'https://reserve.example/states'; base.ft = 'test-token';
 base.z = { e: true, v: [80,30], r: [20] }; // Legacy fields survive without enabling sound.
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -86,7 +87,7 @@ const value = code => clone(run(code));
   dayRow.children[1].children[1].value = '0'; dayRow.children[1].children[1].oninput();
   assert.equal(dayRgba.value, 'rgba(0, 170, 255, 0)');
   await run('saveConfig()');
-  assert.deepEqual(stored.c.d.c, [18,52,86,80]);
+  assert.deepEqual(stored.c.d.c, [18,52,86,base.c.d.c[3]]);
   assert.deepEqual(stored.sc['17'].slice(4,7), [171,205,239]);
   assert.deepEqual(stored.sc['2'], [0,170,255,0,10,20,30,nightCap]);
   for (const key of ['l','m','w','t','z','fu','ft','g']) assert.deepEqual(stored[key], base[key], key);

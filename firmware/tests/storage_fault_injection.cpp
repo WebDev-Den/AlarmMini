@@ -41,6 +41,40 @@ static size_t checkPowerCuts(const std::map<std::string, std::string> &baseline)
 
 int main()
 {
+    // A factory profile is applied exactly once, with service credentials intact.
+    applyDefaults();
+    credentials("factory-network");
+    strcpy(gConfig.mqttPass, "factory-mqtt-password");
+    strcpy(gConfig.fallbackUrl, "https://example.com/status");
+    strcpy(gConfig.fallbackToken, "factory-token");
+    DynamicJsonDocument factory(CONFIG_JSON_CAPACITY);
+    storagePopulateJson(factory);
+    std::string factoryJson;
+    serializeJson(factory, factoryJson);
+    files = {{"/config.json", factoryJson}};
+    reboot();
+    assert(std::string(gConfig.wifiSsid) == "factory-network");
+    assert(std::string(gConfig.mqttPass) == "factory-mqtt-password");
+    assert(std::string(gConfig.fallbackToken) == "factory-token");
+    credentials("user-network");
+    assert(storageSaveCurrentConfig(true));
+    reboot();
+    assert(std::string(gConfig.wifiSsid) == "user-network");
+    files = {{"/config.json", factoryJson}, {CONFIG_PATH, "{damaged"}};
+    faults = {};
+    assert(!storageInit());
+    assert(files.at(CONFIG_PATH) == "{damaged" && !gConfig.mqttPass[0]);
+    files = {{"/config.json", "{invalid-profile"}};
+    faults = {};
+    assert(!storageInit() && !files.count(CONFIG_PATH));
+    files = {{"/config.json", factoryJson}};
+    faults = {};
+    faults.failOpenWrite = true;
+    assert(!storageInit());
+    assert(files.at("/config.json") == factoryJson);
+    reboot();
+    assert(std::string(gConfig.fallbackToken) == "factory-token");
+    files.clear();
     reboot();
     credentials("old-network");
     assert(storageSaveCurrentConfig(true));

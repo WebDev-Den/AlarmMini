@@ -31,14 +31,14 @@ test('unsupported browser explains how to continue and disables USB actions', as
   await expect(page.getByRole('button', { name: 'Оновити й зберегти налаштування' })).toBeDisabled();
 });
 
-test('new-device AIR preset shows six states and serves a template with blank network settings', async ({ page }) => {
+test('new-device defaults include six states and preconfigured service credentials', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/releases', route => route.fulfill({ json: [{...release,tag_name:'v2.1.2',name:'v2.1.2'}] }));
   await page.goto('/');
   await expect(page.locator('.new-device-preset')).not.toBeVisible();
   await page.getByRole('radio', {name:/Перше встановлення/}).check();
-  const preset = page.getByRole('checkbox', {name:/Шаблон UkraineAlarm AIR/});
+  const preset = page.getByRole('checkbox', {name:/Початкові налаштування AlarmMini/});
   await expect(preset).toBeChecked();
   await expect(page.getByRole('list', {name:'Кольори шести станів'}).getByRole('listitem')).toHaveCount(6);
   await expect(page.getByText('5 · Частково оранжевий', {exact:true})).toBeVisible();
@@ -46,9 +46,9 @@ test('new-device AIR preset shows six states and serves a template with blank ne
   const response = await page.request.get('/profiles/ukrainealarm-air-6-states.json');
   expect(response.ok()).toBe(true);
   const config = await response.json();
-  expect(config.m).toEqual({h:'',p:1883,t:'ukraine/alarm/map/full_v2',u:'',s:''});
+  expect(Boolean(config.m.h && config.m.u && config.m.s)).toBe(true);
   expect(config.w).toEqual({s:'',p:''});
-  expect(config.fu).toBe(''); expect(config.ft).toBe('');
+  expect(Boolean(config.fu && config.ft)).toBe(true);
   expect(Object.keys(config.sc)).toEqual(['2','3','4','5']);
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
@@ -64,7 +64,7 @@ test('old firmware gives an actionable preset incompatibility before any USB wri
   await page.getByRole('radio', {name:/Перше встановлення/}).check();
   await expect(page.locator('.new-device-preset [role=alert]')).toContainText('2.1.0');
   await expect(page.getByRole('button',{name:'Встановити AlarmMini'})).toBeDisabled();
-  await page.getByRole('checkbox',{name:/Шаблон UkraineAlarm AIR/}).uncheck();
+  await page.getByRole('checkbox',{name:/Початкові налаштування AlarmMini/}).uncheck();
   await expect(page.locator('.new-device-preset [role=alert]')).not.toBeVisible();
 });
 

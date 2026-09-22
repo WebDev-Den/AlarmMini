@@ -1044,7 +1044,19 @@ bool storageInit()
         return false;
     }
 
-    LOG_WARN(LOG_CAT_CONFIG, "Config not found, creating defaults");
+    // Apply the shipped profile only on first boot. Never replace an existing
+    // user's config (including damaged files awaiting recovery) with defaults.
+    if (LittleFS.exists("/config.json"))
+    {
+        if (!tryLoadFromPath("/config.json", true))
+        {
+            LOG_ERROR(LOG_CAT_CONFIG, "Invalid initial profile; preserving it for recovery");
+            return false;
+        }
+        LOG_INFO(LOG_CAT_CONFIG, "Initial profile loaded from /config.json");
+    }
+    else
+        LOG_WARN(LOG_CAT_CONFIG, "Config not found, creating defaults");
 
     if (!storageSaveCurrentConfig(true))
     {

@@ -574,5 +574,9 @@
   "Очікування...": "Waiting…",
   "Налаштування ESP8266. Введи SSID та пароль Wi-Fi й дочекайся IP-адреси пристрою.": "ESP8266 setup. Enter the Wi-Fi SSID and password, then wait for the device IP address.",
   "день": "day",
-  "ніч": "night"
+  "ніч": "night",
+  "Початкові налаштування AlarmMini · 6 станів": "AlarmMini default settings · 6 states",
+  "MQTT, пароль, резервний URL і токен авторизації вже заповнені. Після встановлення налаштуй свій Wi-Fi. Прив’язку LED можна змінити в калібруванні.": "MQTT, its password, the fallback URL and authorization token are already filled in. Set up your Wi-Fi after installation. LED mapping can be changed in calibration.",
+  "Початкові налаштування вже на платі, включно з MQTT і резервним API. Залишилося підключити свій Wi-Fi.": "The default settings are on the board, including MQTT and the fallback API. Connect your Wi-Fi to finish setup.",
+  "AlarmMini встановлено. Кольори, MQTT і резервний API записано й перевірено. Налаштуй свій Wi-Fi.": "AlarmMini installed. Colors, MQTT and the fallback API were written and verified. Set up your Wi-Fi."
 }

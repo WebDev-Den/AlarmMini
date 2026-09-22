@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const page = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
 const preset = JSON.parse(readFileSync(new URL('../public/profiles/ukrainealarm-air-6-states.json', import.meta.url), 'utf8'));
-const palette = JSON.parse(readFileSync(new URL('../../firmware/profiles/ukrainealarm-air-6-states.json', import.meta.url), 'utf8'));
+const factory = JSON.parse(readFileSync(new URL('../../firmware/work_data/config.example.json', import.meta.url), 'utf8'));
 const compile = source => ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const helpers = compile(page.slice(page.indexOf('function buildConfigValidationErrors'), page.indexOf('export default function Page')));
 const flow = compile(page.slice(page.indexOf('  async function runFlashFlow('), page.indexOf('  async function runRecoveryWizard(')));
@@ -37,7 +37,8 @@ function fixture(options = {}) {
       calls.push(['preset',clone(cfg),label]);
       if(options.writeError)throw new Error('USB write failed');
       deviceConfig=clone(cfg);
-      delete deviceConfig.fu; delete deviceConfig.ft; // Real firmware omits empty reserve fields.
+      if (!deviceConfig.fu) delete deviceConfig.fu;
+      if (!deviceConfig.ft) delete deviceConfig.ft;
       if(options.missingState)delete deviceConfig.sc['5'];
       if(options.leakedNetwork)deviceConfig.m.h='stale.example';
       if(options.leakedFallback)deviceConfig.fu='https://stale.example/status';
@@ -50,14 +51,17 @@ function fixture(options = {}) {
   return {calls,backup,run:restore=>context.runFlashFlow(restore),context};
 }
 
-test('public preset includes all six colors and contains no personal connection settings', () => {
+test('installer and firmware share the supplied defaults including service credentials', () => {
   const {context}=fixture();
   assert.equal(context.buildConfigValidationErrors(preset).length,0);
-  assert.deepEqual(preset.c,palette.c); assert.deepEqual(preset.sc,palette.sc);
-  assert.deepEqual(Object.keys(preset).sort(),['cv','c','sc','n','k','o','l','m','w','t','g','fu','ft'].sort());
+  assert.ok(JSON.stringify(preset) === JSON.stringify(factory));
+  assert.deepEqual(preset.c.d.a,[255,0,0,128]);
+  assert.deepEqual(preset.sc['2'],[255,160,0,52,255,0,0,3]);
+  assert.deepEqual(Object.keys(preset).sort(),['cv','c','sc','n','z','k','o','l','m','w','t','g','fu','ft'].sort());
   assert.deepEqual(preset.w,{s:'',p:''});
-  assert.deepEqual(preset.m,{h:'',p:1883,t:'ukraine/alarm/map/full_v2',u:'',s:''});
-  assert.equal(preset.fu,'');assert.equal(preset.ft,'');assert.deepEqual(preset.t,['','','']);
+  assert.ok(preset.m.h && preset.m.u && preset.m.s);
+  assert.equal(preset.m.t,'ukraine/alarm/map/full_v2');
+  assert.ok(preset.fu.startsWith('https://') && preset.ft.length > 0);assert.deepEqual(preset.t,['','','']);
   assert.deepEqual(preset.n.s,[22,0]);assert.deepEqual(preset.n.x,[7,0]);
   assert.equal(preset.l.length,27);assert.equal(new Set(preset.l).size,25);
 });
@@ -91,7 +95,7 @@ for (const option of ['flashError','writeError','missingState','leakedNetwork','
   });
 }
 
-test('an explicitly supplied reserve URL is verified then saved after the blank preset',async()=>{
+test('an explicitly supplied reserve URL is verified then saved after the default preset',async()=>{
   const {run,calls}=fixture({reserveUrl:'https://custom.example/status'});await run(false);
   const actions=calls.map(c=>c[0]);
   assert.ok(actions.indexOf('probe')<actions.indexOf('flash'));
