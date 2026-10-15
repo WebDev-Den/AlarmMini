@@ -5,6 +5,8 @@ ESP32-C3 SuperMini / ESP8266 Wemos D1 mini · UA / EN · v2.1.5
 
 [Відкрити інсталятор / Open installer](https://alarmmini.vercel.app) · [Посібник / User guide (PDF)](docs/AlarmMini_User_Manual_UA_EN.pdf) · [Реліз / Release](https://github.com/WebDev-Den/AlarmMini/releases/latest) · [Підтримка / Support](https://t.me/+j3zFZHE5gGoyNGYy)
 
+[Моделі для друку та складання / Print files and assembly](firmware/STL/MakerWorld/README.md)
+
 ---
 
 ## Українська
@@ -80,6 +82,7 @@ Personal non-commercial use, learning and gifts are permitted. **Selling AlarmMi
 | Path | Contents / Вміст |
 | --- | --- |
 | `firmware/` | ESP32-C3 / ESP8266 firmware and embedded web panel |
+| `firmware/STL/MakerWorld/` | Printable map parts, Bambu Studio project and assembly notes |
 | `vercel/` | Web installer and default JSON profile |
 | `docs/` | Printable bilingual PDF only |
 | `documentation/` | Technical notes, release history and manual source |
