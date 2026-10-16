@@ -236,8 +236,6 @@ function normalizeConfig(cfg) {
     pulseContrastPct: Number(offline.c ?? source.pulseContrastPct ?? 60),
     ledRegionIds: source.l || source.ledRegionIds || source.leds || [],
     mqttHost: mqtt.h ?? source.mqttHost ?? "",
-    fallbackUrl: source.fu ?? "",
-    fallbackToken: source.ft ?? "",
     timeZone: source.tz ?? "Europe/Kyiv",
     mqttPort: Number(mqtt.p ?? source.mqttPort ?? 1883),
     mqttTopic: mqtt.t ?? source.mqttTopic ?? "ukraine/alarm/map/full_v2",
@@ -778,9 +776,8 @@ function applyConfig(cfg) {
   currentConfig.logCategoryBits = previousLogCategoryBits;
   renderTimeZones(currentConfig.timeZone);
 
-  // Editable connection settings come from /api/config. /api/info is device
-  // metadata and does not include the fallback URL or its authorization token.
-  for (const field of ["mqttHost", "mqttPort", "mqttTopic", "mqttUser", "mqttPass", "fallbackUrl", "fallbackToken"]) {
+  // Editable connection settings come from /api/config, not device metadata.
+  for (const field of ["mqttHost", "mqttPort", "mqttTopic", "mqttUser", "mqttPass"]) {
     $(field).value = currentConfig[field];
   }
 
@@ -834,8 +831,6 @@ function buildPayload() {
   } else if (!Array.isArray(payload.l)) {
     payload.l = [];
   }
-  payload.fu = $("fallbackUrl").value.trim();
-  payload.ft = payload.fu ? $("fallbackToken").value.trim() : "";
   payload.tz = $("timeZone").value;
   payload.m = {
     h: $("mqttHost").value.trim(),
@@ -1230,21 +1225,30 @@ function setHealthChip(id, ok, text) {
   el.style.color = ok ? "var(--green)" : "var(--danger)";
 }
 
+function updateDataSource(source, fresh) {
+  const activeSource = fresh ? source : "";
+  $("sourceMqtt").classList.toggle("is-active", activeSource === "mqtt");
+  $("sourceTryvoha").classList.toggle("is-active", activeSource === "tryvoha");
+  const name = { mqtt: "MQTT", tryvoha: "Tryvoha", http: "HTTP API" }[activeSource];
+  window.AlarmI18n.text($("dataSourceStatus"), name ? `Активне джерело: ${name}` : "Немає актуальних даних");
+  setHealthChip("healthMqtt", Boolean(name), name ? `Джерело: ${name}` : "Джерело: немає даних");
+}
+
 async function updateRuntimeHealth() {
   if (!currentSessionReady) return;
   try {
     const health = await fetchJson("/health");
     latestRuntimeHealth = health;
     const wifiOk = Boolean(health.wifiConnected);
-    const mqttOk = Boolean(health.mqttConnected);
-    const dataFresh = health.alertsFresh ?? !Boolean(health.mqttDataStale);
+    const dataFresh = health.alertsFresh ?? health.mqttDataStale === false;
     setHealthChip("healthWifi", wifiOk, `Wi-Fi: ${wifiOk ? "OK" : "Немає"}`);
-    const reserveActive = health.alertsSource === "http" && dataFresh;
-    setHealthChip("healthMqtt", mqttOk || reserveActive, reserveActive ? "Джерело: резервний API" : `MQTT: ${mqttOk ? "OK" : "Немає"}`);
+    updateDataSource(health.alertsSource, dataFresh);
     setHealthChip("healthData", dataFresh, `Дані: ${dataFresh ? "Актуальні" : "Застарілі"}`);
   } catch (_) {
     setHealthChip("healthWifi", false, "Wi-Fi: помилка");
-    setHealthChip("healthMqtt", false, "MQTT: помилка");
+    updateDataSource("", false);
+    window.AlarmI18n.text($("dataSourceStatus"), "Не вдалося перевірити джерело даних");
+    setHealthChip("healthMqtt", false, "Джерело: помилка");
     setHealthChip("healthData", false, "Дані: помилка");
   }
 }

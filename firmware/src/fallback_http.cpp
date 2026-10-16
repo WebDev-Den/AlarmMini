@@ -1,5 +1,7 @@
 #include "fallback_http.h"
 #include "platform_compat.h"
+#include "tryvoha_contract.h"
+#include <new>
 #include <atomic>
 #include <time.h>
 #if defined(ESP32)
@@ -20,17 +22,19 @@ char requestToken[fallbackContract::TOKEN_CAPACITY] = {};
 template<class Base> class LimitedClient : public Base {
     uint32_t started = millis();
     size_t received = 0;
+    size_t limit;
     bool expired() {
 #if defined(ESP32)
         constexpr uint32_t deadlineMs = 10000; // Worker does not block the main loop.
 #else
         constexpr uint32_t deadlineMs = 4500;
 #endif
-        if (millis() - started <= deadlineMs && received < 4096) return false;
+        if (millis() - started <= deadlineMs && received < limit) return false;
         Base::stop();
         return true;
     }
 public:
+    explicit LimitedClient(size_t maxBytes = 4096) : limit(maxBytes) {}
 #if defined(ESP8266)
     using Base::connect;
     int connect(const char *host, uint16_t port) override {
@@ -53,7 +57,7 @@ public:
     }
     int read(uint8_t *buffer, size_t length) override {
         if (expired()) return -1;
-        const int count = Base::read(buffer, min(length, size_t(4096 - received)));
+        const int count = Base::read(buffer, min(length, limit - received));
         if (count > 0) received += count;
         return count;
     }
@@ -76,7 +80,18 @@ public:
     }
 };
 
+class TryvohaBody : public Stream {
+public:
+    tryvoha::Parser parser;
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    void flush() override {}
+    size_t write(uint8_t value) override { return parser.write(char(value)) ? 1 : 0; }
+};
+
 template<class ClientType> void request(ClientType &client) {
+    const bool isTryvoha = strcmp(result.url, tryvoha::URL) == 0;
     HTTPClient http;
     http.setReuse(false);
     http.setTimeout(1000);
@@ -90,13 +105,25 @@ template<class ClientType> void request(ClientType &client) {
     http.addHeader("Accept", "application/json");
     http.addHeader("Accept-Encoding", "identity");
     http.addHeader("Cache-Control", "no-cache");
-    if (requestToken[0]) http.addHeader("Authorization", String("Bearer ") + requestToken);
+    if (!isTryvoha && requestToken[0]) http.addHeader("Authorization", String("Bearer ") + requestToken);
     const int code = http.GET();
     result.status = code;
     if (code == 200) {
         const String encoding = http.header("Content-Encoding");
-        if (http.getSize() > (int)fallbackContract::BODY_CAPACITY ||
+        const size_t maxBody = isTryvoha ? tryvoha::MAX_BODY : fallbackContract::BODY_CAPACITY;
+        if (http.getSize() > (int)maxBody ||
             (encoding.length() && encoding != "identity")) result.status = -1003;
+        else if (isTryvoha) {
+            // Keep this buffer off the ESP8266's small main-loop stack.
+            auto *sink = new (std::nothrow) TryvohaBody;
+            if (!sink) result.status = -1002;
+            else {
+                const int count = http.writeToStream(sink);
+                if (count <= 0 || (http.getSize() >= 0 && count != http.getSize()) ||
+                    !sink->parser.finish(result.tryvohaStates, time(nullptr), result.updatedAt)) result.status = -1007;
+                delete sink;
+            }
+        }
         else {
             BodyBuffer sink(result.body);
             const int count = http.writeToStream(&sink);
@@ -109,9 +136,11 @@ template<class ClientType> void request(ClientType &client) {
 
 void fetch() {
     result.body[0] = 0;
+    result.updatedAt = 0;
     result.status = -1000;
     if (WiFi.status() != WL_CONNECTED || !fallbackContract::validUrl(result.url)) return;
     const bool secure = strncmp(result.url, "https://", 8) == 0;
+    const size_t maxBytes = strcmp(result.url, tryvoha::URL) == 0 ? tryvoha::MAX_BODY + 4096 : 4096;
     if (!secure) {
         LimitedClient<WiFiClient> client;
         request(client);
@@ -126,7 +155,7 @@ void fetch() {
     static bool preferFullRoots = true;
     for (int attempt = 0; attempt < 2; ++attempt) {
         const bool full = attempt == 0 ? preferFullRoots : !preferFullRoots;
-        LimitedClient<WiFiClientSecure> client;
+        LimitedClient<WiFiClientSecure> client(maxBytes);
         if (full) client.setCACert(commonRoots);
         else client.setCACertBundle(roots);
         client.setHandshakeTimeout(5);
@@ -146,7 +175,7 @@ void fetch() {
     static bool loaded = false;
     if (!loaded) loaded = store.initCertStore(LittleFS, "/certs.idx", "/certs.ar") > 0;
     if (!loaded) { result.status = -1006; return; }
-    LimitedClient<BearSSL::WiFiClientSecure> client;
+    LimitedClient<BearSSL::WiFiClientSecure> client(maxBytes);
     client.setCertStore(&store);
     client.setTimeout(1500);
     request(client);

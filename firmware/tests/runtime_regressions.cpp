@@ -59,6 +59,7 @@ struct SerialInput {
 #define CONSOLE_PORT console
 
 #include "fallback_http.h"
+#include "tryvoha_test.h"
 static bool reserveBusy = false, reserveReady = false;
 static int reserveStarted = 0;
 static FallbackHttpResult reserveResponse;
@@ -93,8 +94,17 @@ static std::string allStates(const char *value) {
     return result + ']';
 }
 
-int main() {
+int main(int argc, char **argv) {
     static_assert(sizeof(void*) == 4, "Run in 32-bit mode to match MCU JSON capacities");
+    testTryvohaParser();
+    if (argc > 1) {
+        std::ifstream input(argv[1], std::ios::binary);
+        assert(input);
+        const std::string json((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        uint8_t states[25] = {};
+        assert(parseTryvoha(json, states, time(nullptr)));
+        std::printf("PASS live Tryvoha payload (%u bytes)\n", unsigned(json.size()));
+    }
 
     // Whole-packet time budget remains bounded even when the broker keeps
     // supplying bytes. Check the deadline across 32-bit millis rollover too.
@@ -265,24 +275,21 @@ int main() {
     gLastMqttMessageAt = clockMs;
     gUsingFallbackSnapshot = false;
     strcpy(gConfig.fallbackUrl, "http://reserve.test/alerts");
+    strcpy(gConfig.fallbackToken, "private-test-token");
     alertsFallbackTick();
     assert(reserveStarted == 0); // MQTT wins while fresh.
     gMqttConnected = false;
     alertsFallbackTick();
-    assert(reserveStarted == 1 && reserveBusy);
+    assert(reserveStarted == 1 && reserveBusy && reserveToken == "private-test-token");
     reserveResponse.status = 200;
     strcpy(reserveResponse.body, allStates("1").c_str());
     reserveReady = true;
     alertsFallbackTick();
-    assert(gUsingHttpFallback && alertsDataFresh());
+    assert(gUsingHttpFallback && !gUsingTryvohaFallback && alertsDataFresh());
     gMqttConnected = true;
     assert(!alertsMqttFresh(clockMs)); // Reconnection alone is not a new payload.
     gMqttConnected = false;
-    for (bool v : gMqttAlerts) assert(v);
-    clockMs += 20000;
-    alertsFallbackTick();
-    assert(reserveStarted == 1 && !reserveBusy);
-    clockMs += 9999;
+    clockMs += 29999;
     alertsFallbackTick();
     assert(reserveStarted == 1 && !reserveBusy);
     ++clockMs;
@@ -293,14 +300,47 @@ int main() {
     alertsFallbackTick();
     assert(gFallbackErrors == 1);
     for (bool v : gMqttAlerts) assert(v); // HTTP error never clears alerts.
-    clockMs += 30000;
+    assert(reserveBusy && std::string(reserveResponse.url) == tryvoha::URL);
+    assert(reserveToken.empty()); // The private server token never reaches Tryvoha.
+    reserveResponse.status = 200;
+    reserveResponse.updatedAt = time(nullptr);
+    memset(reserveResponse.tryvohaStates, 0, sizeof(reserveResponse.tryvohaStates));
+    reserveResponse.tryvohaStates[8] = 3;
+    reserveResponse.tryvohaStates[4] = 2;
+    reserveReady = true;
     alertsFallbackTick();
+    assert(gUsingTryvohaFallback && alertsDataFresh());
+    assert(std::string(alertsDataSource()) == "tryvoha");
+    assert(gAlerts[8] == 3 && gAlerts[4] == 2 && gAlerts[0] == 0 && gAlerts[24] == 1); // Colors preserved, Crimea retained.
+    clockMs += 29999;
+    const auto starts = reserveStarted;
+    alertsFallbackTick();
+    assert(reserveStarted == starts);
+    ++clockMs;
+    alertsFallbackTick();
+    assert(std::string(reserveResponse.url) == gConfig.fallbackUrl); // Probe higher priority first.
     reserveResponse.status = 200;
     strcpy(reserveResponse.body, "[0,1]");
     reserveReady = true;
     alertsFallbackTick();
-    assert(gFallbackErrors == 2);
-    for (bool v : gMqttAlerts) assert(v);
+    assert(gFallbackErrors == 2 && gUsingTryvohaFallback);
+    assert(std::string(reserveResponse.url) == tryvoha::URL && reserveBusy);
+    reserveResponse.updatedAt = time(nullptr) - 181;
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(gFallbackErrors == 3 && gAlerts[8] == 3 && gAlerts[4] == 2); // Stale provider cannot clear.
+    gTryvohaUpdatedAt -= 181;
+    assert(!alertsDataFresh());
+    clockMs += 30000;
+    alertsFallbackTick();
+    reserveResponse.status = 200;
+    strcpy(reserveResponse.body, allStates("4").c_str());
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(!gUsingTryvohaFallback && gUsingHttpFallback && alertsDataFresh());
+    for (AlertState state : gAlerts) assert(state == 4); // Server recovery restores full palette.
+    assert(!reserveBusy);
+
     clockMs += 30000;
     alertsFallbackTick();
     gMqttConnected = true;
@@ -308,7 +348,7 @@ int main() {
     strcpy(reserveResponse.body, allStates("1").c_str());
     reserveReady = true;
     alertsFallbackTick();
-    assert(!gUsingHttpFallback);
+    assert(!gUsingHttpFallback && !gUsingTryvohaFallback);
     for (bool v : gMqttAlerts) assert(!v); // Late reserve cannot overwrite MQTT.
     clockMs += fallbackContract::FRESH_MS + 1;
     alertsFallbackTick();
@@ -328,6 +368,44 @@ int main() {
     reserveReady = true;
     alertsFallbackTick();
     assert(!alertsDataFresh());
+    assert(reserveBusy && std::string(reserveResponse.url) == tryvoha::URL);
+    assert(reserveToken.empty()); // Built-in backup works with no custom URL.
+    reserveResponse.status = 200;
+    reserveResponse.updatedAt = time(nullptr);
+    memset(reserveResponse.tryvohaStates, 1, sizeof(reserveResponse.tryvohaStates));
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(gUsingTryvohaFallback && alertsDataFresh());
+    clockMs += 30000;
+    alertsFallbackTick();
+    assert(reserveBusy);
+    deliver(allStates("3")); // MQTT recovers while Tryvoha is in flight.
+    reserveReady = true;
+    alertsFallbackTick();
+    assert(!gUsingTryvohaFallback && !gUsingHttpFallback && alertsDataFresh());
+    for (AlertState state : gAlerts) assert(state == 3);
+
+    // Poll intervals work across millis rollover; no network work when offline.
+    gMqttConnected = false;
+    clockMs = 0xFFFFFF00UL;
+    alertsFallbackTick();
+    assert(reserveBusy);
+    reserveResponse.status = 503;
+    reserveReady = true;
+    alertsFallbackTick();
+    clockMs += 29999;
+    alertsFallbackTick();
+    assert(!reserveBusy);
+    WiFi.state = 0;
+    ++clockMs;
+    alertsFallbackTick();
+    assert(!reserveBusy);
+    WiFi.state = WL_CONNECTED;
+    alertsFallbackTick();
+    assert(reserveBusy);
+    reserveReady = true;
+    alertsFallbackTick();
+    std::puts("PASS failover: MQTT > custom HTTP > Tryvoha, recovery, token isolation, stale/late replies, rollover");
 
     // Numeric codes survive MQTT, HTTP, snapshots and source changes.
     for (const char *code : {"2", "3", "4", "10", "255"}) {

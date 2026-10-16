@@ -593,5 +593,15 @@
   "Зберігаємо…": "Saving…",
   "Посібник UA + EN · PDF": "UA + EN guide · PDF",
   "Початкові налаштування · JSON": "Default settings · JSON",
-  "Умови використання": "Terms of use"
+  "Умови використання": "Terms of use",
+  "Дані": "Data",
+  "Джерела даних": "Data sources",
+  "Джерело даних": "Data source",
+  "Перевіряємо джерело даних…": "Checking the data source…",
+  "Активне джерело: {0}": "Active source: {0}",
+  "Джерело: {0}": "Source: {0}",
+  "Немає актуальних даних": "No fresh data",
+  "Джерело: немає даних": "Source: no data",
+  "Не вдалося перевірити джерело даних": "Could not check the data source",
+  "Джерело: помилка": "Source: error"
 }

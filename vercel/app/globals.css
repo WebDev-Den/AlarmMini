@@ -995,6 +995,15 @@ summary { cursor: pointer; }
 .reserve-settings { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
 .reserve-settings summary { padding: 8px 0; min-height: 44px; }
 .reserve-settings summary span { color: var(--muted); font-size: 11px; margin-left: 8px; }
+.release-notes { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.7; }
+.release-notes h3 { margin: 0 0 10px; font-size: 15px; }
+.release-notes ul { margin: 10px 0 16px; padding-left: 20px; color: var(--muted); }
+.release-notes li + li { margin-top: 6px; }
+.release-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.release-history > summary { min-height: 44px; padding: 10px 0; font-weight: 550; }
+.release-entry { border-top: 1px solid var(--line); }
+.release-entry > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-height: 44px; padding: 10px 0; }
+.release-entry time { color: var(--muted); font-size: 12px; }
 .reserve-settings label { margin-top: 12px; }
 .reserve-settings input { width: 100%; min-width: 0; }
 .fallback-field { min-width: 0; }

@@ -1641,7 +1641,13 @@ input[type=time],
 .mqtt-fields { display: grid; gap: 14px; padding: 16px 18px 18px; }
 .mqtt-broker-grid { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 14px; }
 .mqtt-credentials-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.mqtt-reserve { border-top: 1px solid var(--border); }
+.data-source-panel { border-top: 1px solid var(--border); }
+.data-sources { display: flex; flex-wrap: wrap; gap: 10px; }
+.data-source { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--border); border-radius: 10px; color: var(--text2); font-size: 14px; font-weight: 600; text-decoration: none; }
+.data-source::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.data-source.is-active { color: var(--green); border-color: rgba(123,228,149,.45); background: rgba(123,228,149,.08); }
+.data-source:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.data-source-panel .field-hint { margin: 0; }
 .settings-subtitle { margin: 0; font-size: 13px; font-weight: 700; line-height: 1.4; }
 .field-hint { margin: 6px 0 0; color: var(--text2); font-size: 12px; line-height: 1.5; }
 .field-optional { text-transform: none; }

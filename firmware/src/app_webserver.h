@@ -749,6 +749,7 @@ void handleHealth()
     doc["alertsFresh"] = alertsDataFresh();
     doc["fallbackConfigured"] = gConfig.fallbackUrl[0] != 0;
     doc["fallbackHttpStatus"] = gFallbackHttpStatus;
+    doc["tryvohaHttpStatus"] = gTryvohaHttpStatus;
     doc["mqttUsingFallbackSnapshot"] = gUsingFallbackSnapshot;
     doc["internetConnected"] = gInternetConnected;
     doc["mqttReconnectAttempts"] = gMqttReconnectAttempts;
@@ -787,6 +788,7 @@ void handleSelfTest()
     doc["alertsFresh"] = alertsDataFresh();
     doc["fallbackConfigured"] = gConfig.fallbackUrl[0] != 0;
     doc["fallbackHttpStatus"] = gFallbackHttpStatus;
+    doc["tryvohaHttpStatus"] = gTryvohaHttpStatus;
     doc["usingFallbackSnapshot"] = gUsingFallbackSnapshot;
     doc["webAssetsReady"] = gWebAssetsReady;
     doc["webAssetsMissingMask"] = gWebAssetsMissingMask;

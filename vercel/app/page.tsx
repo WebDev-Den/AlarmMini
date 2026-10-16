@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
 import { BoardIllustration } from "./board-illustration";
+import { ReleaseHistory } from "./release-history";
 import airPreset from "../public/profiles/ukrainealarm-air-6-states.json";
 import { TimeZoneField } from "./time-zone-field";
 import { defaultZone, isValid as isTimeZone, supportsTimeZone } from "../../firmware/work_data/timezone-utils";
@@ -1646,6 +1647,7 @@ export default function Page() {
               {releasesLoading ? <span>{t("Завантажуємо актуальну версію…")}</span> : releasesError ? <><span>{t(releasesError)}</span><button className="btn" onClick={() => setReleasesAttempt((v) => v + 1)}>{t("Спробувати ще раз")}</button></> : !selectedRelease ? <span>{t("Опублікованих версій поки немає.")}</span> : <><span>{t("Версія") + " "}<strong>{selectedRelease.tag_name}</strong>{" " + t("· актуальна")}</span><small>{selectedReleaseUpdatedAt}</small></>}
             </div>
             <p className="hint">{t("Підтримується лише актуальна версія. Старі прошивки більше не доступні для встановлення; налаштування з них можна перенести під час оновлення.")}</p>
+            {selectedRelease ? <ReleaseHistory version={selectedRelease.tag_name} body={selectedRelease.body} /> : null}
           </section>
 
           <section className="card step-card" aria-labelledby="usb-title">

@@ -172,6 +172,7 @@ inline void sendDiagnostics()
     doc["alertsSource"] = alertsDataSource();
     doc["alertsFresh"] = alertsDataFresh();
     doc["fallbackHttpStatus"] = gFallbackHttpStatus;
+    doc["tryvohaHttpStatus"] = gTryvohaHttpStatus;
     doc["fallbackRequests"] = gFallbackRequests;
     doc["fallbackErrors"] = gFallbackErrors;
     serializeJson(doc, CONSOLE_PORT);

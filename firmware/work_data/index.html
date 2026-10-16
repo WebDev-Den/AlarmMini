@@ -20,7 +20,7 @@
         label: { eyebrow: "QR / Друк", title: "QR-наклейки та друковані картки" },
         colors: { eyebrow: "Кольори", title: "Кольори станів" },
         night: { eyebrow: "Нічний режим", title: "Нічний режим" },
-        mqtt: { eyebrow: "MQTT", title: "MQTT та резервний канал" },
+        mqtt: { eyebrow: "Дані", title: "Джерела даних" },
         system: { eyebrow: "Система", title: "Доступ до пристрою, mDNS та системні параметри" },
         calibration: { eyebrow: "Калібрування", title: "Привʼязка фізичних LED до областей із швидким переходом по LED" },
         
@@ -30,7 +30,7 @@
         label: "QR / Друк",
         colors: "Кольори",
         night: "Нічний режим",
-        mqtt: "MQTT",
+        mqtt: "Джерела даних",
         system: "Система",
         calibration: "Калібрування",
         
@@ -224,7 +224,7 @@
           <button class="nav-tab" type="button" data-tab="label">QR / Друк</button>
           <button class="nav-tab" type="button" data-tab="colors">Кольори</button>
           <button class="nav-tab" type="button" data-tab="night">Нічний режим</button>
-          <button class="nav-tab" type="button" data-tab="mqtt">MQTT</button>
+          <button class="nav-tab" type="button" data-tab="mqtt">Джерела даних</button>
           <button class="nav-tab" type="button" data-tab="system">Система</button>
           <button class="nav-tab nav-tab-accent" type="button" data-tab="calibration">Калібрування</button>
         </nav>
@@ -274,7 +274,7 @@
                 вкладку калібрування.</p>
               <div class="health-strip">
                 <div class="health-item" id="healthWifi">Wi-Fi: ...</div>
-                <div class="health-item" id="healthMqtt">MQTT: ...</div>
+                <div class="health-item" id="healthMqtt">Джерело: ...</div>
                 <div class="health-item" id="healthData">Дані: ...</div>
                 <button class="inline-btn inline-btn-primary" type="button" onclick="runSelfTest()">Самотест</button>
               </div>
@@ -437,18 +437,13 @@
                   </div>
                 </div>
               </div>
-              <div class="mqtt-fields mqtt-reserve">
-                <h3 class="settings-subtitle">Резервний канал</h3>
-                <div>
-                  <label for="fallbackUrl" class="field-label">Резервний URL</label>
-                  <input type="url" id="fallbackUrl" placeholder="https://example.com/alerts.json" class="field-input" maxlength="255" autocomplete="off" spellcheck="false" aria-describedby="fallbackUrlHint">
-                  <p class="field-hint" id="fallbackUrlHint">JSON-масив із 25 кодів стану 0–255 у порядку MQTT. Порожнє поле вимикає резерв.</p>
+              <div class="mqtt-fields data-source-panel">
+                <h3 class="settings-subtitle">Джерело даних</h3>
+                <div class="data-sources" aria-describedby="dataSourceStatus">
+                  <span class="data-source" id="sourceMqtt">MQTT</span>
+                  <a class="data-source" id="sourceTryvoha" href="https://tryvoha.online" target="_blank" rel="noopener noreferrer">Tryvoha</a>
                 </div>
-                <div>
-                  <label for="fallbackToken" class="field-label">Токен API <span class="field-optional">(необов’язково)</span></label>
-                  <input type="password" id="fallbackToken" class="field-input" maxlength="511" autocomplete="new-password" spellcheck="false" aria-describedby="fallbackTokenHint">
-                  <p class="field-hint" id="fallbackTokenHint">Тільки токен, без Bearer. Для захисту токена використовуй HTTPS.</p>
-                </div>
+                <p class="field-hint" id="dataSourceStatus" role="status">Перевіряємо джерело даних…</p>
               </div>
             </article>
           </section>

@@ -11,6 +11,7 @@
 #include "storage.h"
 #include "logger.h"
 #include "fallback_http.h"
+#include "tryvoha_contract.h"
 
 AlertState gAlerts[REGIONS_COUNT]     = {};
 AlertState gMqttAlerts[REGIONS_COUNT] = {};
@@ -21,6 +22,9 @@ bool gInternetConnected             = false;
 bool gMqttDataStale                 = false;
 bool gUsingFallbackSnapshot         = false;
 bool gUsingHttpFallback             = false;
+bool gUsingTryvohaFallback          = false;
+time_t gTryvohaUpdatedAt            = 0;
+int gTryvohaHttpStatus              = 0;
 unsigned long gLastFallbackSuccessAt = 0;
 uint32_t gFallbackRequests = 0;
 uint32_t gFallbackErrors = 0;
@@ -337,6 +341,7 @@ void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     gMqttDataStale = false;
     gUsingFallbackSnapshot = false;
     gUsingHttpFallback = false;
+    gUsingTryvohaFallback = false;
     gMqttMessagesReceived++;
     gLastMqttMessageAt = millis();
     _mqttSnapshotDirty = _mqttSnapshotDirty || !_mqttSnapshotSaved;
@@ -667,12 +672,14 @@ bool alertsMqttFresh(unsigned long now) {
 
 bool alertsDataFresh() {
     const unsigned long now = millis();
-    return alertsMqttFresh(now) || (gConfig.fallbackUrl[0] && gUsingHttpFallback &&
+    return alertsMqttFresh(now) || (gUsingHttpFallback &&
+        (gUsingTryvohaFallback ? tryvoha::fresh(gTryvohaUpdatedAt, time(nullptr)) : gConfig.fallbackUrl[0] != 0) &&
         gLastFallbackSuccessAt != 0 && now - gLastFallbackSuccessAt < fallbackContract::FRESH_MS);
 }
 
 const char *alertsDataSource() {
     if (gUsingFallbackSnapshot) return "saved";
+    if (gUsingTryvohaFallback) return "tryvoha";
     if (gUsingHttpFallback) return "http";
     return gLastMqttMessageAt ? "mqtt" : "none";
 }
@@ -681,21 +688,34 @@ void alertsFallbackTick() {
     static char configuredUrl[fallbackContract::URL_CAPACITY] = {};
     static char configuredToken[fallbackContract::TOKEN_CAPACITY] = {};
     static uint32_t generation = 0;
-    static unsigned long lastAttemptAt = 0;
-    static bool attempted = false;
+    static unsigned long lastAttemptAt = 0, lastTryvohaAttemptAt = 0;
+    static bool attempted = false, tryvohaAttempted = false, primaryFailed = false;
     const unsigned long now = millis();
     if (strcmp(configuredUrl, gConfig.fallbackUrl) != 0 || strcmp(configuredToken, gConfig.fallbackToken) != 0) {
         snprintf(configuredUrl, sizeof(configuredUrl), "%s", gConfig.fallbackUrl);
         snprintf(configuredToken, sizeof(configuredToken), "%s", gConfig.fallbackToken);
         ++generation;
-        gLastFallbackSuccessAt = 0;
+        if (!gUsingTryvohaFallback) gLastFallbackSuccessAt = 0;
         attempted = false;
+        primaryFailed = false;
     }
     FallbackHttpResult response;
-    if (fallbackHttpTakeResult(response) && response.generation == generation && strcmp(response.url, configuredUrl) == 0 && configuredUrl[0]) {
-        gFallbackHttpStatus = response.status;
+    if (fallbackHttpTakeResult(response) && response.generation == generation &&
+        ((configuredUrl[0] && strcmp(response.url, configuredUrl) == 0) || strcmp(response.url, tryvoha::URL) == 0)) {
+        const bool isTryvoha = strcmp(response.url, tryvoha::URL) == 0;
+        if (isTryvoha) gTryvohaHttpStatus = response.status;
+        else gFallbackHttpStatus = response.status;
         AlertState states[REGIONS_COUNT];
-        if (response.status == 200 && fallbackContract::parseStates(response.body, states, REGIONS_COUNT)) {
+        bool valid = false;
+        if (response.status == 200) {
+            if (isTryvoha && tryvoha::fresh(response.updatedAt, time(nullptr))) {
+                memcpy(states, response.tryvohaStates, sizeof(response.tryvohaStates));
+                states[24] = gMqttAlerts[24]; // No Crimea data: retain its last known state.
+                valid = true;
+            } else if (!isTryvoha) valid = fallbackContract::parseStates(response.body, states, REGIONS_COUNT);
+        }
+        if (!isTryvoha) primaryFailed = !valid;
+        if (valid) {
             // A delayed HTTP response must never overwrite a recovered MQTT stream.
             if (!alertsMqttFresh(now)) {
                 for (int i = 0; i < REGIONS_COUNT; ++i) {
@@ -706,18 +726,29 @@ void alertsFallbackTick() {
                 gFetchOk = true;
                 gUsingFallbackSnapshot = false;
                 gUsingHttpFallback = true;
+                gUsingTryvohaFallback = isTryvoha;
+                if (isTryvoha) gTryvohaUpdatedAt = response.updatedAt;
                 gLastFallbackSuccessAt = now;
                 _mqttSnapshotDirty = _mqttSnapshotDirty || !_mqttSnapshotSaved;
             }
         } else {
             ++gFallbackErrors;
-            LOG_WARN(LOG_CAT_INTERNET, "Reserve rejected, HTTP=%d; retaining state", response.status);
+            LOG_WARN(LOG_CAT_INTERNET, "%s rejected, HTTP=%d; retaining state", isTryvoha ? "Tryvoha" : "Reserve", response.status);
         }
     }
-    if (!configuredUrl[0] || WiFi.status() != WL_CONNECTED || alertsMqttFresh(now) || fallbackHttpBusy()) return;
-    if (attempted && now - lastAttemptAt < fallbackContract::POLL_MS) return;
-    attempted = true;
-    lastAttemptAt = now;
-    if (fallbackHttpStart(configuredUrl, configuredToken, generation)) ++gFallbackRequests;
-    else ++gFallbackErrors;
+    if (WiFi.status() != WL_CONNECTED || alertsMqttFresh(now) || fallbackHttpBusy()) return;
+    if (configuredUrl[0] && (!attempted || now - lastAttemptAt >= fallbackContract::POLL_MS)) {
+        attempted = true;
+        lastAttemptAt = now;
+        if (fallbackHttpStart(configuredUrl, configuredToken, generation)) ++gFallbackRequests;
+        else { ++gFallbackErrors; primaryFailed = true; }
+        return;
+    }
+    if ((!configuredUrl[0] || primaryFailed) &&
+        (!tryvohaAttempted || now - lastTryvohaAttemptAt >= fallbackContract::POLL_MS)) {
+        tryvohaAttempted = true;
+        lastTryvohaAttemptAt = now;
+        if (fallbackHttpStart(tryvoha::URL, "", generation)) ++gFallbackRequests;
+        else ++gFallbackErrors;
+    }
 }

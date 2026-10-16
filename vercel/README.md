@@ -4,6 +4,12 @@ Installer/flasher UI for deploying AlarmMini from GitHub Releases on Vercel.
 
 Production URL: [alarmmini.vercel.app](https://alarmmini.vercel.app)
 
+The installer shows the current release's changes and a read-only history in
+Ukrainian and English. Installation still uses only GitHub's latest stable release.
+For each firmware release, add a dated entry to `app/release-history.json` and
+publish matching notes from `documentation/releases/`. The release-history test
+checks that the firmware version has notes before it can be published.
+
 ## What it does
 
 The main flow has three steps: select the board and installation mode, connect USB, and start writing. Updating with configuration preservation is the default. A first installation requires a separate acknowledgement that settings will be erased. Unsupported browsers receive desktop Chrome/Edge instructions and cannot start writing.

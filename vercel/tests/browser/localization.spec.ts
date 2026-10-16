@@ -108,7 +108,7 @@ async function mockDevice(page: import('@playwright/test').Page, authenticated =
       writes.push(structuredClone(storedConfig));
       return route.fulfill({ body: 'OK' });
     }
-    if (url.pathname === '/health') return route.fulfill({ json: { wifiConnected: true, mqttConnected: true, alertsFresh: true } });
+    if (url.pathname === '/health') return route.fulfill({ json: { wifiConnected: true, mqttConnected: true, alertsSource: 'mqtt', alertsFresh: true } });
     if (url.pathname === '/api/alerts') return route.fulfill({ json: Array(25).fill(0) });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { ok: true } });
     const file = path.join(webRoot, url.pathname === '/' ? 'index.html' : url.pathname);
@@ -117,14 +117,15 @@ async function mockDevice(page: import('@playwright/test').Page, authenticated =
   return { writes };
 }
 
-test('device fallback loads from config, survives edits and reload, and clears only on request', async ({ page }) => {
+test('device source indicator replaces fallback fields and preserves stored fallback credentials', async ({ page }) => {
   const { writes } = await mockDevice(page);
   await page.goto('http://device.test/');
   await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
   await page.locator('[data-tab="mqtt"]').click();
   await expect(page.locator('#mqttHost')).toHaveValue('saved.example.com');
-  await expect(page.locator('#fallbackUrl')).toHaveValue('https://reserve.example/status');
-  await expect(page.locator('#fallbackToken')).toHaveValue('saved-test-token');
+  await expect(page.locator('#fallbackUrl, #fallbackToken')).toHaveCount(0);
+  await expect(page.locator('#sourceMqtt')).toHaveClass(/is-active/);
+  await expect(page.locator('#dataSourceStatus')).toHaveText('Активне джерело: MQTT');
   await expect(page.locator('#saveBtn')).toBeHidden();
 
   // Saving another section must not silently erase a previously configured fallback.
@@ -136,29 +137,22 @@ test('device fallback loads from config, survives edits and reload, and clears o
   expect(writes[0].ft).toBe('saved-test-token');
 
   await page.locator('[data-tab="mqtt"]').click();
-  await page.locator('#fallbackUrl').fill('https://new.example/alerts');
-  await page.locator('#fallbackToken').fill('new-test-token');
+  await page.locator('#mqttHost').fill('new.example.com');
   await page.locator('.sidebar [data-locale="en"]').click();
-  await expect(page.locator('#fallbackToken')).toHaveValue('new-test-token');
+  await expect(page.locator('[data-tab="mqtt"]')).toHaveText('Data sources');
+  await expect(page.locator('#dataSourceStatus')).toHaveText('Active source: MQTT');
+  await expect(page.locator('#mqttHost')).toHaveValue('new.example.com');
   await page.locator('#saveBtn').click();
   await expect.poll(() => writes.length).toBe(2);
-  expect(writes[1].fu).toBe('https://new.example/alerts');
-  expect(writes[1].ft).toBe('new-test-token');
+  expect(writes[1].fu).toBe('https://reserve.example/status');
+  expect(writes[1].ft).toBe('saved-test-token');
+  expect(writes[1].m.h).toBe('new.example.com');
   await page.reload();
   await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
   await page.locator('[data-tab="mqtt"]').click();
-  await expect(page.locator('#fallbackUrl')).toHaveValue('https://new.example/alerts');
-  await expect(page.locator('#fallbackToken')).toHaveValue('new-test-token');
+  await expect(page.locator('#mqttHost')).toHaveValue('new.example.com');
+  await expect(page.locator('#fallbackUrl, #fallbackToken')).toHaveCount(0);
   await expect(page.locator('#saveBtn')).toBeHidden();
-  await page.locator('#fallbackUrl').fill('');
-  await page.locator('#saveBtn').click();
-  await expect.poll(() => writes.length).toBe(3);
-  expect(writes[2].fu).toBe(''); expect(writes[2].ft).toBe('');
-  await page.reload();
-  await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
-  await page.locator('[data-tab="mqtt"]').click();
-  await expect(page.locator('#fallbackUrl')).toHaveValue('');
-  await expect(page.locator('#fallbackToken')).toHaveValue('');
 });
 
 test('device language control shares the brand row on desktop and mobile', async ({ page }) => {

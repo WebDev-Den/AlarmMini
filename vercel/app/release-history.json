@@ -1,0 +1,67 @@
+[
+  {
+    "version": "2.1.6", "date": "2026-10-16",
+    "ua": [
+      "Автоматичне отримання даних від Tryvoha.online, коли MQTT і власний резервний API недоступні.",
+      "Єдині з MQTT коди 0–5: відбій, червона або оранжева вся область, змішана тривога та часткова тривога.",
+      "Вкладка «Джерела даних» у панелі плати: активне MQTT або Tryvoha підсвічується зеленим. Поля резервного URL і токена прибрано з цієї панелі.",
+      "Історія оновлень на сайті. Під час оновлення зберігаються власні кольори, яскравість, нічний режим, часовий пояс та прив’язка LED."
+    ],
+    "en": [
+      "Automatic data from Tryvoha.online when MQTT and the custom fallback API are unavailable.",
+      "MQTT-compatible codes 0–5: clear, whole-oblast red or orange, mixed alerts and partial alerts.",
+      "The device dashboard now has a Data sources tab. Active MQTT or Tryvoha is highlighted green; fallback URL and token fields were removed from this dashboard.",
+      "Release history on the website. Updating preserves custom colors, brightness, night mode, time zone and LED mapping."
+    ]
+  },
+  {
+    "version": "2.1.5", "date": "2026-09-22",
+    "ua": ["Пошук часового поясу за країною чи містом, визначення з браузера та автоматичний літній/зимовий час.", "Виправлено збереження резервного URL і токена. Додано двомовний посібник PDF і завантаження початкової конфігурації."],
+    "en": ["Time-zone search by country or city, browser detection and automatic daylight saving.", "Fixed fallback URL and token persistence. Added a bilingual PDF guide and a downloadable default configuration."]
+  },
+  {
+    "version": "2.1.4", "date": "2026-09-22",
+    "ua": ["Українська й англійська мови на сайті, у панелі плати та налаштуванні Wi-Fi.", "Поліпшено мобільне компонування. Додано початковий профіль із шістьма станами для нових плат."],
+    "en": ["Ukrainian and English on the website, device dashboard and Wi-Fi setup.", "Improved mobile layouts. Added the six-state default profile for new devices."]
+  },
+  {
+    "version": "2.1.3", "date": "2026-09-08",
+    "ua": ["Колір будь-якого стану пульсує 30 секунд після зміни, зокрема при переходах між додатковими станами.", "Повторні повідомлення не перезапускають ефект; враховуються нічні обмеження яскравості та пульсації."],
+    "en": ["Every state color pulses for 30 seconds after a change, including transitions between custom states.", "Repeated messages do not restart the effect; night brightness and pulse settings are respected."]
+  },
+  {
+    "version": "2.1.2", "date": "2026-09-08",
+    "ua": ["Текстове введення RGBA окремо для денного та нічного кольору кожного стану.", "Синхронізація з палітрою й повзунком яскравості; перевірка введених значень перед збереженням."],
+    "en": ["RGBA text input for each state's day and night colors.", "Color picker and brightness slider synchronization, with input validation before saving."]
+  },
+  {
+    "version": "2.1.1", "date": "2026-09-08",
+    "ua": ["Компактніші налаштування кольорів, нічного режиму й MQTT у панелі плати.", "Збережено наявне компонування калібрування світлодіодів."],
+    "en": ["More compact color, night-mode and MQTT settings in the device dashboard.", "Preserved the existing LED calibration layout."]
+  },
+  {
+    "version": "2.1.0", "date": "2026-09-08",
+    "ua": ["Коди станів 0–255 через MQTT і HTTP, власні денні й нічні кольори для додаткових станів.", "Підтримка full_v2, імпорту та експорту палітри. Звукові функції прибрано."],
+    "en": ["State codes 0–255 over MQTT and HTTP, with custom day and night colors for additional states.", "Support for full_v2 and palette import/export. Audio features removed."]
+  },
+  {
+    "version": "2.0.9", "date": "2026-09-07",
+    "ua": ["Авторизація резервного API за Bearer-токеном і перевірка сумісності під час оновлення."],
+    "en": ["Bearer-token authentication for the fallback API and compatibility checks during updates."]
+  },
+  {
+    "version": "2.0.8", "date": "2026-09-07",
+    "ua": ["Інтервал опитування резервного API змінено на 30 секунд."],
+    "en": ["Changed the fallback API polling interval to 30 seconds."]
+  },
+  {
+    "version": "2.0.7", "date": "2026-09-07",
+    "ua": ["Власне резервне джерело HTTP/HTTPS на випадок втрати MQTT та його налаштування в інсталяторі."],
+    "en": ["Custom HTTP/HTTPS fallback when MQTT is unavailable, with setup in the installer."]
+  },
+  {
+    "version": "2.0.6", "date": "2026-09-07",
+    "ua": ["Покращення стабільності Wi-Fi, MQTT і відновлення збережених налаштувань.", "Покроковий інсталятор з перевіркою конфігурації після запису."],
+    "en": ["Improved Wi-Fi, MQTT and saved-settings recovery.", "Guided installer with configuration verification after flashing."]
+  }
+]

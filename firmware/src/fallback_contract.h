@@ -19,7 +19,7 @@ inline bool validToken(const char *token) {
 }
 
 inline bool validUrl(const char *url) {
-    if (!url || !*url) return true; // Empty disables the reserve.
+    if (!url || !*url) return true; // Empty disables only the custom reserve.
     if (strlen(url) >= URL_CAPACITY) return false;
     const char *host = nullptr;
     if (strncmp(url, "https://", 8) == 0) host = url + 8;

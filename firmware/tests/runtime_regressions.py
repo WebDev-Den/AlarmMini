@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import sys
 
 
 def definition(source, name):
@@ -86,7 +87,7 @@ def main():
                 raise SystemExit("g++ or clang++ is required")
             subprocess.run([compiler, "-m32", "-std=c++17", *[f"-I{p}" for p in include],
                             str(tests / "runtime_regressions.cpp"), "-o", str(executable)], cwd=build, check=True)
-        subprocess.run([str(executable)], cwd=build, check=True)
+        subprocess.run([str(executable), *sys.argv[1:]], cwd=build, check=True)
 
 
 if __name__ == "__main__":
