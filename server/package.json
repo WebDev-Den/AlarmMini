@@ -1,0 +1,17 @@
+{
+  "name": "alarmmini-server",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "description": "UkraineAlarm AIR levels to AlarmMini MQTT and HTTP",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/main.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "mqtt": "5.15.2"
+  }
+}

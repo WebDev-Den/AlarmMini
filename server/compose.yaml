@@ -1,0 +1,16 @@
+services:
+  alarmmini:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+    ports:
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-3000}:3000"
+    volumes:
+      - alarmmini-runtime:/app/runtime
+      - ./keys:/app/keys:ro
+
+volumes:
+  alarmmini-runtime:

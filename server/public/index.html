@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>AlarmMini · Сервер</title>
+  <script src="/admin/theme.js"></script>
+  <link rel="stylesheet" href="/admin/style.css">
+  <script src="/admin/app.js" defer></script>
+</head>
+<body>
+  <a href="#main" class="skip-link">До вмісту</a>
+  <aside class="sidebar">
+    <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M5 24L16 6l11 18M10 18h12M16 22v5"/></svg></span><span>AlarmMini<small>Центр керування</small></span></a>
+    <nav id="navigation" role="tablist" aria-label="Розділи сервера" aria-orientation="vertical" hidden><button id="overview-tab" role="tab" aria-selected="true" aria-controls="overview-panel" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg>Огляд</button>
+<button id="alerts-tab" role="tab" aria-selected="false" aria-controls="alerts-panel" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L2 21h20L12 3z M12 9v5 M12 17v1"/></svg>Тривоги</button>
+<button id="resources-tab" role="tab" aria-selected="false" aria-controls="resources-panel" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Ресурси</button>
+<button id="connections-tab" role="tab" aria-selected="false" aria-controls="connections-panel" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h8v8H8z M12 2v6 M2 12h6 M16 12h6 M12 16v6"/></svg>Підключення</button>
+<button id="duckdns-tab" role="tab" aria-selected="false" aria-controls="duckdns-panel" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4z M7 4h10 M7 20h10 M8 11h8 M8 14h4"/></svg>DuckDNS</button>
+<button id="logs-tab" role="tab" aria-selected="false" aria-controls="logs-panel" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5z M8 7h8 M8 11h8 M8 15h5"/></svg>Журнал</button></nav>
+    <div class="sidebar-bottom"><div class="sidebar-note">Стан карти та доставка даних<br><span>UkraineAlarm / AIR</span></div>
+    <button id="theme-toggle" class="theme-toggle" aria-pressed="false">Темна тема</button>
+    <div id="account" hidden><span id="username"></span><button id="logout" class="quiet">Вийти</button></div>
+    <span class="version">Server 1.4.0</span></div>
+  </aside>
+  <main id="main" tabindex="-1">
+    <header class="topbar"><div><p class="page-context">Локальна панель сервера</p><h1 id="page-title">Огляд</h1></div><div class="sync"><span id="connection-badge" class="pill">Очікуємо дані</span><span id="panel-sync" class="hint">Оновлення кожні 5 с</span></div></header>
+    <div id="message" role="status" aria-live="polite" hidden></div>
+    <p id="panel-sync-error" class="diagnostic-error" role="alert" hidden></p>
+        <section id="login" class="login card" hidden>
+
+      <h1>Вхід до AlarmMini</h1>
+      <p class="muted">Використай логін і пароль, задані в <code>.env</code>.</p>
+      <form id="login-form">
+        <label for="login-name">Логін</label><input id="login-name" name="username" autocomplete="username" required maxlength="256">
+        <label for="login-password">Пароль</label><input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="1024">
+        <button type="submit" class="primary wide">Увійти</button>
+      </form>
+    </section>
+
+    <div id="workspace" hidden>
+      <section id="overview-panel" role="tabpanel" aria-labelledby="overview-tab">
+        <div class="overview-grid">
+          <section class="map-card card" aria-labelledby="map-title">
+            <div class="section-heading"><div><h2 id="map-title">Карта тривог</h2><p class="hint">25 регіонів · лише повітряні загрози</p></div><span id="map-status" class="pill">Немає даних</span></div>
+            <p id="map-empty" class="diagnostic-error">Очікуємо перший коректний знімок.</p>
+            <div id="map-host" class="map-host" aria-label="Карта областей України"></div>
+            <p id="map-load-error" class="diagnostic-error" hidden>Не вдалося завантажити карту. Стани доступні в розділі «Тривоги».</p>
+            <div id="map-selection" class="map-selection" aria-live="polite">Наведи на область або обери її, щоб побачити стан.</div>
+            <p class="map-caption">Штрихування позначає частковий або змішаний стан, а не межі районів. Київ об’єднано з областю, Севастополь — із Кримом.</p>
+          </section>
+          <section class="state-summary card" aria-labelledby="summary-title"><h2 id="summary-title">Зараз на карті</h2><div class="active-total"><strong id="active-count">—</strong><span>регіонів з активним<br>станом AIR</span></div><div id="state-counts" class="state-counts"></div><p id="summary-freshness" class="hint">Очікуємо дані.</p><button class="secondary wide" data-section="alerts">Статистика тривог</button></section>
+        </div>
+        <section class="resource-strip" aria-label="Коротко про сервер"><div><span>CPU процесу</span><strong id="quick-cpu">—</strong></div><div><span>RAM процесу</span><strong id="quick-memory">—</strong></div><div><span>Запити API успішно</span><strong id="quick-api">—</strong></div><button class="quiet" data-section="resources">Докладно про ресурси</button></section>
+              <section class="health" aria-label="Стан сервера">
+        <div><span class="muted">Дані UkraineAlarm</span><strong id="freshness">Перевіряємо…</strong><p id="data-age" class="hint">—</p></div>
+        <div><span class="muted">MQTT</span><strong id="mqtt">—</strong><p id="mqtt-detail" class="hint">—</p></div>
+        <div><span class="muted">Останнє успішне оновлення API</span><strong id="updated">—</strong><p id="update-source" class="hint">—</p></div>
+        <div><span class="muted">Остання зміна станів карти</span><strong id="changed">—</strong></div>
+        <div><span class="muted">Доставка webhook</span><strong id="webhook-health">—</strong><p id="webhook-health-detail" class="hint">—</p></div>
+        <div><span class="muted">Сервер працює</span><strong id="uptime">—</strong><p id="started-at" class="hint">—</p></div>
+      </section>
+
+      </section>
+      <section id="alerts-panel" role="tabpanel" aria-labelledby="alerts-tab" hidden>
+        <section class="card"><div class="section-heading"><h2>Спостереження за тривогами</h2><span id="stats-since" class="hint">Від першого знімка</span></div>
+          <div class="stat-line"><div><span>Початки активного AIR</span><strong id="alarm-starts">—</strong></div><div><span>Зафіксовані відбої</span><strong id="alarm-clears">—</strong></div><div><span>Зміни карти</span><strong id="alarm-changes">—</strong></div><div><span>Максимум активних регіонів</span><strong id="alarm-peak">—</strong></div></div>
+          <p class="hint">Від запуску сервера. Початок — перехід 0 → 1–5. Перший знімок і відновлення після перерви не рахуються як початки. Це локальні спостереження, а не повна історія UkraineAlarm.</p><p id="alarm-gaps" class="hint"></p>
+          <div class="table-scroll"><table class="region-table"><thead><tr><th>Регіон</th><th>Стан</th><th>Початки</th><th>Відбої</th><th>Зміни</th><th>Остання зміна</th></tr></thead><tbody id="regions"></tbody></table></div>
+        </section>
+        <section class="card timeline-card"><h2>Останні зміни станів</h2><p class="hint">До 80 переходів між послідовними свіжими знімками.</p><div id="alert-events" class="alert-events"></div></section>
+      </section>
+      <section id="resources-panel" role="tabpanel" aria-labelledby="resources-tab" hidden>
+        <section class="card"><div class="section-heading"><h2>Навантаження сервера</h2><span id="resource-time" class="hint">Оновлення кожні 10 с</span></div>
+          <div class="stat-line"><div><span>CPU Node.js</span><strong id="cpu-value">—</strong><small>100% = одне ядро</small></div><div><span>RAM Node.js (RSS)</span><strong id="memory-value">—</strong><small>Фізична пам’ять процесу</small></div><div><span>Пам’ять JS</span><strong id="heap-value">—</strong><small id="heap-total">—</small></div><div><span>Затримка циклу подій</span><strong id="loop-value">—</strong><small>Середня за інтервал</small></div></div>
+          <div class="chart-grid"><figure><figcaption>CPU процесу, %</figcaption><svg id="cpu-chart" viewBox="0 0 600 150" role="img" aria-label="Історія CPU процесу"></svg><p class="hint chart-range" id="cpu-range">Збираємо вимірювання…</p></figure><figure><figcaption>RAM процесу, MiB</figcaption><svg id="memory-chart" viewBox="0 0 600 150" role="img" aria-label="Історія RAM процесу"></svg><p class="hint chart-range" id="memory-range">Збираємо вимірювання…</p></figure></div>
+          <p class="hint">До 60 вимірювань, приблизно 10 хвилин. Зберігаються в пам’яті й починаються заново після перезапуску.</p>
+        </section>
+        <div class="columns resource-details"><section class="card"><h2>Система</h2><dl class="diagnostic-facts"><div><dt id="system-memory-label">Пам’ять системи</dt><dd id="system-memory">—</dd></div><div><dt>Доступно CPU / квота</dt><dd id="system-cpu">—</dd></div><div><dt>Load average, 1 / 5 / 15 хв</dt><dd id="system-load">—</dd></div><div><dt>Вільно на диску runtime</dt><dd id="system-disk">—</dd></div></dl><p class="hint">У LXC з доступними лімітами cgroup v2 показується пам’ять контейнера. Інакше — пам’ять хоста. Load average належить хосту.</p></section><section class="card"><h2>Доставка даних</h2><dl class="diagnostic-facts"><div><dt>Успішні цикли оновлення</dt><dd id="api-successes">—</dd></div><div><dt>Невдалі цикли</dt><dd id="api-failures">—</dd></div><div><dt>Останній цикл оновлення</dt><dd id="api-duration">—</dd></div><div><dt>Прийнято webhook</dt><dd id="resource-hooks">—</dd></div></dl><p class="hint">Лічильники від запуску. Недоступна метрика позначається «—» й не впливає на отримання тривог.</p></section></div>
+      </section>
+      <section id="connections-panel" role="tabpanel" aria-labelledby="connections-tab" hidden>      <div class="columns">
+        <section class="card">
+          <h2>Публічний доступ</h2>
+          <form id="settings-form">
+            <label for="public-base">Публічна адреса сервера</label>
+            <div class="input-action"><input id="public-base" name="publicBaseUrl" type="url" placeholder="https://alarm.example.com" required><button type="submit" class="primary">Зберегти</button></div>
+            <p class="hint">HTTPS-домен із Cloudflare Tunnel, без <code>/public</code> у кінці.</p>
+          </form>
+          <div class="endpoint">
+            <label for="status-url"><span class="method">GET</span> Статус карти</label>
+            <input id="status-url" readonly placeholder="Спочатку збережи публічну адресу">
+            <div class="actions"><button id="copy-status" class="secondary">Копіювати URL</button><button id="copy-status-token" class="secondary">Копіювати з токеном</button></div>
+            <p class="hint">Масив із 25 станів. Для прошивки можна передавати токен у заголовку <code>Authorization: Bearer …</code>.</p>
+          </div>
+          <div class="endpoint">
+            <label for="webhook-url"><span class="method">POST</span> Вхідний webhook</label>
+            <input id="webhook-url" readonly placeholder="Потрібні публічна адреса й WEBHOOK_TOKEN">
+            <div class="actions"><button id="copy-webhook" class="secondary">Копіювати з токеном</button></div>
+            <p class="hint">Посилання містить окремий токен. Додатково перевіряється підпис UkraineAlarm.</p>
+          </div>
+        </section>
+        <section class="card">
+          <h2>Webhook UkraineAlarm</h2>
+          <p class="muted">Спочатку перевір адресу. Перед реєстрацією та оновленням сервер повторно перевірить доставку POST і наявність ключа підпису.</p>
+          <div class="preflight-box">
+            <div class="section-heading"><strong>Перевірка публічної адреси</strong><button id="check-webhook" class="secondary">Перевірити адресу</button></div>
+            <p id="preflight-status" class="hint">Перевірку ще не виконано.</p>
+            <p class="hint">Тест перевіряє HTTPS, маршрут і токен. Він не змінює карту чи підписку і не є подією UkraineAlarm.</p>
+          </div>
+          <div class="registration"><span id="registration-label" class="pill">Немає збереженої реєстрації</span><p id="registration-info" class="hint">—</p></div>
+          <div class="actions webhook-actions">
+            <button id="register" class="primary">Зареєструвати</button><button id="update" class="secondary">Оновити</button><button id="remove" class="quiet danger">Відписатися</button>
+          </div>
+          <div class="key-row"><div><strong>Перевірка підпису</strong><p id="key-status" class="hint">—</p></div><button id="update-key" class="secondary">Оновити ключ</button></div>
+          <p id="key-fingerprint" class="hint key-fingerprint" hidden></p>
+          <p class="hint">Якщо Cloudflare блокує автоматичне завантаження, відкрий <a href="https://api.ukrainealarm.com/webhook-public.pem" target="_blank" rel="noopener noreferrer">офіційний публічний ключ</a> у браузері та збережи файл. Завантаж сюди саме цей файл; власний ключ не підходить.</p>
+          <label for="key-file">Файл публічного RSA-ключа UkraineAlarm (.pem)</label>
+          <input id="key-file" type="file" accept=".pem,.pub,text/plain">
+          <div class="actions"><button id="import-key" class="secondary" disabled>Зберегти ключ із файлу</button></div>
+          <p class="hint">Реальні webhook завжди потребують правильного підпису. Планове опитування API працює і без webhook.</p>
+          <div class="tunnel-note"><strong>Cloudflare Tunnel</strong><p>Відкрий назовні лише шлях <code>^/public/.*$</code>. Локальна панель і її налаштування доступні через адресу сервера у твоїй мережі.</p></div>
+        </section>
+      </div>
+</section>
+            <section id="duckdns-panel" role="tabpanel" aria-labelledby="duckdns-tab" hidden>
+        <div class="columns">
+          <section class="card">
+            <h2>Постійна адреса сервера</h2>
+            <p class="muted">Сервер перевіряє IPv4 і оновлює DuckDNS, коли адреса змінилася.</p>
+            <form id="duckdns-form">
+              <label for="duckdns-domain">Домен DuckDNS</label>
+              <input id="duckdns-domain" name="duckdnsDomain" placeholder="alarm-mqtt.duckdns.org" maxlength="76" autocomplete="off" spellcheck="false">
+              <p class="hint">Введи коротке ім’я або повну адресу без http:// і порту. Домен має вже існувати у твоєму акаунті DuckDNS.</p>
+              <label for="duckdns-token">Токен DuckDNS</label>
+              <input id="duckdns-token" name="duckdnsToken" type="password" maxlength="128" autocomplete="new-password" spellcheck="false" aria-describedby="duckdns-token-hint">
+              <p id="duckdns-token-hint" class="hint">Токен ще не збережено.</p>
+              <label class="check-label"><input id="duckdns-clear-token" type="checkbox"> Видалити збережений токен</label>
+              <label for="duckdns-ipv4">Власний IPv4 (необов’язково)</label>
+              <input id="duckdns-ipv4" name="duckdnsIpv4" placeholder="Автоматично визначати зовнішній IPv4" maxlength="15" autocomplete="off" spellcheck="false">
+              <p class="hint">Порожнє поле — зовнішній IPv4 цього сервера через ipify. Якщо MQTT-брокер в іншій мережі, вкажи його публічний IPv4 вручну. Змінюється лише IPv4-запис.</p>
+              <label for="duckdns-interval">Інтервал перевірки, хвилин</label>
+              <input id="duckdns-interval" type="number" min="1" max="1440" step="1" value="5" required>
+              <label class="check-label"><input id="duckdns-enabled" type="checkbox"> Автоматично оновлювати IPv4</label>
+              <p class="hint">Після ввімкнення й збереження сервер одразу перевірить адресу, а далі — за розкладом. Якщо IPv4 збігається, запит оновлення не надсилається.</p>
+              <button id="duckdns-save" type="submit" class="primary">Зберегти налаштування</button>
+            </form>
+          </section>
+          <section class="card">
+            <h2>Стан DuckDNS</h2>
+            <span id="duckdns-status" class="pill" role="status">Ще не налаштовано</span>
+            <p id="duckdns-mode" class="hint">Автоматичне оновлення вимкнено.</p>
+            <dl class="diagnostic-facts duckdns-facts">
+              <div><dt>Домен</dt><dd id="duckdns-hostname">—</dd></div>
+              <div><dt>Потрібний IPv4</dt><dd id="duckdns-expected-ip">—</dd></div>
+              <div><dt>IPv4 з останньої DNS-перевірки</dt><dd id="duckdns-dns-ip">—</dd></div>
+              <div><dt>Остання перевірка</dt><dd id="duckdns-checked">—</dd></div>
+              <div><dt>DuckDNS підтвердив запит</dt><dd id="duckdns-success">—</dd></div>
+              <div><dt>Остання зміна запису</dt><dd id="duckdns-updated">—</dd></div>
+              <div><dt>Наступна автоматична перевірка</dt><dd id="duckdns-next">—</dd></div>
+            </dl>
+            <p id="duckdns-error" class="diagnostic-error" role="alert" hidden></p>
+            <p id="duckdns-unsaved" class="hint" hidden>Спочатку збережи зміни, щоб перевірити саме ці налаштування.</p>
+            <div class="actions"><button id="duckdns-check" class="secondary">Перевірити без змін</button><button id="duckdns-update" class="primary">Оновити зараз</button></div>
+            <p class="hint">«Перевірити» лише порівнює адреси й не перевіряє токен. «Оновити зараз» надсилає запит у DuckDNS навіть при збігу IP та перевіряє доступ. DNS-кеші можуть оновитися із затримкою.</p>
+            <div class="tunnel-note"><strong>Один механізм оновлення</strong><p>Вимкни попередній updater DuckDNS на роутері чи іншому сервері, якщо він може записувати інший IP. Це оновлення адреси, а не автоматичне перемикання на резервний сервер.</p></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="logs-panel" role="tabpanel" aria-labelledby="logs-tab" hidden>      <section class="card diagnostics-card" aria-labelledby="diagnostics-title">
+        <div class="section-heading"><h2 id="diagnostics-title">Події та діагностика</h2></div>
+
+        <dl class="diagnostic-facts">
+          <div><dt>Остання спроба запиту API</dt><dd id="api-attempt">—</dd></div>
+          <div><dt>Останнє надсилання карти в MQTT</dt><dd id="mqtt-published">—</dd></div>
+          <div><dt>Останній вхідний webhook</dt><dd id="hook-received">Ще не надходив</dd></div>
+          <div><dt>Останній webhook з правильним підписом</dt><dd id="hook-accepted">Ще не надходив</dd></div>
+        </dl>
+        <p id="hook-counts" class="hint">Лічильники від запуску сервера.</p>
+        <p id="diagnostic-problems" class="diagnostic-error" hidden></p>
+        <div class="log-toolbar">
+          <div><h3>Журнал подій</h3><p class="hint">Останні 200 записів. Очищення діє лише на журнал панелі; файли PM2 та статистика зберігаються.</p></div>
+          <div class="log-controls"><label for="log-level">Показати</label><select id="log-level"><option value="all">Усі події</option><option value="error">Помилки</option><option value="warn">Попередження</option><option value="info">Інформація</option></select><button id="pause-logs" class="secondary" aria-pressed="false">Пауза журналу</button><button id="clear-logs" class="secondary danger">Очистити журнал</button></div>
+        </div>
+        <p id="logs-cleared" class="hint" hidden></p>
+        <div class="log-scroll" role="region" aria-label="Журнал подій сервера" tabindex="0">
+          <table class="log-table"><thead><tr><th scope="col">Час</th><th scope="col">Рівень / джерело</th><th scope="col">Подія</th></tr></thead><tbody id="logs"></tbody></table>
+          <p id="logs-empty" class="hint">Подій поки немає.</p>
+        </div>
+      </section>
+</section>
+    </div>
+    <footer><span>AlarmMini Server 1.4.0</span><span>Локальне керування · Україна</span></footer>
+  </main>
+</body>
+</html>
