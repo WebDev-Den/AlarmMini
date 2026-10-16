@@ -250,6 +250,7 @@ function isSafeBackupConfig(cfg: any) {
 
 function sanitizeLogLine(raw: string) {
   const normalized = raw
+    .replace(/([?&]token=)[^&\s"'<>\\]*/gi, "$1***")
     .replace(/\t/g, "    ")
     .replace(/[^\u000A\u000D\u0020-\u007E\u00A0-\u024F\u0400-\u04FF]/g, "�");
   const maxLen = 420;
@@ -457,7 +458,6 @@ export default function Page() {
   const [mqttHost, setMqttHost] = useState("");
   const [fallbackUrl, setFallbackUrl] = useState("");
   const [fallbackToken, setFallbackToken] = useState("");
-  const [installFallbackToken, setInstallFallbackToken] = useState("");
   const [fallbackSaving, setFallbackSaving] = useState(false);
   const [installFallbackUrl, setInstallFallbackUrl] = useState("");
   const [mqttPort, setMqttPort] = useState("");
@@ -1414,9 +1414,7 @@ export default function Page() {
     if (freshConfig && !supportsMultiState(selectedRelease?.tag_name ?? "")) throw new Error("Для шаблону UkraineAlarm AIR · 6 станів вибери прошивку 2.1.0 або новішу.");
     if (freshConfig && buildConfigValidationErrors(freshConfig).length) throw new Error("Шаблон налаштувань некоректний. Запис не розпочато.");
     const reserveUrl = normalizeFallbackUrl(installFallbackUrl);
-    const reserveToken = normalizeFallbackToken(installFallbackToken);
-    if (reserveToken && !reserveUrl) throw new Error("Вкажи резервний URL разом із токеном або очисти поле токена.");
-    if (reserveToken && !supportsFallbackToken(selectedRelease?.tag_name ?? "")) throw new Error("Для токена резервного API вибери прошивку 2.0.9 або новішу.");
+    const reserveToken = "";
     if (reserveUrl && !supportsFallback(selectedRelease?.tag_name ?? "")) throw new Error("Для резервного API вибери прошивку 2.0.7 або новішу.");
     if (!serialSupported || !canFlash || !manifest) throw new Error("Спочатку вибери плату та доступну версію прошивки.");
     if (!restoreSettings && !freshInstallConfirmed) throw new Error("Підтвердь перше встановлення: поточні налаштування буде видалено.");
@@ -1638,8 +1636,8 @@ export default function Page() {
               <p className="hint">{t("У прошивці від 2.1.3 колір будь-якого стану пульсує 30 секунд після зміни. Уночі враховуються налаштування пульсації та яскравості.")}</p>
             </div>
             <details className="reserve-settings"><summary>{t("Резервний канал даних") + " "}<span>{t("Необов’язково")}</span></summary>
-              <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} token={installFallbackToken} onTokenChange={setInstallFallbackToken} firmwareVersion={selectedRelease?.tag_name} disabled={flashBusy || waitActive || fallbackSaving} />
-              <p className="hint">{t("JSON-масив із 25 чисел у порядку областей MQTT: 0/1 для старих прошивок, 0–255 починаючи з 2.1.0. Опитування кожні 30 секунд при втраті MQTT або відсутності повідомлень понад 90 секунд.")}</p>
+              <FallbackUrlField id="install-fallback-url" value={installFallbackUrl} onChange={setInstallFallbackUrl} firmwareVersion={selectedRelease?.tag_name} disabled={flashBusy || waitActive || fallbackSaving} />
+              <p className="hint">{t("Від v2.1.7: MQTT → Tryvoha → власний URL. Власне джерело опитується кожні 30 секунд, коли перші два недоступні; відповідь — JSON-масив із 25 кодів 0–255 у порядку MQTT.")}</p>
               <p className="hint">{t("Порожнє поле збереже наявну адресу під час оновлення. Потрібна прошивка 2.0.7 або новіша.")}</p>
               <a className="hint" href={`${GITHUB_REPO_URL}/blob/main/documentation/http-fallback.md`} target="_blank" rel="noreferrer">{t("Порядок областей і приклад відповіді ↗")}</a>
             </details>
@@ -1836,7 +1834,7 @@ export default function Page() {
               <div className="row gap">
                 <button className="btn" disabled={flashBusy || portState !== "connected"} onClick={() => void cmdSetMqtt().catch(showActionError)}>{" " + t("Зберегти MQTT") + " "}</button>
               </div>
-              <FallbackUrlField id="fallback-url" value={fallbackUrl} onChange={setFallbackUrl} token={fallbackToken} onTokenChange={setFallbackToken} firmwareVersion={info.fw} disabled={flashBusy || waitActive || fallbackSaving} />
+              <FallbackUrlField id="fallback-url" value={fallbackUrl} onChange={value => { setFallbackUrl(value); setFallbackToken(value.trim() === downloadedConfig?.fu ? String(downloadedConfig.ft ?? "") : ""); }} token={fallbackToken} firmwareVersion={info.fw} disabled={flashBusy || waitActive || fallbackSaving} />
               <p className="hint">{t("25 значень у порядку MQTT: 0/1 або 0–255 з прошивкою 2.1.0+. Очисти поле й збережи, щоб вимкнути резерв.")}</p>
               <button className="btn" disabled={flashBusy || fallbackSaving || portState !== "connected"} onClick={() => void cmdSetFallbackUrl().catch(showActionError)}>{t(fallbackSaving ? "Перевіряємо й зберігаємо…" : "Зберегти резервний URL")}</button>
             </div>

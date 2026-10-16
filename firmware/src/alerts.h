@@ -689,7 +689,7 @@ void alertsFallbackTick() {
     static char configuredToken[fallbackContract::TOKEN_CAPACITY] = {};
     static uint32_t generation = 0;
     static unsigned long lastAttemptAt = 0, lastTryvohaAttemptAt = 0;
-    static bool attempted = false, tryvohaAttempted = false, primaryFailed = false;
+    static bool attempted = false, tryvohaAttempted = false, tryvohaFailed = false;
     const unsigned long now = millis();
     if (strcmp(configuredUrl, gConfig.fallbackUrl) != 0 || strcmp(configuredToken, gConfig.fallbackToken) != 0) {
         snprintf(configuredUrl, sizeof(configuredUrl), "%s", gConfig.fallbackUrl);
@@ -697,7 +697,6 @@ void alertsFallbackTick() {
         ++generation;
         if (!gUsingTryvohaFallback) gLastFallbackSuccessAt = 0;
         attempted = false;
-        primaryFailed = false;
     }
     FallbackHttpResult response;
     if (fallbackHttpTakeResult(response) && response.generation == generation &&
@@ -714,7 +713,7 @@ void alertsFallbackTick() {
                 valid = true;
             } else if (!isTryvoha) valid = fallbackContract::parseStates(response.body, states, REGIONS_COUNT);
         }
-        if (!isTryvoha) primaryFailed = !valid;
+        if (isTryvoha) tryvohaFailed = !valid;
         if (valid) {
             // A delayed HTTP response must never overwrite a recovered MQTT stream.
             if (!alertsMqttFresh(now)) {
@@ -737,18 +736,19 @@ void alertsFallbackTick() {
         }
     }
     if (WiFi.status() != WL_CONNECTED || alertsMqttFresh(now) || fallbackHttpBusy()) return;
-    if (configuredUrl[0] && (!attempted || now - lastAttemptAt >= fallbackContract::POLL_MS)) {
-        attempted = true;
-        lastAttemptAt = now;
-        if (fallbackHttpStart(configuredUrl, configuredToken, generation)) ++gFallbackRequests;
-        else { ++gFallbackErrors; primaryFailed = true; }
-        return;
-    }
-    if ((!configuredUrl[0] || primaryFailed) &&
-        (!tryvohaAttempted || now - lastTryvohaAttemptAt >= fallbackContract::POLL_MS)) {
+    // Probe the higher-priority source even while the custom URL is healthy.
+    if (!tryvohaAttempted || now - lastTryvohaAttemptAt >= fallbackContract::POLL_MS) {
         tryvohaAttempted = true;
         lastTryvohaAttemptAt = now;
         if (fallbackHttpStart(tryvoha::URL, "", generation)) ++gFallbackRequests;
+        else { ++gFallbackErrors; tryvohaFailed = true; }
+        return;
+    }
+    if (tryvohaFailed && configuredUrl[0] &&
+        (!attempted || now - lastAttemptAt >= fallbackContract::POLL_MS)) {
+        attempted = true;
+        lastAttemptAt = now;
+        if (fallbackHttpStart(configuredUrl, configuredToken, generation)) ++gFallbackRequests;
         else ++gFallbackErrors;
     }
 }

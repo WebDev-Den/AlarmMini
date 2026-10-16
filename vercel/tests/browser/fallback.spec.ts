@@ -55,9 +55,8 @@ test('manual validation shows success, invalidates changed URLs, and ignores lat
   const result=page.locator('#install-fallback-url-result');
   await input.fill('https://valid.test/alerts'); await check.click();
   await expect(result).toContainText('Перевірено: HTTP 200');
-  const token=page.locator('#install-fallback-url-token');
-  await expect(token).toHaveAttribute('type','password');
-  await token.fill('test-only-token');await expect(result).toBeEmpty();
+  await expect(page.locator('#install-fallback-url-token')).toHaveCount(0);
+  await input.fill('https://valid.test/alerts?token=test-only-token');await expect(result).toBeEmpty();
   await check.click();await expect(result).toContainText('Перевірено: HTTP 200');
   await input.fill('https://slow.test/alerts'); await expect(result).toBeEmpty(); await check.click();
   await expect(result).toContainText('Перевіряємо');
@@ -92,8 +91,8 @@ test('saving rechecks a previously valid URL, writes only after success and perm
   await page.locator('.advanced-settings > summary').click();
   await page.getByRole('tab',{name:'MQTT',exact:true}).click();
   const input=page.locator('#fallback-url'); const field=page.locator('.fallback-field').filter({has:input});
-  await input.fill('https://reserve.test/alerts');
-  await page.locator('#fallback-url-token').fill('test-only-token');
+  await input.fill('https://reserve.test/alerts?token=test-only-token');
+  await expect(page.locator('#fallback-url-token')).toHaveCount(0);
   await field.getByRole('button',{name:'Перевірити URL',exact:true}).click();
   await expect(page.locator('#fallback-url-result')).toContainText('Перевірено');
   available=false;
@@ -101,29 +100,35 @@ test('saving rechecks a previously valid URL, writes only after success and perm
   await save.click(); await expect(save).toBeEnabled();
   await expect.poll(()=>checks).toBe(2);
   expect(await page.evaluate(()=>(window as any).serialCommands.filter((c:string)=>c.includes('fallback_set')))).toEqual([]);
-  await expect(input).toHaveValue('https://reserve.test/alerts');
-  await expect(page.locator('#fallback-url-token')).toHaveValue('test-only-token');
+  await expect(input).toHaveValue('https://reserve.test/alerts?token=test-only-token');
   available=true; await save.click(); await expect(save).toBeEnabled();
   await expect.poll(async()=>await page.evaluate(()=>(window as any).serialCommands.filter((c:string)=>c.includes('fallback_set')).length)).toBe(1);
-  expect(await page.evaluate(()=>JSON.parse((window as any).serialCommands.find((c:string)=>c.includes('fallback_set'))).token)).toBe('test-only-token');
-  await expect(input).toHaveValue('https://reserve.test/alerts');
+  expect(await page.evaluate(()=>JSON.parse((window as any).serialCommands.find((c:string)=>c.includes('fallback_set'))).token)).toBe('');
+  expect(await page.evaluate(()=>JSON.parse((window as any).serialCommands.find((c:string)=>c.includes('fallback_set'))).url)).toBe('https://reserve.test/alerts?token=test-only-token');
+  await expect(input).toHaveValue('https://reserve.test/alerts?token=test-only-token');
   available=false;const before=checks; await input.fill('');await save.click();await expect(save).toBeEnabled();
   expect(checks).toBe(before);
   expect(await page.evaluate(()=>JSON.parse((window as any).serialCommands.filter((c:string)=>c.includes('fallback_set')).at(-1)).url)).toBe('');
   expect(await page.evaluate(()=>JSON.parse((window as any).serialCommands.filter((c:string)=>c.includes('fallback_set')).at(-1)).token)).toBe('');
 });
 
-test('older firmware cannot silently discard the new token', async ({page}) => {
+test('query tokens work with older firmware without a Bearer token field', async ({page}) => {
   await fakeDevice(page);
+  await page.route('**/api/fallback-validation',route=>{
+    const {url,token}=route.request().postDataJSON();
+    expect(url).toBe('https://reserve.test/alerts?token=query-only');
+    expect(token).toBe('');
+    return route.fulfill({json:{ok:true,url,count:25}});
+  });
   await page.goto('/');await page.evaluate(()=>{(window as any).fakeFirmware='2.0.8';});
   await page.getByRole('button',{name:'Підключити через USB'}).click();
   await page.locator('.advanced-settings > summary').click();await page.getByRole('tab',{name:'MQTT',exact:true}).click();
-  await page.locator('#fallback-url').fill('https://reserve.test/alerts');
-  await page.locator('#fallback-url-token').fill('test-only-token');
+  await page.locator('#fallback-url').fill('https://reserve.test/alerts?token=query-only');
   const save=page.getByRole('button',{name:'Зберегти резервний URL',exact:true});
   await save.click();await expect(save).toBeEnabled();
-  await expect(page.getByText('Для токена резервного API потрібна прошивка 2.0.9 або новіша.',{exact:true})).toBeVisible();
-  expect(await page.evaluate(()=>(window as any).serialCommands.filter((c:string)=>c.includes('fallback_set')))).toEqual([]);
+  const messages=await page.evaluate(()=>(window as any).serialCommands.filter((c:string)=>c.includes('fallback_set')).map(JSON.parse));
+  expect(messages).toHaveLength(1);
+  expect(messages[0]).toMatchObject({url:'https://reserve.test/alerts?token=query-only',token:''});
 });
 
 test('validation endpoint rejects local destinations and bad request origins', async ({request}) => {

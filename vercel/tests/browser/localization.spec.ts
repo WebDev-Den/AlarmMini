@@ -16,14 +16,13 @@ test('language changes preserve form data and consent, translate errors, and per
   await page.getByRole('radio', { name: /Перше встановлення/ }).check();
   await page.getByRole('checkbox', { name: /Розумію/ }).check();
   await page.locator('.reserve-settings > summary').click();
-  await page.locator('#install-fallback-url').fill('https://example.com/alerts.json');
-  await page.locator('#install-fallback-url-token').fill('keep-this-token');
+  await page.locator('#install-fallback-url').fill('https://example.com/alerts.json?token=keep-this-token');
+  await expect(page.locator('#install-fallback-url-token')).toHaveCount(0);
   await page.getByRole('button', { name: 'English', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('radio', { name: /First installation/ })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: /I understand/ })).toBeChecked();
-  await expect(page.locator('#install-fallback-url')).toHaveValue('https://example.com/alerts.json');
-  await expect(page.locator('#install-fallback-url-token')).toHaveValue('keep-this-token');
+  await expect(page.locator('#install-fallback-url')).toHaveValue('https://example.com/alerts.json?token=keep-this-token');
   await page.getByRole('button', { name: 'Check URL', exact: true }).click();
   await expect(page.locator('#install-fallback-url-result')).toHaveText('The server returned HTTP 503. An HTTP 200 response is required.');
   await page.getByRole('button', { name: 'Українська', exact: true }).click();
@@ -117,13 +116,14 @@ async function mockDevice(page: import('@playwright/test').Page, authenticated =
   return { writes };
 }
 
-test('device source indicator replaces fallback fields and preserves stored fallback credentials', async ({ page }) => {
+test('device URL-only source settings preserve legacy credentials and unrelated settings', async ({ page }) => {
   const { writes } = await mockDevice(page);
   await page.goto('http://device.test/');
   await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
   await page.locator('[data-tab="mqtt"]').click();
   await expect(page.locator('#mqttHost')).toHaveValue('saved.example.com');
-  await expect(page.locator('#fallbackUrl, #fallbackToken')).toHaveCount(0);
+  await expect(page.locator('#fallbackUrl')).toHaveValue('https://reserve.example/status');
+  await expect(page.locator('#fallbackToken')).toHaveCount(0);
   await expect(page.locator('#sourceMqtt')).toHaveClass(/is-active/);
   await expect(page.locator('#dataSourceStatus')).toHaveText('Активне джерело: MQTT');
   await expect(page.locator('#saveBtn')).toBeHidden();
@@ -151,8 +151,19 @@ test('device source indicator replaces fallback fields and preserves stored fall
   await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
   await page.locator('[data-tab="mqtt"]').click();
   await expect(page.locator('#mqttHost')).toHaveValue('new.example.com');
-  await expect(page.locator('#fallbackUrl, #fallbackToken')).toHaveCount(0);
+  await expect(page.locator('#fallbackUrl')).toHaveValue('https://reserve.example/status');
+  await expect(page.locator('#fallbackToken')).toHaveCount(0);
   await expect(page.locator('#saveBtn')).toBeHidden();
+  await page.locator('#fallbackUrl').fill('https://custom.example/status?token=query-token');
+  await page.locator('#saveBtn').click();
+  await expect.poll(() => writes.length).toBe(3);
+  expect(writes[2].fu).toBe('https://custom.example/status?token=query-token');
+  expect(writes[2].ft).toBeUndefined();
+  for (const key of ['c', 'sc', 'n', 'l', 'm', 'w', 'tz']) expect(writes[2][key]).toEqual(writes[1][key]);
+  await page.reload();
+  await expect(page.locator('body')).not.toHaveClass(/is-loading|auth-locked/);
+  await page.locator('[data-tab="mqtt"]').click();
+  await expect(page.locator('#fallbackUrl')).toHaveValue('https://custom.example/status?token=query-token');
 });
 
 test('device language control shares the brand row on desktop and mobile', async ({ page }) => {

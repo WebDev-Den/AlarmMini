@@ -442,8 +442,15 @@
                 <div class="data-sources" aria-describedby="dataSourceStatus">
                   <span class="data-source" id="sourceMqtt">MQTT</span>
                   <a class="data-source" id="sourceTryvoha" href="https://tryvoha.online" target="_blank" rel="noopener noreferrer">Tryvoha</a>
+                  <span class="data-source" id="sourceCustom">Власний URL</span>
                 </div>
                 <p class="field-hint" id="dataSourceStatus" role="status">Перевіряємо джерело даних…</p>
+                <p class="field-hint">Пріоритет: MQTT → Tryvoha → власний URL. Відновлене джерело з вищим пріоритетом повертається автоматично.</p>
+                <div class="field-group">
+                  <label for="fallbackUrl" class="field-label">Резервний URL</label>
+                  <input type="url" id="fallbackUrl" class="field-input" maxlength="255" autocomplete="off" spellcheck="false" placeholder="https://example.com/alerts?token=…" aria-describedby="fallbackUrlHelp">
+                  <p class="field-hint" id="fallbackUrlHelp">GET-запит. Токен додай у URL: ?token=… Потрібен JSON-масив із 25 кодів 0–255 у порядку MQTT. Порожнє поле вимикає лише власне джерело.</p>
+                </div>
               </div>
             </article>
           </section>

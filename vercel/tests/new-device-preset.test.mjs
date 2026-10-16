@@ -63,7 +63,10 @@ test('installer and firmware share the supplied defaults including service crede
   assert.deepEqual(preset.w,{s:'',p:''});
   assert.ok(preset.m.h && preset.m.u && preset.m.s);
   assert.equal(preset.m.t,'ukraine/alarm/map/full_v2');
-  assert.ok(preset.fu.startsWith('https://') && preset.ft.length > 0);assert.deepEqual(preset.t,['','','']);
+  const fallbackUrl = new URL(preset.fu);
+  assert.equal(fallbackUrl.origin + fallbackUrl.pathname, 'https://alarm.web-devops.uno/public/status');
+  assert.ok(fallbackUrl.searchParams.get('token')); assert.equal(preset.ft, '');
+  assert.deepEqual(preset.t,['','','']);
   assert.deepEqual(preset.n.s,[22,0]);assert.deepEqual(preset.n.x,[7,0]);
   assert.equal(preset.l.length,27);assert.equal(new Set(preset.l).size,25);
 });
@@ -73,6 +76,13 @@ test('first installation writes preset after flashing and checks actual firmware
   assert.deepEqual(calls.filter(c=>['flash','reconnect','preset','outcome'].includes(c[0])&&c[1]!=='idle').map(c=>c[0]),['flash','reconnect','preset','outcome']);
   assert.deepEqual(calls.find(c=>c[0]==='preset')[1],preset);
   assert.deepEqual(calls.at(-2),['outcome','success']);
+});
+
+test('diagnostic logs redact URL query tokens', () => {
+  const context = vm.createContext({});
+  vm.runInContext(compile(page.slice(page.indexOf('function sanitizeLogLine'), page.indexOf('function createPipelineInitialState'))), context);
+  assert.equal(context.sanitizeLogLine('GET https://example.com/status?token=secret%2Bvalue&format=json'), 'GET https://example.com/status?token=***&format=json');
+  assert.equal(context.compactJsonLog({url:'https://example.com/status?x=1&token=secret',token:'legacy-secret'}), '{"url":"https://example.com/status?x=1&token=***","token":"***"}');
 });
 
 test('new firmware writes and verifies the selected timezone with the first-install profile', async () => {

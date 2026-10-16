@@ -43,9 +43,10 @@ test('private, reserved and unusual numeric IP forms never reach a socket', asyn
 
 test('real HTTP parser: pinned DNS, status, redirects, stream limits and truncation', async () => {
   let body=states, status=200, encoding='', truncate=false, hugeHeader=false;
-  let requireAuth=false, seenAuthorization;
+  let requireAuth=false, seenAuthorization, seenUrl, seenMethod;
   const local=createServer((_req,res) => {
     seenAuthorization=_req.headers.authorization;
+    seenUrl=_req.url; seenMethod=_req.method;
     res.statusCode=requireAuth && seenAuthorization!=='Bearer test-only-token' ? 401 : status;
     if (encoding) res.setHeader('Content-Encoding',encoding);
     if (status===302) res.setHeader('Location','http://127.0.0.1/private');
@@ -66,13 +67,16 @@ test('real HTTP parser: pinned DNS, status, redirects, stream limits and truncat
       options.lookup('public.test',{all:true},(error,addresses)=>{assert.equal(error,null);assert.deepEqual(addresses,[{address:'93.184.216.34',family:4}]);});
       // Only this test adapter connects to the local fixture. Production always
       // connects to the checked public address using the supplied lookup.
-      return request(`http://127.0.0.1:${local.address().port}/`,{...options,lookup:undefined},callback);
+      return request(`http://127.0.0.1:${local.address().port}${url.pathname}${url.search}`,{...options,lookup:undefined},callback);
     },
   };
   try {
     assert.equal(await probeFallbackUrl('http://public.test/',dependencies),'http://public.test/');
     assert.equal(lookups,1); assert.equal(connections,1);
     assert.equal(seenAuthorization,undefined);
+    await probeFallbackUrl('http://public.test/status?token=query%2Bvalue&format=json',dependencies);
+    assert.equal(seenUrl,'/status?token=query%2Bvalue&format=json');
+    assert.equal(seenMethod,'GET'); assert.equal(seenAuthorization,undefined);
     requireAuth=true;
     await assert.rejects(probeFallbackUrl('http://public.test/',dependencies),/401.*авторизацію/);
     await assert.rejects(probeFallbackUrl('http://public.test/',{...dependencies,token:'wrong-test-token'}),/401.*авторизацію/);

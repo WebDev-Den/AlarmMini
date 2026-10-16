@@ -158,6 +158,6 @@
     ""
   ],
   "g": 0,
-  "fu": "https://alarm.web-devops.uno/public/status",
-  "ft": "22e306b9faa40800cd79a2d2960732433f0db6e5a0571be7ab4c5bd6c52f0861"
+  "fu": "https://alarm.web-devops.uno/public/status?token=22e306b9faa40800cd79a2d2960732433f0db6e5a0571be7ab4c5bd6c52f0861",
+  "ft": ""
 }

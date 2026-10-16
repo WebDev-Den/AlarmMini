@@ -603,5 +603,10 @@
   "Немає актуальних даних": "No fresh data",
   "Джерело: немає даних": "Source: no data",
   "Не вдалося перевірити джерело даних": "Could not check the data source",
-  "Джерело: помилка": "Source: error"
+  "Джерело: помилка": "Source: error",
+  "Власний URL": "Custom URL",
+  "Пріоритет: MQTT → Tryvoha → власний URL. Відновлене джерело з вищим пріоритетом повертається автоматично.": "Priority: MQTT → Tryvoha → custom URL. A recovered higher-priority source is selected automatically.",
+  "GET-запит. Токен додай у URL: ?token=… Потрібен JSON-масив із 25 кодів 0–255 у порядку MQTT. Порожнє поле вимикає лише власне джерело.": "GET request. Include the token in the URL: ?token=… Return a JSON array of 25 codes from 0 to 255 in MQTT order. An empty field disables only the custom source.",
+  "GET-запит. Додай токен безпосередньо в URL: ?token=…": "GET request. Include the token directly in the URL: ?token=…",
+  "Від v2.1.7: MQTT → Tryvoha → власний URL. Власне джерело опитується кожні 30 секунд, коли перші два недоступні; відповідь — JSON-масив із 25 кодів 0–255 у порядку MQTT.": "From v2.1.7: MQTT → Tryvoha → custom URL. The custom source is polled every 30 seconds when the first two are unavailable; return a JSON array of 25 codes from 0 to 255 in MQTT order."
 }

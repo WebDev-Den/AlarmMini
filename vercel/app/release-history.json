@@ -1,5 +1,21 @@
 [
   {
+    "version": "2.1.7",
+    "date": "2026-10-16",
+    "ua": [
+      "Три джерела даних у порядку MQTT → Tryvoha → власний URL, з автоматичним поверненням після відновлення.",
+      "У панелі плати повернуто резервний URL; активне джерело з трьох підсвічується зеленим.",
+      "Одне поле URL у панелі плати та інсталяторі. Токен передається в GET-параметрі адреси.",
+      "Для нових плат задано типовий URL /public/status. Оновлення зберігає власні адреси, кольори, нічний режим та решту конфігурації."
+    ],
+    "en": [
+      "Three data sources in priority order: MQTT → Tryvoha → custom URL, with automatic return when a source recovers.",
+      "Restored the fallback URL field in the device dashboard; the active source is highlighted green.",
+      "A single URL field in the dashboard and installer. Include the token as a GET query parameter.",
+      "New devices use the default /public/status URL. Updates preserve custom URLs, colors, night mode and other settings."
+    ]
+  },
+  {
     "version": "2.1.6", "date": "2026-10-16",
     "ua": [
       "Автоматичне отримання даних від Tryvoha.online, коли MQTT і власний резервний API недоступні.",

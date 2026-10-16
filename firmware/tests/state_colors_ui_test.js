@@ -27,7 +27,7 @@ function element() {
 let stored = clone(base), posts = 0, reloads = 0;
 const errors = [];
 const context = vm.createContext({ console: {...console, error: error => errors.push(error)}, window: {}, setTimeout: () => 0, clearTimeout() {},
-  document: { getElementById: id => ['fallbackUrl', 'fallbackToken'].includes(id) ? null : elements[id] ??= element(), createElement: element },
+  document: { getElementById: id => id === 'fallbackToken' ? null : elements[id] ??= element(), createElement: element },
   fetch: async (url, options) => { assert.equal(url, '/api/saveSettings'); stored = JSON.parse(options.body); posts++; return {ok:true}; },
   loadConfig: async () => clone(stored), didReload: () => reloads++, base: clone(base), assert,
 });
@@ -122,7 +122,8 @@ const value = code => clone(run(code));
   assert.equal(posts, beforeInvalid);
   assert.equal(errors.length, 1); // The invalid import was rejected intentionally.
   assert.ok(!/testBuzzer|testSubscribedAlert|buzzerEnabled/.test(html));
-  assert.ok(!/fallbackUrl|fallbackToken|Резервний канал/.test(html));
+  assert.ok(/id="fallbackUrl"/.test(html));
+  assert.ok(!/id="fallbackToken"/.test(html));
   assert.equal(run('UI_LANG.nav.mqtt'), 'Джерела даних');
   // A connected broker is not necessarily the active source of fresh alerts.
   run('currentSessionReady = true; fetchJson = async () => runtimeHealth;');
@@ -135,6 +136,7 @@ const value = code => clone(run(code));
     await run('updateRuntimeHealth()');
     assert.equal(elements.sourceMqtt.classList.contains('is-active'), expected === 'MQTT');
     assert.equal(elements.sourceTryvoha.classList.contains('is-active'), expected === 'Tryvoha');
+    assert.equal(elements.sourceCustom.classList.contains('is-active'), expected === 'HTTP API');
     assert.equal(elements.dataSourceStatus.textContent, expected ? `Активне джерело: ${expected}` : 'Немає актуальних даних');
   }
   context.runtimeHealth = { mqttConnected: true, alertsSource: 'mqtt' };
@@ -145,8 +147,18 @@ const value = code => clone(run(code));
   await run('fetchJson = async () => { throw new Error("offline"); }; updateRuntimeHealth()');
   assert.equal(elements.sourceMqtt.classList.contains('is-active'), false);
   assert.equal(elements.sourceTryvoha.classList.contains('is-active'), false);
+  assert.equal(elements.sourceCustom.classList.contains('is-active'), false);
   assert.equal(elements.dataSourceStatus.textContent, 'Не вдалося перевірити джерело даних');
   assert.deepEqual(stored.fu, base.fu); assert.deepEqual(stored.ft, base.ft);
+  const beforeUrlChange = clone(stored);
+  elements.fallbackUrl.value = 'https://custom.example/status?token=query-token';
+  await run('saveConfig()');
+  assert.equal(stored.fu, elements.fallbackUrl.value);
+  assert.equal(stored.ft, undefined);
+  for (const key of ['c', 'sc', 'n', 'l', 'm', 'w', 't', 'tz']) assert.deepEqual(stored[key], beforeUrlChange[key], key);
+  elements.fallbackUrl.value = '';
+  await run('saveConfig()');
+  assert.equal(stored.fu, ''); assert.equal(stored.ft, undefined);
   console.log('PASS data source UI: MQTT/Tryvoha switching, stale and unavailable data, legacy HTTP and config preservation');
   console.log('PASS state palette UI: RGBA input, byte round trips, validation, night cap, picker/slider sync, 0/1 + 16 states, save/import and calibration preservation');
 })().catch(error => { console.error(error); process.exitCode = 1; });

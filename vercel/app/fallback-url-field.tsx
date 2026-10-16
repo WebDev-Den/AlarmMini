@@ -3,8 +3,8 @@ import { useLanguage } from "./language-provider";
 import { useEffect, useRef, useState } from "react";
 import { verifyFallbackEndpoint } from "./fallback-settings";
 
-export function FallbackUrlField({ id, value, onChange, token, onTokenChange, firmwareVersion = "", disabled = false }: {
-  id: string; value: string; onChange: (value: string) => void; token: string; onTokenChange: (value: string) => void; firmwareVersion?: string; disabled?: boolean;
+export function FallbackUrlField({ id, value, onChange, token = "", firmwareVersion = "", disabled = false }: {
+  id: string; value: string; onChange: (value: string) => void; token?: string; firmwareVersion?: string; disabled?: boolean;
 }) {
   const { t } = useLanguage();
   const [result, setResult] = useState<{ kind: "idle" | "checking" | "success" | "error"; message: string }>({ kind: "idle", message: "" });
@@ -26,13 +26,10 @@ export function FallbackUrlField({ id, value, onChange, token, onTokenChange, fi
     }
   }
   return <div className="fallback-field">
-    <label htmlFor={id}>{t("Резервний URL")}<input id={id} name={id} type="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/alerts.json" value={value} disabled={disabled} aria-describedby={`${id}-result ${id}-help`} aria-invalid={result.kind === "error"} onChange={(event) => {
+    <label htmlFor={id}>{t("Резервний URL")}<input id={id} name={id} type="url" autoComplete="off" spellCheck={false} maxLength={255} placeholder="https://example.com/alerts?token=…" value={value} disabled={disabled} aria-describedby={`${id}-result ${id}-help`} aria-invalid={result.kind === "error"} onChange={(event) => {
       pending.current?.abort(); setResult({ kind: "idle", message: "" }); onChange(event.target.value);
     }} /></label>
-    <label htmlFor={`${id}-token`}>{t("Токен авторизації (необов’язково)")}<input id={`${id}-token`} name={`${id}-token`} type="password" autoComplete="new-password" spellCheck={false} maxLength={511} value={token} disabled={disabled} aria-describedby={`${id}-token-help`} onChange={(event) => {
-      pending.current?.abort(); setResult({ kind: "idle", message: "" }); onTokenChange(event.target.value);
-    }} /></label>
-    <p id={`${id}-token-help`} className="hint">{t("Лише токен, без «Bearer». Передаємо в Authorization: Bearer …; для захисту токена використовуй HTTPS. Потрібна прошивка 2.0.9 або новіша.")}</p>
+    <p className="hint">{t("GET-запит. Додай токен безпосередньо в URL: ?token=…")}</p>
     <button type="button" className="btn" disabled={disabled || !value.trim() || result.kind === "checking"} onClick={() => void check()}>{t(result.kind === "checking" ? "Перевіряємо URL…" : "Перевірити URL")}</button>
     <p id={`${id}-result`} className={`fallback-check ${result.kind}`} role="status" aria-live="polite">{t(result.message)}</p>
     <p id={`${id}-help`} className="hint">{t("Перед записом перевіримо URL ще раз. Перевірка виконується з сервера сайту; доступність із мережі плати може відрізнятися.")}</p>

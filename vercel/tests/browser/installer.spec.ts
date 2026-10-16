@@ -48,7 +48,8 @@ test('new-device defaults include six states and preconfigured service credentia
   const config = await response.json();
   expect(Boolean(config.m.h && config.m.u && config.m.s)).toBe(true);
   expect(config.w).toEqual({s:'',p:''});
-  expect(Boolean(config.fu && config.ft)).toBe(true);
+  expect(Boolean(new URL(config.fu).searchParams.get('token'))).toBe(true);
+  expect(config.ft).toBe('');
   expect(Object.keys(config.sc)).toEqual(['2','3','4','5']);
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);

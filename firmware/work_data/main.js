@@ -236,6 +236,7 @@ function normalizeConfig(cfg) {
     pulseContrastPct: Number(offline.c ?? source.pulseContrastPct ?? 60),
     ledRegionIds: source.l || source.ledRegionIds || source.leds || [],
     mqttHost: mqtt.h ?? source.mqttHost ?? "",
+    fallbackUrl: source.fu ?? "",
     timeZone: source.tz ?? "Europe/Kyiv",
     mqttPort: Number(mqtt.p ?? source.mqttPort ?? 1883),
     mqttTopic: mqtt.t ?? source.mqttTopic ?? "ukraine/alarm/map/full_v2",
@@ -777,7 +778,7 @@ function applyConfig(cfg) {
   renderTimeZones(currentConfig.timeZone);
 
   // Editable connection settings come from /api/config, not device metadata.
-  for (const field of ["mqttHost", "mqttPort", "mqttTopic", "mqttUser", "mqttPass"]) {
+  for (const field of ["mqttHost", "mqttPort", "mqttTopic", "mqttUser", "mqttPass", "fallbackUrl"]) {
     $(field).value = currentConfig[field];
   }
 
@@ -831,6 +832,10 @@ function buildPayload() {
   } else if (!Array.isArray(payload.l)) {
     payload.l = [];
   }
+  const fallbackUrl = $("fallbackUrl").value.trim();
+  // Keep legacy Bearer credentials only while their original URL is unchanged.
+  if (fallbackUrl !== (payload.fu || "") || !fallbackUrl) delete payload.ft;
+  payload.fu = fallbackUrl;
   payload.tz = $("timeZone").value;
   payload.m = {
     h: $("mqttHost").value.trim(),
@@ -1229,6 +1234,7 @@ function updateDataSource(source, fresh) {
   const activeSource = fresh ? source : "";
   $("sourceMqtt").classList.toggle("is-active", activeSource === "mqtt");
   $("sourceTryvoha").classList.toggle("is-active", activeSource === "tryvoha");
+  $("sourceCustom").classList.toggle("is-active", activeSource === "http");
   const name = { mqtt: "MQTT", tryvoha: "Tryvoha", http: "HTTP API" }[activeSource];
   window.AlarmI18n.text($("dataSourceStatus"), name ? `Активне джерело: ${name}` : "Немає актуальних даних");
   setHealthChip("healthMqtt", Boolean(name), name ? `Джерело: ${name}` : "Джерело: немає даних");
