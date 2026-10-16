@@ -7,6 +7,7 @@ import type { Manifest } from "esp-web-tools/dist/const";
 import { writeFirmware } from "./installer";
 import { BoardIllustration } from "./board-illustration";
 import { ReleaseHistory } from "./release-history";
+import { version as SITE_VERSION } from "../package.json";
 import airPreset from "../public/profiles/ukrainealarm-air-6-states.json";
 import { TimeZoneField } from "./time-zone-field";
 import { defaultZone, isValid as isTimeZone, supportsTimeZone } from "../../firmware/work_data/timezone-utils";
@@ -99,7 +100,6 @@ const TELEGRAM_GROUP_URL =
   process.env.NEXT_PUBLIC_ALARMMINI_TELEGRAM_URL ||
   "https://t.me/+j3zFZHE5gGoyNGYy";
 const GITHUB_REPO_URL = `https://github.com/${owner}/${repo}`;
-const SITE_VERSION = "2.0.13";
 const AIR_STATE_LABELS = ["Відбій", "Вся область: червоний", "Вся область: оранжевий", "Червоний + оранжевий", "Частково червоний", "Частково оранжевий"];
 const AIR_STATE_COLORS = [airPreset.c.d.c, airPreset.c.d.a, ...Object.values(airPreset.sc)];
 const BOARD_TARGETS: BoardTarget[] = [
